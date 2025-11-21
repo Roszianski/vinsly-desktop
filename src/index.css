@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+@variant dark (.dark &);
+
+@theme {
+  --color-v-dark: #15171c;
+  --color-v-mid-dark: #1f2229;
+  --color-v-light-dark: #2c313a;
+  --color-v-border: #3d4450;
+  --color-v-text-primary: #f2f4f8;
+  --color-v-text-secondary: #b7bdc8;
+  --color-v-light-bg: #FBFBFA;
+  --color-v-light-surface: #F7F7F5;
+  --color-v-light-hover: #F0F0EE;
+  --color-v-light-border: #E5E5E3;
+  --color-v-light-text-primary: #111111;
+  --color-v-light-text-secondary: #555555;
+  --color-v-accent: #C17356;
+  --color-v-accent-hover: #B06A4E;
+  --color-v-danger: #ff4444;
+  --color-v-warning: #ffbb33;
+  --color-v-success: #00C851;
+
+  --font-sans: Inter, sans-serif;
+  --font-mono: Fira Code, monospace;
+}
+
+/* Checkbox styling for dark mode */
+input[type="checkbox"] {
+  accent-color: var(--color-v-accent);
+  background-color: var(--color-v-light-surface) !important;
+  border-color: var(--color-v-light-border) !important;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border-width: 1px;
+  border-style: solid;
+  cursor: pointer;
+  position: relative;
+}
+
+html.dark input[type="checkbox"] {
+  background-color: var(--color-v-mid-dark) !important;
+  border-color: var(--color-v-border) !important;
+}
+
+input[type="checkbox"]:checked {
+  background-color: var(--color-v-accent) !important;
+  border-color: var(--color-v-accent) !important;
+}
+
+/* Checkmark for checked state */
+input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #4a4a4a;
+    border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #6a6a6a;
+}
+html.light .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #d1d1d1;
+}
+html.light .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #b1b1b1;
+}
+
+/* Sharper border radii for a more professional look */
+.rounded { border-radius: 0.125rem !important; }
+.rounded-md { border-radius: 0.25rem !important; }
+.rounded-lg { border-radius: 0.375rem !important; }
+.rounded-xl { border-radius: 0.5rem !important; }
+.rounded-2xl { border-radius: 0.625rem !important; }
+
+:root {
+    --tool-breakdown-cursor: rgba(240, 240, 238, 0.65);
+}
+
+html.dark {
+    --tool-breakdown-cursor: rgba(62, 70, 84, 0.5);
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+[role="button"] {
+  cursor: pointer;
+}
+
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
