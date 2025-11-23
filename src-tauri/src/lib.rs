@@ -408,7 +408,6 @@ fn check_full_disk_access() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
         use std::fs;
-
         log_tcc_full_disk_status();
 
         let home_dir =
@@ -418,6 +417,15 @@ fn check_full_disk_access() -> Result<bool, String> {
             home_dir.join("Desktop"),
             home_dir.join("Library").join("Application Support"),
         ];
+
+        tauri::async_runtime::block_on(async {
+            let mut cache = home_discovery_cache().lock().await;
+            *cache = None;
+        });
+
+        if let Some(allowed) = query_tcc_full_disk_entry()? {
+            return Ok(allowed);
+        }
 
         for target in targets {
             if !target.exists() {
@@ -445,7 +453,7 @@ fn check_full_disk_access() -> Result<bool, String> {
 
 #[cfg(target_os = "macos")]
 fn log_tcc_full_disk_status() {
-    match read_tcc_full_disk_entry() {
+    match query_tcc_full_disk_entry() {
         Ok(Some(true)) => println!(
             "[FDA] TCC entry for {} allows Full Disk Access.",
             MACOS_BUNDLE_IDENTIFIER
@@ -463,7 +471,7 @@ fn log_tcc_full_disk_status() {
 }
 
 #[cfg(target_os = "macos")]
-fn read_tcc_full_disk_entry() -> Result<Option<bool>, String> {
+fn query_tcc_full_disk_entry() -> Result<Option<bool>, String> {
     let home_dir = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
     let db_path = home_dir
         .join("Library")
@@ -475,18 +483,42 @@ fn read_tcc_full_disk_entry() -> Result<Option<bool>, String> {
         return Ok(None);
     }
 
-    // Ventura and newer record Full Disk Access decisions via auth_value=2 while leaving
-    // the legacy allowed column at 0, so prefer auth_value but keep the older flag as a fallback.
-    let query = format!(
-        "SELECT CASE WHEN auth_value IN (2,5) THEN 1 WHEN allowed = 1 THEN 1 ELSE 0 END AS granted \
-        FROM access WHERE client='{}' AND service='kTCCServiceSystemPolicyAllFiles' \
-        ORDER BY last_modified DESC LIMIT 1;",
-        MACOS_BUNDLE_IDENTIFIER
-    );
+    let allowed_column_exists = tcc_access_has_allowed_column(&db_path)?;
+    // macOS 14+ record Full Disk Access decisions via auth_value. On Ventura through Tahaeo betas,
+    // grants show up as auth_value>=2 while the legacy "allowed" column may stay at 0 or be removed.
+    // Prefer auth_value everywhere but still honor the column on older releases if present.
+    let grant_query = if allowed_column_exists {
+        format!(
+            "SELECT CASE WHEN auth_value >= 2 OR allowed = 1 THEN 1 ELSE 0 END AS granted \
+            FROM access WHERE client='{}' AND service='kTCCServiceSystemPolicyAllFiles' \
+            ORDER BY last_modified DESC LIMIT 1;",
+            MACOS_BUNDLE_IDENTIFIER
+        )
+    } else {
+        format!(
+            "SELECT CASE WHEN auth_value >= 2 THEN 1 ELSE 0 END AS granted \
+            FROM access WHERE client='{}' AND service='kTCCServiceSystemPolicyAllFiles' \
+            ORDER BY last_modified DESC LIMIT 1;",
+            MACOS_BUNDLE_IDENTIFIER
+        )
+    };
 
+    let stdout = run_sqlite_query(&db_path, &grant_query)?;
+    if stdout.is_empty() {
+        return Ok(None);
+    }
+
+    let granted: i64 = stdout
+        .parse()
+        .map_err(|err| format!("Unexpected sqlite3 output '{}': {}", stdout, err))?;
+    Ok(Some(granted == 1))
+}
+
+#[cfg(target_os = "macos")]
+fn run_sqlite_query(db_path: &Path, query: &str) -> Result<String, String> {
     let output = Command::new("/usr/bin/sqlite3")
-        .arg(&db_path)
-        .arg(&query)
+        .arg(db_path)
+        .arg(query)
         .output()
         .map_err(|err| format!("Failed to invoke sqlite3 on {}: {}", db_path.display(), err))?;
 
@@ -499,15 +531,16 @@ fn read_tcc_full_disk_entry() -> Result<Option<bool>, String> {
         ));
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if stdout.is_empty() {
-        return Ok(None);
-    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
 
-    let granted: i64 = stdout
-        .parse()
-        .map_err(|err| format!("Unexpected sqlite3 output '{}': {}", stdout, err))?;
-    Ok(Some(granted == 1))
+#[cfg(target_os = "macos")]
+fn tcc_access_has_allowed_column(db_path: &Path) -> Result<bool, String> {
+    let pragma_output = run_sqlite_query(db_path, "PRAGMA table_info(access);")?;
+    Ok(pragma_output
+        .lines()
+        .filter_map(|line| line.split('|').nth(1))
+        .any(|column| column == "allowed"))
 }
 
 #[tauri::command]
