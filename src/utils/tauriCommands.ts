@@ -42,11 +42,28 @@ export async function getHomeDir(): Promise<string> {
   return await invoke<string>('get_home_dir');
 }
 
-export async function discoverProjectDirectories(maxDepth?: number): Promise<string[]> {
-  const payload: Record<string, number> = {};
-  if (typeof maxDepth === 'number') {
-    payload.maxDepth = maxDepth;
-    payload.max_depth = maxDepth;
+interface DiscoverProjectDirectoriesOptions {
+  maxDepth?: number;
+  includeProtectedDirs?: boolean;
+}
+
+export async function discoverProjectDirectories(options: DiscoverProjectDirectoriesOptions = {}): Promise<string[]> {
+  const payload: Record<string, number | boolean> = {};
+  if (typeof options.maxDepth === 'number') {
+    payload.maxDepth = options.maxDepth;
+    payload.max_depth = options.maxDepth;
+  }
+  if (typeof options.includeProtectedDirs === 'boolean') {
+    payload.includeProtectedDirs = options.includeProtectedDirs;
+    payload.include_protected_dirs = options.includeProtectedDirs;
   }
   return await invoke<string[]>('discover_project_directories', payload);
+}
+
+export async function checkFullDiskAccess(): Promise<boolean> {
+  return await invoke<boolean>('check_full_disk_access');
+}
+
+export async function openFullDiskAccessSettings(): Promise<void> {
+  await invoke('open_full_disk_access_settings');
 }

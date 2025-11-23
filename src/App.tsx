@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getVersion } from '@tauri-apps/api/app';
 import { Agent, AgentScope, ScanSettings, LoadAgentsOptions } from './types';
 import { LicenseInfo } from './types/licensing';
 import { AgentListScreen } from './components/screens/AgentListScreen';
@@ -12,13 +13,17 @@ import { pageTransition } from './animations';
 import { getStorageItem, setStorageItem, removeStorageItem } from './utils/storage';
 import { useToast } from './contexts/ToastContext';
 import { ToastContainer } from './components/Toast';
-import { listAgents, writeAgent, deleteAgent, listAgentsFromDirectory, discoverProjectDirectories } from './utils/tauriCommands';
+import { listAgents, writeAgent, deleteAgent, listAgentsFromDirectory } from './utils/tauriCommands';
 import { markdownToAgent } from './utils/agentImport';
 import { agentToMarkdown } from './utils/agentExport';
 import { getScanSettings, saveScanSettings } from './utils/scanSettings';
 import { ActivationModal } from './components/ActivationModal';
 import { SplashScreen } from './components/SplashScreen';
 import { extractProjectRootFromAgentPath } from './utils/path';
+import { DEFAULT_HOME_DISCOVERY_DEPTH, discoverHomeDirectories } from './utils/homeDiscovery';
+import { useUpdater } from './hooks/useUpdater';
+import { UpdatePrompt } from './components/UpdatePrompt';
+import { validateLicenseWithLemon } from './utils/lemonLicensingClient';
 
 type View = 'list' | 'team' | 'analytics' | 'edit' | 'create' | 'duplicate';
 export type Theme = 'light' | 'dark';
@@ -26,10 +31,27 @@ export type Theme = 'light' | 'dark';
 const DEFAULT_SCAN_SETTINGS: ScanSettings = {
   autoScanGlobalOnStartup: false,
   autoScanHomeDirectoryOnStartup: false,
+  fullDiskAccessEnabled: false,
   watchedDirectories: [],
 };
-const HOME_DISCOVERY_MAX_DEPTH = 12;
+const HOME_DISCOVERY_MAX_DEPTH = DEFAULT_HOME_DISCOVERY_DEPTH;
 const AGENT_CACHE_KEY = 'vinsly-agent-cache';
+const AUTO_UPDATE_KEY = 'vinsly-auto-update-enabled';
+const UPDATE_SNOOZE_KEY = 'vinsly-update-snooze';
+const UPDATE_SNOOZE_DURATION_MS = 1000 * 60 * 60 * 6; // 6 hours
+const UPDATE_CHECK_INTERVAL_MS = 1000 * 60 * 60 * 24; // 24 hours
+
+const normalizeProjectRootPath = (input?: string | null): string | null => {
+  if (!input) {
+    return null;
+  }
+  return input.replace(/\\/g, '/').replace(/\/+$/, '');
+};
+
+const getAgentProjectRootPath = (agent: Agent): string | null => {
+  const agentPath = agent.path || agent.id || '';
+  return normalizeProjectRootPath(extractProjectRootFromAgentPath(agentPath));
+};
 
 const getInitialTheme = (): Theme => {
   if (typeof window !== 'undefined' && window.matchMedia) {
@@ -38,13 +60,49 @@ const getInitialTheme = (): Theme => {
   return 'dark';
 };
 
+const detectMacOSMajorVersion = (): number | null => {
+  if (typeof navigator === 'undefined') {
+    return null;
+  }
+
+  const uaData = (navigator as any).userAgentData;
+  if (uaData?.platform && /mac/i.test(uaData.platform) && typeof uaData.platformVersion === 'string') {
+    const parsed = parseInt(uaData.platformVersion.split('.')[0], 10);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+
+  const userAgent = navigator.userAgent || '';
+  const match = userAgent.match(/Mac OS X (\d+)[._](\d+)/i);
+  if (!match) {
+    return null;
+  }
+
+  const major = parseInt(match[1], 10);
+  if (Number.isNaN(major)) {
+    return null;
+  }
+
+  if (major === 10) {
+    const minor = parseInt(match[2], 10);
+    if (!Number.isNaN(minor) && minor >= 16) {
+      return minor - 5;
+    }
+  }
+
+  return major;
+};
+
 const App: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [isScanBusy, setIsScanBusy] = useState(false);
   const [currentView, setCurrentView] = useState<View>('list');
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [themeLoaded, setThemeLoaded] = useState(false);
   const [isMacLike, setIsMacLike] = useState(false);
+  const [macOSMajorVersion, setMacOSMajorVersion] = useState<number | null>(null);
   const [returnDestination, setReturnDestination] = useState<'list' | 'team'>('list');
   const [isTourActive, setIsTourActive] = useState(false);
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
@@ -54,11 +112,24 @@ const App: React.FC = () => {
   const [activationPresented, setActivationPresented] = useState(false);
   const [scanSettings, setScanSettingsState] = useState<ScanSettings>(DEFAULT_SCAN_SETTINGS);
   const { showToast, toasts, removeToast } = useToast();
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
+  const [appVersion, setAppVersion] = useState('');
+  const [updateSnooze, setUpdateSnooze] = useState<{ version: string; until: string } | null>(null);
   const agentsRef = useRef<Agent[]>([]);
   const agentCacheHydrated = useRef(false);
   const themeResolvedRef = useRef(false);
   const scanSettingsRef = useRef<ScanSettings>(DEFAULT_SCAN_SETTINGS);
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
+  const inFlightScanCount = useRef(0);
+  const autoUpdateTimerRef = useRef<number | null>(null);
+  const {
+    isChecking: isCheckingUpdate,
+    isInstalling: isInstallingUpdate,
+    pendingUpdate,
+    lastCheckedAt: lastUpdateCheckAt,
+    checkForUpdate,
+    installUpdate,
+  } = useUpdater();
 
   useEffect(() => {
     agentsRef.current = agents;
@@ -103,10 +174,15 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (typeof navigator !== 'undefined') {
-      const platform = (navigator as any).userAgentData?.platform || navigator.platform || '';
-      setIsMacLike(/mac|iphone|ipad|ipod/i.test(platform));
+    if (typeof navigator === 'undefined') {
+      setIsMacLike(false);
+      setMacOSMajorVersion(null);
+      return;
     }
+    const platform = (navigator as any).userAgentData?.platform || navigator.platform || '';
+    const isMacPlatform = /mac|iphone|ipad|ipod/i.test(platform);
+    setIsMacLike(isMacPlatform);
+    setMacOSMajorVersion(isMacPlatform ? detectMacOSMajorVersion() : null);
   }, []);
 
   useEffect(() => {
@@ -132,6 +208,55 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const loadAppVersion = async () => {
+      if (typeof window === 'undefined' || !(window as any).__TAURI__) {
+        return;
+      }
+      try {
+        const version = await getVersion();
+        setAppVersion(version);
+      } catch (error) {
+        console.warn('Unable to read application version', error);
+      }
+    };
+    loadAppVersion();
+  }, []);
+
+  useEffect(() => {
+    const loadUpdatePreferences = async () => {
+      const storedAutoUpdate = await getStorageItem<boolean>(AUTO_UPDATE_KEY);
+      if (typeof storedAutoUpdate === 'boolean') {
+        setAutoUpdateEnabled(storedAutoUpdate);
+      }
+      const storedSnooze = await getStorageItem<{ version: string; until: string }>(UPDATE_SNOOZE_KEY);
+      if (storedSnooze) {
+        setUpdateSnooze(storedSnooze);
+      }
+    };
+    loadUpdatePreferences();
+  }, []);
+
+  useEffect(() => {
+    if (!updateSnooze) {
+      return;
+    }
+    const expiresAt = Date.parse(updateSnooze.until);
+    if (Number.isNaN(expiresAt)) {
+      return;
+    }
+    if (expiresAt <= Date.now()) {
+      setUpdateSnooze(null);
+      void removeStorageItem(UPDATE_SNOOZE_KEY);
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setUpdateSnooze(null);
+      void removeStorageItem(UPDATE_SNOOZE_KEY);
+    }, expiresAt - Date.now());
+    return () => window.clearTimeout(timeoutId);
+  }, [updateSnooze]);
+
+  useEffect(() => {
     if (!showSplash && !activationPresented && !licenseInfo) {
       setIsActivationOpen(true);
       setActivationPresented(true);
@@ -140,10 +265,141 @@ const App: React.FC = () => {
     }
   }, [licenseInfo, showSplash, activationPresented]);
 
+  useEffect(() => {
+    if (!licenseInfo || autoUpdateEnabled) {
+      return;
+    }
+    const runInitialUpdateCheck = async () => {
+      try {
+        const update = await checkForUpdate();
+        if (update) {
+          showToast('info', `Vinsly ${update.version} is ready to install.`);
+        }
+      } catch (error) {
+        console.warn('Initial update check failed', error);
+      }
+    };
+    runInitialUpdateCheck();
+  }, [licenseInfo, autoUpdateEnabled, checkForUpdate, showToast]);
+
+  useEffect(() => {
+    if (!licenseInfo || !autoUpdateEnabled) {
+      if (autoUpdateTimerRef.current) {
+        window.clearInterval(autoUpdateTimerRef.current);
+        autoUpdateTimerRef.current = null;
+      }
+      return;
+    }
+
+    const checkAndInstall = async () => {
+      try {
+        const update = await checkForUpdate();
+        if (update) {
+          showToast('info', `Installing Vinsly ${update.version}…`);
+          await installUpdate();
+        }
+      } catch (error) {
+        console.warn('Auto-update cycle failed', error);
+        showToast('error', 'Auto-update failed. We will try again later.');
+      }
+    };
+
+    void checkAndInstall();
+    autoUpdateTimerRef.current = window.setInterval(() => {
+      void checkAndInstall();
+    }, UPDATE_CHECK_INTERVAL_MS);
+
+    return () => {
+      if (autoUpdateTimerRef.current) {
+        window.clearInterval(autoUpdateTimerRef.current);
+        autoUpdateTimerRef.current = null;
+      }
+    };
+  }, [licenseInfo, autoUpdateEnabled, checkForUpdate, installUpdate, showToast]);
+
+  useEffect(() => {
+    if (!pendingUpdate || !updateSnooze) {
+      return;
+    }
+    if (pendingUpdate.version !== updateSnooze.version) {
+      setUpdateSnooze(null);
+      void removeStorageItem(UPDATE_SNOOZE_KEY);
+    }
+  }, [pendingUpdate, updateSnooze]);
+
+  const beginScan = useCallback(() => {
+    inFlightScanCount.current += 1;
+    setIsScanBusy(true);
+  }, []);
+
+  const endScan = useCallback(() => {
+    inFlightScanCount.current = Math.max(0, inFlightScanCount.current - 1);
+    if (inFlightScanCount.current === 0) {
+      setIsScanBusy(false);
+    }
+  }, []);
+
+  const handleManualUpdateCheck = useCallback(async () => {
+    try {
+      const update = await checkForUpdate();
+      if (!update) {
+        showToast('success', 'You are already on the latest version.');
+        return;
+      }
+      if (autoUpdateEnabled) {
+        showToast('info', `Installing Vinsly ${update.version}…`);
+        await installUpdate();
+        return;
+      }
+      showToast('info', `Vinsly ${update.version} is ready to install.`);
+    } catch (error) {
+      console.error('Manual update check failed', error);
+      showToast('error', 'Unable to check for updates right now.');
+    }
+  }, [autoUpdateEnabled, checkForUpdate, installUpdate, showToast]);
+
+  const handleAutoUpdateChange = useCallback(async (enabled: boolean) => {
+    setAutoUpdateEnabled(enabled);
+    await setStorageItem(AUTO_UPDATE_KEY, enabled);
+    if (!enabled || !licenseInfo) {
+      return;
+    }
+    try {
+      const update = await checkForUpdate();
+      if (update) {
+        showToast('info', `Installing Vinsly ${update.version}…`);
+        await installUpdate();
+      }
+    } catch (error) {
+      console.error('Auto-update toggle check failed', error);
+      showToast('error', 'Automatic update check failed. Please try again later.');
+    }
+  }, [licenseInfo, checkForUpdate, installUpdate, showToast]);
+
+  const handleInstallUpdate = useCallback(async () => {
+    try {
+      await installUpdate();
+    } catch (error) {
+      console.error('Update installation failed', error);
+      showToast('error', 'Unable to install the update. Please try again.');
+    }
+  }, [installUpdate, showToast]);
+
+  const handleSnoozeUpdatePrompt = useCallback(async () => {
+    if (!pendingUpdate) {
+      return;
+    }
+    const until = new Date(Date.now() + UPDATE_SNOOZE_DURATION_MS).toISOString();
+    const payload = { version: pendingUpdate.version, until };
+    setUpdateSnooze(payload);
+    await setStorageItem(UPDATE_SNOOZE_KEY, payload);
+  }, [pendingUpdate]);
+
   // Load agents from filesystem
   const loadAgents = useCallback(async (
     options: LoadAgentsOptions = {}
   ): Promise<{ total: number; newCount: number }> => {
+    beginScan();
     const currentScanSettings = scanSettingsRef.current;
     const {
       projectPaths,
@@ -156,23 +412,70 @@ const App: React.FC = () => {
       const previousAgents = agentsRef.current;
       const seen = new Set<string>();
       const projectPathList = projectPaths
-        ? Array.isArray(projectPaths) ? projectPaths : [projectPaths]
+        ? (Array.isArray(projectPaths) ? projectPaths : [projectPaths]).filter(path => typeof path === 'string' && path.trim().length > 0)
         : [];
 
+      const directoriesToScan = new Set<string>();
+      additionalDirectories
+        .filter((dir): dir is string => typeof dir === 'string' && dir.trim().length > 0)
+        .forEach(dir => directoriesToScan.add(dir));
+      if (scanWatchedDirectories) {
+        currentScanSettings.watchedDirectories
+          .filter(dir => dir && dir.trim().length > 0)
+          .forEach(directory => directoriesToScan.add(directory));
+      }
+
+      const normalizedScannedRoots = new Set<string>();
+      const addNormalizedRoot = (input?: string | null) => {
+        const normalized = normalizeProjectRootPath(input);
+        if (normalized) {
+          normalizedScannedRoots.add(normalized);
+        }
+      };
+      projectPathList.forEach(addNormalizedRoot);
+      directoriesToScan.forEach(directory => addNormalizedRoot(directory));
+
+      const shouldReplaceProjectAgent = (agent: Agent) => {
+        if (normalizedScannedRoots.size === 0) {
+          return false;
+        }
+        const agentRoot = getAgentProjectRootPath(agent);
+        return !!agentRoot && normalizedScannedRoots.has(agentRoot);
+      };
+
+      const addAgent = (agent: Agent | null) => {
+        if (!agent) return;
+        const key = makeAgentKey(agent);
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        allAgents.push(agent);
+      };
+
       const allAgents: Agent[] = [];
+
+      // Retain existing agents that aren't part of this refresh cycle
+      for (const agent of previousAgents) {
+        if (agent.scope === AgentScope.Global) {
+          if (!includeGlobal) {
+            addAgent(agent);
+          }
+          continue;
+        }
+
+        if (agent.scope === AgentScope.Project && shouldReplaceProjectAgent(agent)) {
+          continue;
+        }
+
+        addAgent(agent);
+      }
 
       // Parse global agents
       if (includeGlobal) {
         const globalAgents = await listAgents('global');
         for (const agentFile of globalAgents) {
-          const agent = markdownToAgent(agentFile.content, agentFile.name, AgentScope.Global, agentFile.path);
-          if (agent) {
-            const key = makeAgentKey(agent);
-            if (!seen.has(key)) {
-              seen.add(key);
-              allAgents.push(agent);
-            }
-          }
+          addAgent(markdownToAgent(agentFile.content, agentFile.name, AgentScope.Global, agentFile.path));
         }
       }
 
@@ -181,14 +484,7 @@ const App: React.FC = () => {
         try {
           const projectAgents = await listAgents('project', projectPath);
           for (const agentFile of projectAgents) {
-            const agent = markdownToAgent(agentFile.content, agentFile.name, AgentScope.Project, agentFile.path);
-            if (agent) {
-              const key = makeAgentKey(agent);
-              if (!seen.has(key)) {
-                seen.add(key);
-                allAgents.push(agent);
-              }
-            }
+            addAgent(markdownToAgent(agentFile.content, agentFile.name, AgentScope.Project, agentFile.path));
           }
         } catch (error) {
           console.error(`Error scanning project directory ${projectPath}:`, error);
@@ -196,53 +492,14 @@ const App: React.FC = () => {
         }
       }
 
-      const directoriesToScan = new Set<string>();
-      additionalDirectories.filter(Boolean).forEach(dir => directoriesToScan.add(dir));
-      if (scanWatchedDirectories) {
-        currentScanSettings.watchedDirectories.forEach(directory => directoriesToScan.add(directory));
-      }
-
       for (const directory of directoriesToScan) {
         try {
           const watchedAgents = await listAgentsFromDirectory(directory);
           for (const agentFile of watchedAgents) {
-            const agent = markdownToAgent(agentFile.content, agentFile.name, AgentScope.Project, agentFile.path);
-            if (agent) {
-              const key = makeAgentKey(agent);
-              if (!seen.has(key)) {
-                seen.add(key);
-                allAgents.push(agent);
-              }
-            }
+            addAgent(markdownToAgent(agentFile.content, agentFile.name, AgentScope.Project, agentFile.path));
           }
         } catch (error) {
           console.error(`Error scanning directory ${directory}:`, error);
-        }
-      }
-
-      if (!includeGlobal) {
-        for (const agent of previousAgents) {
-          if (agent.scope === AgentScope.Global) {
-            const key = makeAgentKey(agent);
-            if (!seen.has(key)) {
-              seen.add(key);
-              allAgents.push(agent);
-            }
-          }
-        }
-      }
-
-      // If we weren't asked to scan any project paths or watched dirs,
-      // preserve any existing project-scope agents from the previous state.
-      if (projectPathList.length === 0 && directoriesToScan.size === 0) {
-        for (const agent of previousAgents) {
-          if (agent.scope === AgentScope.Project) {
-            const key = makeAgentKey(agent);
-            if (!seen.has(key)) {
-              seen.add(key);
-              allAgents.push(agent);
-            }
-          }
         }
       }
 
@@ -255,8 +512,10 @@ const App: React.FC = () => {
       console.error('Error loading agents:', error);
       showToast('error', 'Failed to load agents from filesystem');
       throw error;
+    } finally {
+      endScan();
     }
-  }, [showToast]);
+  }, [beginScan, endScan, showToast]);
 
   const getSystemTheme = (): Theme => {
     if (typeof window !== 'undefined' && window.matchMedia) {
@@ -301,7 +560,10 @@ const App: React.FC = () => {
       let homeDirectories: string[] = [];
       if (storedSettings.autoScanHomeDirectoryOnStartup) {
         try {
-          homeDirectories = await discoverProjectDirectories(HOME_DISCOVERY_MAX_DEPTH);
+          homeDirectories = await discoverHomeDirectories({
+            maxDepth: HOME_DISCOVERY_MAX_DEPTH,
+            includeProtectedDirs: storedSettings.fullDiskAccessEnabled,
+          });
         } catch (error) {
           console.error('Error discovering home directories:', error);
         }
@@ -699,6 +961,14 @@ const App: React.FC = () => {
     }
   };
 
+  const snoozeActive = Boolean(
+    pendingUpdate &&
+      updateSnooze &&
+      updateSnooze.version === pendingUpdate.version &&
+      Date.parse(updateSnooze.until) > Date.now()
+  );
+  const shouldShowUpdatePrompt = Boolean(pendingUpdate && !autoUpdateEnabled && !snoozeActive);
+
   return (
     <div className="min-h-screen bg-v-light-bg dark:bg-v-dark text-v-light-text-primary dark:text-v-text-primary transition-colors duration-200">
       <Header
@@ -707,12 +977,24 @@ const App: React.FC = () => {
         onStartTour={startTour}
         onNavigateHome={handleNavigateHome}
         onScan={loadAgents}
+        isScanning={isScanBusy}
         licenseInfo={licenseInfo}
         onResetLicense={handleResetLicense}
         userDisplayName={userDisplayName}
         onDisplayNameChange={handlePersistDisplayName}
         scanSettings={scanSettings}
         onScanSettingsChange={applyScanSettings}
+        autoUpdateEnabled={autoUpdateEnabled}
+        onAutoUpdateChange={handleAutoUpdateChange}
+        onCheckForUpdates={handleManualUpdateCheck}
+        isCheckingUpdate={isCheckingUpdate}
+        isInstallingUpdate={isInstallingUpdate}
+        pendingUpdate={pendingUpdate}
+        appVersion={appVersion}
+        lastUpdateCheckAt={lastUpdateCheckAt}
+        onInstallUpdate={handleInstallUpdate}
+        isMacPlatform={isMacLike}
+        macOSVersionMajor={macOSMajorVersion}
       />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <AnimatePresence mode="wait">
@@ -726,28 +1008,56 @@ const App: React.FC = () => {
         editorMode={getEditorMode()}
       />
       <ToastContainer toasts={toasts} onClose={removeToast} />
+      <AnimatePresence>
+        {shouldShowUpdatePrompt && pendingUpdate && (
+          <UpdatePrompt
+            update={pendingUpdate}
+            isInstalling={isInstallingUpdate}
+            onInstall={handleInstallUpdate}
+            onRemindLater={handleSnoozeUpdatePrompt}
+          />
+        )}
+      </AnimatePresence>
       <ActivationModal
         isOpen={isActivationOpen}
         defaultEmail={licenseInfo?.email}
         defaultDisplayName={userDisplayName}
         defaultScanGlobal={scanSettings.autoScanGlobalOnStartup}
         defaultScanHome={scanSettings.autoScanHomeDirectoryOnStartup}
-        onComplete={async ({ licenseKey, email, displayName, autoScanGlobal, autoScanHome }) => {
+        defaultFullDiskAccess={scanSettings.fullDiskAccessEnabled}
+        isMacPlatform={isMacLike}
+        macOSVersionMajor={macOSMajorVersion}
+        onValidateLicense={async ({ licenseKey, email }) => {
+          const result = await validateLicenseWithLemon(licenseKey);
+          if (!result.valid) {
+            const message =
+              result.error === 'invalid'
+                ? 'This licence key was not recognised.'
+                : result.error === 'revoked'
+                  ? 'This licence has been revoked or refunded.'
+                  : 'Unable to validate your licence right now.';
+            throw new Error(message);
+          }
+
           const nextLicense: LicenseInfo = {
             licenseKey,
             email,
             status: 'active',
             lastChecked: new Date().toISOString()
           };
+
           setLicenseInfo(nextLicense);
-          setUserDisplayName(displayName);
           await setStorageItem('vinsly-license-info', nextLicense);
+        }}
+        onComplete={async ({ licenseKey, email, displayName, autoScanGlobal, autoScanHome, fullDiskAccessEnabled }) => {
+          setUserDisplayName(displayName);
           await setStorageItem('vinsly-display-name', displayName);
 
           const updatedScanSettings: ScanSettings = {
             ...scanSettingsRef.current,
             autoScanGlobalOnStartup: autoScanGlobal,
             autoScanHomeDirectoryOnStartup: autoScanHome,
+            fullDiskAccessEnabled,
           };
           await saveScanSettings(updatedScanSettings);
           applyScanSettings(updatedScanSettings);
@@ -755,7 +1065,11 @@ const App: React.FC = () => {
           let onboardingDirectories: string[] = [];
           if (autoScanHome) {
             try {
-              onboardingDirectories = await discoverProjectDirectories(HOME_DISCOVERY_MAX_DEPTH);
+              onboardingDirectories = await discoverHomeDirectories({
+                maxDepth: HOME_DISCOVERY_MAX_DEPTH,
+                includeProtectedDirs: fullDiskAccessEnabled,
+                force: true,
+              });
             } catch (error) {
               console.error('Error discovering home directories during onboarding:', error);
             }

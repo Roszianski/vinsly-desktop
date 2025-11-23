@@ -112,11 +112,11 @@ export const AnalyticsDashboardScreen: React.FC<AnalyticsDashboardScreenProps> =
           <div className="w-px bg-v-light-border dark:bg-v-border opacity-50"></div>
           <button
             onClick={onShowTeam}
-            title="Visualise"
+            title="Swarm View"
             className="px-3 py-2 text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary hover:bg-v-accent/10 dark:hover:bg-v-light-dark"
           >
             <NetworkIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Visualise</span>
+            <span className="hidden sm:inline">Swarm View</span>
           </button>
           <div className="w-px bg-v-light-border dark:bg-v-border opacity-50"></div>
           <button

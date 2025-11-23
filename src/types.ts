@@ -42,6 +42,7 @@ export interface Agent {
 export interface ScanSettings {
   autoScanGlobalOnStartup: boolean;
   autoScanHomeDirectoryOnStartup: boolean;
+  fullDiskAccessEnabled: boolean;
   watchedDirectories: string[];
 }
 

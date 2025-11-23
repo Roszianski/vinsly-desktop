@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
+default-run = "tauri-app"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,6 +15,10 @@ edition = "2021"
 name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "scan-helper"
+path = "src/bin/scan_helper.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -23,7 +28,8 @@ tauri-plugin-opener = "2"
 tauri-plugin-store = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
-tauri-plugin-shell = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5.0"

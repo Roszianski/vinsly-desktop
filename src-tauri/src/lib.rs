@@ -1,9 +1,97 @@
+pub mod scanner;
+
+use scanner::{scan_project_directories, DEFAULT_DISCOVERY_DEPTH};
+use serde::{Deserialize, Serialize};
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
-use serde::{Deserialize, Serialize};
-use walkdir::WalkDir;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
+#[cfg(target_os = "macos")]
+use std::{env, process::Command};
+use tokio::sync::Mutex;
 
-const DEFAULT_DISCOVERY_DEPTH: usize = 12;
+const HOME_DISCOVERY_CACHE_TTL_SECS: u64 = 120;
+#[cfg(target_os = "macos")]
+const MACOS_BUNDLE_IDENTIFIER: &str = "com.vinsly.desktop";
+
+struct DiscoveryCacheEntry {
+    depth: usize,
+    include_protected: bool,
+    timestamp: Instant,
+    directories: Vec<String>,
+}
+
+static HOME_DISCOVERY_CACHE: OnceLock<Mutex<Option<DiscoveryCacheEntry>>> = OnceLock::new();
+static HOME_DISCOVERY_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+#[cfg(target_os = "macos")]
+static SCAN_HELPER_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+fn home_discovery_cache() -> &'static Mutex<Option<DiscoveryCacheEntry>> {
+    HOME_DISCOVERY_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+fn home_discovery_mutex() -> &'static Mutex<()> {
+    HOME_DISCOVERY_MUTEX.get_or_init(|| Mutex::new(()))
+}
+
+#[cfg(target_os = "macos")]
+fn scan_helper_path() -> Option<PathBuf> {
+    SCAN_HELPER_PATH
+        .get_or_init(|| {
+            if let Ok(custom_path) = env::var("VINSLY_SCAN_HELPER_PATH") {
+                let candidate = PathBuf::from(custom_path);
+                if candidate.exists() {
+                    return Some(candidate);
+                }
+            }
+
+            if let Ok(exe_path) = std::env::current_exe() {
+                if let Some(dir) = exe_path.parent() {
+                    let default_candidate = dir.join("scan-helper");
+                    if default_candidate.exists() {
+                        return Some(default_candidate);
+                    }
+
+                    let bundle_candidate = dir
+                        .join("scan-helper.app")
+                        .join("Contents")
+                        .join("MacOS")
+                        .join("scan-helper");
+                    if bundle_candidate.exists() {
+                        return Some(bundle_candidate);
+                    }
+                }
+            }
+
+            None
+        })
+        .clone()
+}
+
+async fn get_cached_directories(depth: usize, include_protected: bool) -> Option<Vec<String>> {
+    let cache = home_discovery_cache().lock().await;
+    match cache.as_ref() {
+        Some(entry)
+            if entry.depth == depth
+                && entry.include_protected == include_protected
+                && entry.timestamp.elapsed()
+                    < Duration::from_secs(HOME_DISCOVERY_CACHE_TTL_SECS) =>
+        {
+            Some(entry.directories.clone())
+        }
+        _ => None,
+    }
+}
+
+async fn cache_directories(depth: usize, include_protected: bool, directories: &[String]) {
+    let mut cache = home_discovery_cache().lock().await;
+    *cache = Some(DiscoveryCacheEntry {
+        depth,
+        include_protected,
+        timestamp: Instant::now(),
+        directories: directories.to_vec(),
+    });
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AgentFile {
@@ -30,8 +118,8 @@ fn validate_agent_name(name: &str) -> Result<(), String> {
 }
 
 fn ensure_path_in_agents_dir(path: &Path) -> Result<(), String> {
-    let canonical = std::fs::canonicalize(path)
-        .map_err(|e| format!("Failed to resolve path: {}", e))?;
+    let canonical =
+        std::fs::canonicalize(path).map_err(|e| format!("Failed to resolve path: {}", e))?;
 
     let mut saw_claude = false;
     for component in canonical.components() {
@@ -65,8 +153,8 @@ fn get_agents_dir(scope: &str, project_path: Option<String>) -> Result<PathBuf, 
         }
         "global" => {
             // Use home directory for global scope
-            let home_dir = dirs::home_dir()
-                .ok_or_else(|| "Failed to get home directory".to_string())?;
+            let home_dir =
+                dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
             let mut path = home_dir;
             path.push(".claude");
             path.push("agents");
@@ -78,7 +166,10 @@ fn get_agents_dir(scope: &str, project_path: Option<String>) -> Result<PathBuf, 
 
 // List all agent files from a directory
 #[tauri::command]
-async fn list_agents(scope: String, project_path: Option<String>) -> Result<Vec<AgentFile>, String> {
+async fn list_agents(
+    scope: String,
+    project_path: Option<String>,
+) -> Result<Vec<AgentFile>, String> {
     let agents_dir = get_agents_dir(&scope, project_path)?;
 
     if !agents_dir.exists() {
@@ -87,8 +178,8 @@ async fn list_agents(scope: String, project_path: Option<String>) -> Result<Vec<
 
     let mut agents = Vec::new();
 
-    let entries = std::fs::read_dir(&agents_dir)
-        .map_err(|e| format!("Failed to read directory: {}", e))?;
+    let entries =
+        std::fs::read_dir(&agents_dir).map_err(|e| format!("Failed to read directory: {}", e))?;
 
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
@@ -98,7 +189,8 @@ async fn list_agents(scope: String, project_path: Option<String>) -> Result<Vec<
             let content = std::fs::read_to_string(&path)
                 .map_err(|e| format!("Failed to read file: {}", e))?;
 
-            let name = path.file_stem()
+            let name = path
+                .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("")
                 .to_string();
@@ -118,13 +210,17 @@ async fn list_agents(scope: String, project_path: Option<String>) -> Result<Vec<
 // Read a single agent file
 #[tauri::command]
 async fn read_agent(path: String) -> Result<String, String> {
-    std::fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read agent file: {}", e))
+    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read agent file: {}", e))
 }
 
 // Write an agent file
 #[tauri::command]
-async fn write_agent(scope: String, name: String, content: String, project_path: Option<String>) -> Result<String, String> {
+async fn write_agent(
+    scope: String,
+    name: String,
+    content: String,
+    project_path: Option<String>,
+) -> Result<String, String> {
     validate_agent_name(&name)?;
     let agents_dir = get_agents_dir(&scope, project_path)?;
 
@@ -144,12 +240,10 @@ async fn write_agent(scope: String, name: String, content: String, project_path:
 // Expand path to handle ~ (tilde) and relative paths
 fn expand_path(path: &str) -> Result<PathBuf, String> {
     if path.starts_with("~/") {
-        let home = dirs::home_dir()
-            .ok_or_else(|| "Failed to get home directory".to_string())?;
+        let home = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
         Ok(home.join(&path[2..]))
     } else if path.starts_with("~") && path.len() == 1 {
-        dirs::home_dir()
-            .ok_or_else(|| "Failed to get home directory".to_string())
+        dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())
     } else {
         Ok(PathBuf::from(path))
     }
@@ -160,8 +254,7 @@ fn expand_path(path: &str) -> Result<PathBuf, String> {
 async fn delete_agent(path: String) -> Result<(), String> {
     let expanded_path = expand_path(&path)?;
     ensure_path_in_agents_dir(&expanded_path)?;
-    std::fs::remove_file(&expanded_path)
-        .map_err(|e| format!("Failed to delete agent file: {}", e))
+    std::fs::remove_file(&expanded_path).map_err(|e| format!("Failed to delete agent file: {}", e))
 }
 
 // List agents from an arbitrary directory path
@@ -177,8 +270,8 @@ async fn list_agents_from_directory(directory: String) -> Result<Vec<AgentFile>,
 
     let mut agents = Vec::new();
 
-    let entries = std::fs::read_dir(&agents_path)
-        .map_err(|e| format!("Failed to read directory: {}", e))?;
+    let entries =
+        std::fs::read_dir(&agents_path).map_err(|e| format!("Failed to read directory: {}", e))?;
 
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
@@ -188,7 +281,8 @@ async fn list_agents_from_directory(directory: String) -> Result<Vec<AgentFile>,
             let content = std::fs::read_to_string(&path)
                 .map_err(|e| format!("Failed to read file: {}", e))?;
 
-            let name = path.file_stem()
+            let name = path
+                .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("")
                 .to_string();
@@ -213,70 +307,255 @@ fn get_home_dir() -> Result<String, String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
-#[tauri::command]
-async fn discover_project_directories(max_depth: Option<usize>) -> Result<Vec<String>, String> {
-    use std::ffi::OsStr;
-    let home_dir = dirs::home_dir()
-        .ok_or_else(|| "Failed to get home directory".to_string())?;
-    let depth = max_depth.unwrap_or(DEFAULT_DISCOVERY_DEPTH).max(1);
-    let mut directories = Vec::new();
-    let mobile_documents = home_dir.join("Library").join("Mobile Documents");
-    let cloud_storage = home_dir.join("Library").join("CloudStorage");
-    let container_storage = home_dir.join("Library").join("Containers");
-    let skip_dir_names = [".Trash", "node_modules", ".git", ".cache", ".npm"];
-
-    let walker = WalkDir::new(&home_dir)
-        .max_depth(depth)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|entry| {
-            let path = entry.path();
-            if path.starts_with(&mobile_documents)
-                || path.starts_with(&cloud_storage)
-                || path.starts_with(&container_storage)
-            {
-                return false;
-            }
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if skip_dir_names.contains(&name) {
-                    return false;
-                }
-            }
-            true
-        });
-
-    for entry in walker {
-        match entry {
-            Ok(entry) => {
-                if entry.file_type().is_dir() && entry.file_name() == OsStr::new(".claude") {
-                    let agents_path = entry.path().join("agents");
-                    if agents_path.exists() {
-                        // Skip the global ~/.claude/agents directory
-                        if entry.path() == home_dir.join(".claude") {
-                            continue;
-                        }
-                        if let Some(project_root) = entry.path().parent() {
-                            directories.push(project_root.to_string_lossy().to_string());
-                        }
-                    }
-                }
-            }
+#[cfg(target_os = "macos")]
+async fn perform_directory_scan(
+    depth: usize,
+    include_protected: bool,
+) -> Result<Vec<String>, String> {
+    if include_protected {
+        match run_scan_helper(depth, include_protected).await {
+            Ok(result) => return Ok(result),
             Err(err) => {
-                if let Some(io_err) = err.io_error() {
-                    match io_err.kind() {
-                        ErrorKind::PermissionDenied | ErrorKind::TimedOut => continue,
-                        _ => {}
-                    }
-                }
-                eprintln!("Skipping directory due to error: {}", err);
-                continue;
+                eprintln!(
+                    "[FDA] scan-helper error: {}. Falling back to inline scanner.",
+                    err
+                );
             }
         }
     }
 
-    directories.sort();
-    directories.dedup();
+    run_inline_scan(depth, include_protected).await
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn perform_directory_scan(
+    depth: usize,
+    include_protected: bool,
+) -> Result<Vec<String>, String> {
+    run_inline_scan(depth, include_protected).await
+}
+
+async fn run_inline_scan(depth: usize, include_protected: bool) -> Result<Vec<String>, String> {
+    let home_dir = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+    let include_protected_for_task = include_protected;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        scan_project_directories(home_dir, depth, include_protected_for_task)
+    })
+    .await
+    .map_err(|err| format!("Failed to join home discovery task: {}", err))?
+}
+
+#[cfg(target_os = "macos")]
+async fn run_scan_helper(depth: usize, include_protected: bool) -> Result<Vec<String>, String> {
+    let helper_path = scan_helper_path()
+        .ok_or_else(|| "scan-helper binary not found next to the Vinsly executable".to_string())?;
+    let helper_label = helper_path.display().to_string();
+    let depth_arg = depth.to_string();
+
+    let helper_result = tauri::async_runtime::spawn_blocking(move || {
+        let mut cmd = Command::new(&helper_path);
+        cmd.arg("--depth").arg(&depth_arg);
+        if include_protected {
+            cmd.arg("--include-protected");
+        }
+        cmd.output()
+            .map_err(|err| format!("Failed to launch {}: {}", helper_label, err))
+    })
+    .await
+    .map_err(|err| format!("Failed to join scan-helper task: {}", err))?;
+
+    let output = helper_result?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "scan-helper exited with status {} ({})",
+            output.status,
+            stderr.trim()
+        ));
+    }
+
+    serde_json::from_slice::<Vec<String>>(&output.stdout)
+        .map_err(|err| format!("scan-helper returned invalid JSON: {}", err))
+}
+
+#[tauri::command]
+async fn discover_project_directories(
+    max_depth: Option<usize>,
+    include_protected_dirs: Option<bool>,
+) -> Result<Vec<String>, String> {
+    let depth = max_depth.unwrap_or(DEFAULT_DISCOVERY_DEPTH).max(1);
+    let include_protected = include_protected_dirs.unwrap_or(false);
+
+    if let Some(cached) = get_cached_directories(depth, include_protected).await {
+        return Ok(cached);
+    }
+
+    let _guard = home_discovery_mutex().lock().await;
+
+    if let Some(cached) = get_cached_directories(depth, include_protected).await {
+        return Ok(cached);
+    }
+
+    let directories = perform_directory_scan(depth, include_protected).await?;
+    cache_directories(depth, include_protected, &directories).await;
     Ok(directories)
+}
+
+#[tauri::command]
+fn check_full_disk_access() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::fs;
+
+        log_tcc_full_disk_status();
+
+        let home_dir =
+            dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+        let targets = [
+            home_dir.join("Documents"),
+            home_dir.join("Desktop"),
+            home_dir.join("Library").join("Application Support"),
+        ];
+
+        for target in targets {
+            if !target.exists() {
+                continue;
+            }
+            match fs::read_dir(&target) {
+                Ok(_) => return Ok(true),
+                Err(err) => match err.kind() {
+                    ErrorKind::PermissionDenied => continue,
+                    ErrorKind::NotFound => continue,
+                    _ => {
+                        return Err(format!("Failed to inspect {}: {}", target.display(), err));
+                    }
+                },
+            }
+        }
+
+        Ok(false)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(true)
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn log_tcc_full_disk_status() {
+    match read_tcc_full_disk_entry() {
+        Ok(Some(true)) => println!(
+            "[FDA] TCC entry for {} allows Full Disk Access.",
+            MACOS_BUNDLE_IDENTIFIER
+        ),
+        Ok(Some(false)) => println!(
+            "[FDA] TCC entry for {} exists but is denied.",
+            MACOS_BUNDLE_IDENTIFIER
+        ),
+        Ok(None) => println!(
+            "[FDA] No TCC entry for {} found in TCC.db.",
+            MACOS_BUNDLE_IDENTIFIER
+        ),
+        Err(err) => eprintln!("[FDA] Unable to inspect TCC.db: {}", err),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn read_tcc_full_disk_entry() -> Result<Option<bool>, String> {
+    let home_dir = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+    let db_path = home_dir
+        .join("Library")
+        .join("Application Support")
+        .join("com.apple.TCC")
+        .join("TCC.db");
+
+    if !db_path.exists() {
+        return Ok(None);
+    }
+
+    let query = format!(
+        "SELECT allowed FROM access WHERE client='{}' AND service='kTCCServiceSystemPolicyAllFiles' ORDER BY last_modified DESC LIMIT 1;",
+        MACOS_BUNDLE_IDENTIFIER
+    );
+
+    let output = Command::new("/usr/bin/sqlite3")
+        .arg(&db_path)
+        .arg(&query)
+        .output()
+        .map_err(|err| format!("Failed to invoke sqlite3 on {}: {}", db_path.display(), err))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "sqlite3 exited with status {} ({})",
+            output.status,
+            stderr.trim()
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if stdout.is_empty() {
+        return Ok(None);
+    }
+
+    let allowed: i64 = stdout
+        .parse()
+        .map_err(|err| format!("Unexpected sqlite3 output '{}': {}", stdout, err))?;
+    Ok(Some(allowed == 1))
+}
+
+#[tauri::command]
+fn open_full_disk_access_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        const PRIVACY_URL: &str =
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles";
+        const SECURITY_FALLBACK_URL: &str =
+            "x-apple.systempreferences:com.apple.preference.security";
+
+        let attempts = [
+            (
+                "/usr/bin/open",
+                vec!["-b", "com.apple.systempreferences", PRIVACY_URL],
+            ),
+            ("open", vec![PRIVACY_URL]),
+            ("open", vec![SECURITY_FALLBACK_URL]),
+        ];
+
+        let mut last_error: Option<String> = None;
+        for (binary, args) in attempts {
+            let status_result = Command::new(binary).args(&args).status();
+            match status_result {
+                Ok(status) if status.success() => return Ok(()),
+                Ok(status) => {
+                    last_error = Some(format!(
+                        "{} {} exited with status {}",
+                        binary,
+                        args.join(" "),
+                        status
+                    ));
+                }
+                Err(err) => {
+                    last_error = Some(format!(
+                        "Failed to run {} {}: {}",
+                        binary,
+                        args.join(" "),
+                        err
+                    ));
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| "Unable to open System Settings".to_string()))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Full Disk Access settings are only available on macOS".to_string())
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -286,7 +565,8 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             list_agents,
             read_agent,
@@ -295,6 +575,8 @@ pub fn run() {
             list_agents_from_directory,
             get_home_dir,
             discover_project_directories,
+            check_full_disk_access,
+            open_full_disk_access_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

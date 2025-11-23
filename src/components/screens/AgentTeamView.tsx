@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toPng } from 'html-to-image';
 import { save } from '@tauri-apps/plugin-dialog';
@@ -50,6 +50,16 @@ interface LayoutNode extends GraphNode {
   y: number;
 }
 
+interface AgentRowEntry {
+  agent: Agent;
+  width: number;
+}
+
+interface AgentRow {
+  entries: AgentRowEntry[];
+  rowWidth: number;
+}
+
 const ROOT_CARD_WIDTH = 220;
 const ROOT_CARD_HEIGHT = 120;
 const GROUP_CARD_WIDTH = 220;
@@ -60,6 +70,8 @@ const LEVEL_GAP = 200;
 const GROUP_PADDING = 240;
 const AGENT_SPACING = 36;
 const CANVAS_PADDING = 170;
+const MAX_AGENT_ROW_WIDTH = 720;
+const AGENT_ROW_GAP = 56;
 
 const scopeCopy: Record<AgentScope, { title: string; text: string }> = {
   [AgentScope.Project]: {
@@ -83,10 +95,14 @@ const colorPalette: Record<string, string> = {
   cyan: '#06b6d4'
 };
 
-const DEFAULT_ZOOM = 0.85;
-const ZOOM_PERCENT_STEP = 0.15;
-const ZOOM_STEP = DEFAULT_ZOOM * ZOOM_PERCENT_STEP;
-const clampZoom = (value: number) => Math.min(1.8, Math.max(0.5, value));
+const DEFAULT_ZOOM = 0.8;
+const ZOOM_STEP = 0.1;
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 1.8;
+const clampZoom = (value: number) => {
+  const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+  return Math.round(clamped * 10) / 10;
+};
 const formatZoom = (value: number) => `${Math.round(value * 100)}%`;
 const parseZoomDisplay = (displayValue: string): number => {
   const numeric = parseFloat(displayValue.replace(/[^0-9.]/g, ''));
@@ -100,15 +116,15 @@ const getAgentCardWidth = (label: string) => {
 
 export const AgentTeamView: React.FC<AgentTeamViewProps> = ({ agents, onBack, onShowList, onShowAnalytics, onEdit, onToggleFavorite, userName = '' }) => {
   const { showToast } = useToast();
-  const [zoom, setZoom] = useState(0.85);
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [isEditingZoom, setIsEditingZoom] = useState(false);
-  const [zoomInputValue, setZoomInputValue] = useState(formatZoom(0.85));
+  const [zoomInputValue, setZoomInputValue] = useState(formatZoom(DEFAULT_ZOOM));
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [maxPanelHeight, setMaxPanelHeight] = useState<number | null>(null);
-  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [favoritesFilterActive, setFavoritesFilterActive] = useState(false);
   const [scopeVisibility, setScopeVisibility] = useState<ScopeVisibility>({
     [AgentScope.Global]: true,
     [AgentScope.Project]: true
@@ -117,29 +133,46 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({ agents, onBack, on
     [AgentScope.Global]: false,
     [AgentScope.Project]: false
   });
+  const [isViewportHovered, setIsViewportHovered] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const graphContainerRef = useRef<HTMLDivElement | null>(null);
   const panelsRef = useRef<HTMLDivElement | null>(null);
   const tooltipHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pointerActiveRef = useRef(false);
   const lastPointerPositionRef = useRef({ x: 0, y: 0 });
+  const zoomRef = useRef(DEFAULT_ZOOM);
+  const userZoomOverrideRef = useRef(false);
+  const gestureStateRef = useRef<{ baseZoom: number } | null>(null);
 
   const filteredAgents = useMemo(() => {
-    return agents.filter(agent => {
-      if (showFavoritesOnly && !agent.isFavorite) {
-        return false;
+    const favorites: Agent[] = [];
+    const others: Agent[] = [];
+
+    agents.forEach(agent => {
+      const scopeEnabled = scopeVisibility[agent.scope];
+      const favorited = Boolean(agent.isFavorite);
+      const includeViaFavorites = favoritesFilterActive && favorited;
+
+      if (scopeEnabled || includeViaFavorites) {
+        if (favoritesFilterActive && favorited) {
+          favorites.push(agent);
+        } else {
+          others.push(agent);
+        }
       }
-      if (!scopeVisibility[agent.scope]) {
-        return false;
-      }
-      return true;
     });
-  }, [agents, scopeVisibility, showFavoritesOnly]);
+
+    if (favoritesFilterActive) {
+      return [...favorites, ...others];
+    }
+    return others;
+  }, [agents, scopeVisibility, favoritesFilterActive]);
 
   const toggleScopeVisibility = (scope: AgentScope) => {
     setScopeVisibility(prev => {
       const activeCount = Object.values(prev).filter(Boolean).length;
-      if (prev[scope] && activeCount === 1) {
+      const isLastActive = prev[scope] && activeCount === 1;
+      if (isLastActive && !favoritesFilterActive) {
         return prev;
       }
       return {
@@ -157,7 +190,7 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({ agents, onBack, on
   };
 
   const resetFilters = () => {
-    setShowFavoritesOnly(false);
+    setFavoritesFilterActive(false);
     setScopeVisibility({
       [AgentScope.Global]: true,
       [AgentScope.Project]: true
@@ -174,15 +207,15 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({ agents, onBack, on
 
   const activeScopeCount = useMemo(() => Object.values(scopeVisibility).filter(Boolean).length, [scopeVisibility]);
   const totalScopeCount = Object.keys(scopeVisibility).length;
-  const allFiltersActive = !showFavoritesOnly && activeScopeCount === totalScopeCount;
+  const allFiltersActive = !favoritesFilterActive && activeScopeCount === totalScopeCount;
   const filtersActive = !allFiltersActive;
   const showEmptyBanner = filteredAgents.length === 0;
   const emptyBannerMessage =
     agents.length === 0
-      ? 'No agents to visualise yet. Scan or create an agent to populate this map.'
+      ? 'No agents to show in Swarm View yet. Scan or create an agent to populate this map.'
       : 'No agents match the current filters.';
   const showResetCta = agents.length > 0 && filtersActive;
-const filterButtonClasses = (active: boolean) =>
+  const filterButtonClasses = (active: boolean) =>
     `inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
       active
         ? 'border-v-accent text-v-accent bg-v-accent/10'
@@ -195,20 +228,20 @@ const filterButtonClasses = (active: boolean) =>
       active: allFiltersActive,
       onClick: resetFilters
     },
-    {
-      key: 'favorites',
-      label: 'Favorites',
-      icon: StarIcon,
-      active: showFavoritesOnly,
-      onClick: () => setShowFavoritesOnly(prev => !prev)
-    },
     ...scopeFilterOptions.map(({ scope, label, Icon }) => ({
       key: scope,
       label,
       icon: Icon,
       active: scopeVisibility[scope],
       onClick: () => toggleScopeVisibility(scope)
-    }))
+    })),
+    {
+      key: 'favorites',
+      label: 'Favorites',
+      icon: StarIcon,
+      active: favoritesFilterActive,
+      onClick: () => setFavoritesFilterActive(prev => !prev)
+    }
   ];
   const updatePanelHeight = useCallback(() => {
     if (typeof window === 'undefined' || !panelsRef.current) return;
@@ -249,6 +282,34 @@ const filterButtonClasses = (active: boolean) =>
     const nodes: LayoutNode[] = [];
     const links: { from: LayoutNode; to: LayoutNode }[] = [];
 
+    const buildAgentRows = (entries: AgentRowEntry[]): AgentRow[] => {
+      if (entries.length === 0) return [];
+      const rows: AgentRow[] = [];
+      let current: AgentRowEntry[] = [];
+      let currentWidth = 0;
+
+      const flushRow = () => {
+        if (current.length === 0) return;
+        rows.push({ entries: current, rowWidth: currentWidth });
+        current = [];
+        currentWidth = 0;
+      };
+
+      entries.forEach(entry => {
+        const spacing = current.length === 0 ? 0 : AGENT_SPACING;
+        const projectedWidth = currentWidth + spacing + entry.width;
+        if (current.length > 0 && projectedWidth > MAX_AGENT_ROW_WIDTH) {
+          flushRow();
+        }
+        const rowSpacing = current.length === 0 ? 0 : AGENT_SPACING;
+        current.push(entry);
+        currentWidth += rowSpacing + entry.width;
+      });
+
+      flushRow();
+      return rows;
+    };
+
     const rootNode = createNode(
       {
         id: 'root',
@@ -276,22 +337,20 @@ const filterButtonClasses = (active: boolean) =>
       const sortedAgents = group.agents.slice().sort((a, b) => a.name.localeCompare(b.name));
       const isCollapsed = collapsedGroups[group.scope];
       const visibleAgents = isCollapsed ? [] : sortedAgents;
-      const agentEntries = visibleAgents.map(agent => ({
+      const agentEntries: AgentRowEntry[] = visibleAgents.map(agent => ({
         agent,
         width: getAgentCardWidth(agent.name || agent.frontmatter.name || 'agent')
       }));
-      const totalAgentWidth = agentEntries.reduce((acc, entry) => acc + entry.width, 0);
-      const totalSpacing = agentEntries.length > 1 ? AGENT_SPACING * (agentEntries.length - 1) : 0;
+      const agentRows = buildAgentRows(agentEntries);
+      const maxRowWidth = agentRows.reduce((max, row) => Math.max(max, row.rowWidth), 0);
       const clusterWidth = Math.max(
         GROUP_CARD_WIDTH,
-        agentEntries.length > 0 ? totalAgentWidth + totalSpacing : GROUP_CARD_WIDTH
+        agentRows.length > 0 ? Math.min(MAX_AGENT_ROW_WIDTH, maxRowWidth) : GROUP_CARD_WIDTH
       );
       return {
         scope: group.scope,
-        agentEntries,
+        agentRows,
         clusterWidth,
-        totalAgentWidth,
-        totalSpacing,
         totalAgents: sortedAgents.length,
         isCollapsed
       };
@@ -326,31 +385,34 @@ const filterButtonClasses = (active: boolean) =>
       nodes.push(groupNode);
       links.push({ from: rootNode, to: groupNode });
 
-      if (group.agentEntries.length === 0) {
+      if (group.agentRows.length === 0) {
         return;
       }
 
-      const agentBandWidth = group.totalAgentWidth + group.totalSpacing;
-      let agentCursor = -agentBandWidth / 2;
+      const baseAgentY = LEVEL_GAP * 2;
+      group.agentRows.forEach((row, rowIndex) => {
+        let agentCursor = -row.rowWidth / 2;
+        const rowCenterY = baseAgentY + rowIndex * (AGENT_HEIGHT + AGENT_ROW_GAP);
 
-      group.agentEntries.forEach(entry => {
-        const node = createNode(
-          {
-            id: entry.agent.id || entry.agent.name,
-            label: entry.agent.name,
-            description: entry.agent.frontmatter.description || 'No description provided.',
-            kind: 'agent',
-            scope: entry.agent.scope,
-            agent: entry.agent
-          },
-          entry.width,
-          AGENT_HEIGHT,
-          groupNode.centerX + agentCursor + entry.width / 2,
-          LEVEL_GAP * 2
-        );
-        nodes.push(node);
-        links.push({ from: groupNode, to: node });
-        agentCursor += entry.width + AGENT_SPACING;
+        row.entries.forEach(entry => {
+          const node = createNode(
+            {
+              id: entry.agent.id || entry.agent.name,
+              label: entry.agent.name,
+              description: entry.agent.frontmatter.description || 'No description provided.',
+              kind: 'agent',
+              scope: entry.agent.scope,
+              agent: entry.agent
+            },
+            entry.width,
+            AGENT_HEIGHT,
+            groupNode.centerX + agentCursor + entry.width / 2,
+            rowCenterY
+          );
+          nodes.push(node);
+          links.push({ from: groupNode, to: node });
+          agentCursor += entry.width + AGENT_SPACING;
+        });
       });
     });
 
@@ -377,39 +439,113 @@ const filterButtonClasses = (active: boolean) =>
     };
   }, [collapsedGroups, filteredAgents]);
 
-  const centerViewport = useCallback((targetZoom = zoom) => {
+  const centerViewport = useCallback((targetZoom?: number) => {
     const viewportEl = viewportRef.current;
     if (!viewportEl) return;
+    const zoomValue = typeof targetZoom === 'number' ? targetZoom : zoomRef.current;
     const rect = viewportEl.getBoundingClientRect();
-    const centeredX = (rect.width - layout.canvasWidth * targetZoom) / 2;
-    const centeredY = (rect.height - layout.canvasHeight * targetZoom) / 2;
+    const centeredX = (rect.width - layout.canvasWidth * zoomValue) / 2;
+    const centeredY = (rect.height - layout.canvasHeight * zoomValue) / 2;
     setPan({ x: centeredX, y: centeredY });
-  }, [layout.canvasWidth, layout.canvasHeight, zoom]);
+  }, [layout.canvasWidth, layout.canvasHeight]);
 
   useEffect(() => {
+    zoomRef.current = zoom;
     if (!isEditingZoom) {
       setZoomInputValue(formatZoom(zoom));
     }
   }, [zoom, isEditingZoom]);
 
-  useEffect(() => {
-    if (!viewportRef.current) return;
-    centerViewport();
+  const autoFitGraph = useCallback((options?: { force?: boolean }) => {
+    const force = options?.force ?? false;
+    const viewportEl = viewportRef.current;
+    if (!viewportEl || layout.canvasWidth <= 0 || layout.canvasHeight <= 0) {
+      return;
+    }
+    const rect = viewportEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return;
+    }
+    const fitRatio = Math.min(rect.width / layout.canvasWidth, rect.height / layout.canvasHeight);
+    if (!Number.isFinite(fitRatio) || fitRatio <= 0) {
+      return;
+    }
+    const minZoomToFit = clampZoom(fitRatio * 0.98);
+    const currentZoom = zoomRef.current;
+    let nextZoom = currentZoom;
+
+    if (force || currentZoom > minZoomToFit) {
+      nextZoom = minZoomToFit;
+      if (nextZoom !== currentZoom) {
+        zoomRef.current = nextZoom;
+        setZoom(nextZoom);
+        setZoomInputValue(formatZoom(nextZoom));
+      }
+      userZoomOverrideRef.current = false;
+      centerViewport(nextZoom);
+      return;
+    }
+
+    centerViewport(currentZoom);
   }, [layout.canvasWidth, layout.canvasHeight, centerViewport]);
+
+useLayoutEffect(() => {
+  autoFitGraph({ force: true });
+}, [autoFitGraph, layout.canvasWidth, layout.canvasHeight]);
+
+useEffect(() => {
+  const handleResize = () => autoFitGraph();
+  window.addEventListener('resize', handleResize);
+  return () => window.removeEventListener('resize', handleResize);
+}, [autoFitGraph]);
+
+useEffect(() => {
+  const viewportEl = viewportRef.current;
+  if (!viewportEl || typeof ResizeObserver === 'undefined') {
+    return;
+  }
+  const observer = new ResizeObserver(() => autoFitGraph());
+  observer.observe(viewportEl);
+  return () => observer.disconnect();
+}, [autoFitGraph]);
 
   useEffect(() => {
     const node = viewportRef.current;
     if (!node) return;
-    const preventDefault = (event: Event) => {
+
+    const handleGestureStart = (event: Event) => {
       event.preventDefault();
+      gestureStateRef.current = { baseZoom: zoomRef.current };
+      userZoomOverrideRef.current = true;
     };
-    node.addEventListener('gesturestart', preventDefault as EventListener, { passive: false });
-    node.addEventListener('gesturechange', preventDefault as EventListener, { passive: false });
-    node.addEventListener('gestureend', preventDefault as EventListener, { passive: false });
+
+    const handleGestureChange = (event: Event) => {
+      event.preventDefault();
+      const state = gestureStateRef.current;
+      if (!state || typeof (event as any).scale !== 'number') {
+        return;
+      }
+      const rawZoom = state.baseZoom * (event as any).scale;
+      const snappedZoom = clampZoom(Math.round(rawZoom / ZOOM_STEP) * ZOOM_STEP);
+      const nextZoom = snappedZoom;
+      zoomRef.current = nextZoom;
+      setZoom(nextZoom);
+      setZoomInputValue(formatZoom(nextZoom));
+    };
+
+    const handleGestureEnd = (event: Event) => {
+      event.preventDefault();
+      gestureStateRef.current = null;
+    };
+
+    node.addEventListener('gesturestart', handleGestureStart as EventListener, { passive: false });
+    node.addEventListener('gesturechange', handleGestureChange as EventListener, { passive: false });
+    node.addEventListener('gestureend', handleGestureEnd as EventListener, { passive: false });
+
     return () => {
-      node.removeEventListener('gesturestart', preventDefault as EventListener);
-      node.removeEventListener('gesturechange', preventDefault as EventListener);
-      node.removeEventListener('gestureend', preventDefault as EventListener);
+      node.removeEventListener('gesturestart', handleGestureStart as EventListener);
+      node.removeEventListener('gesturechange', handleGestureChange as EventListener);
+      node.removeEventListener('gestureend', handleGestureEnd as EventListener);
     };
   }, []);
 
@@ -422,12 +558,17 @@ const filterButtonClasses = (active: boolean) =>
   }, []);
 
   const handleZoomChange = (delta: number) => {
+    userZoomOverrideRef.current = true;
     setZoom(prev => clampZoom(prev + delta));
   };
 
   const handleZoomReset = () => {
-    centerViewport(0.85);
-    setZoom(0.85);
+    const resetZoom = DEFAULT_ZOOM;
+    userZoomOverrideRef.current = false;
+    zoomRef.current = resetZoom;
+    centerViewport(resetZoom);
+    setZoom(resetZoom);
+    setZoomInputValue(formatZoom(resetZoom));
   };
 
   const handleExport = async () => {
@@ -447,17 +588,15 @@ const filterButtonClasses = (active: boolean) =>
 
       if (!filePath) return; // User cancelled
 
-      // Now show spinner while actually exporting
       setIsExporting(true);
 
-      // Detect dark mode
       const isDarkMode = document.documentElement.classList.contains('dark');
       const backgroundColor = isDarkMode ? '#0f1419' : '#f8f9fa';
+      const desiredPixelRatio = Math.min(5, Math.max(3, window.devicePixelRatio * 2));
 
-      // Use html-to-image which handles modern CSS/flexbox properly
       const dataUrl = await toPng(viewport, {
         backgroundColor,
-        pixelRatio: 2,
+        pixelRatio: desiredPixelRatio,
         cacheBust: true,
       });
 
@@ -482,8 +621,10 @@ const filterButtonClasses = (active: boolean) =>
     }
     event.stopPropagation();
     if (event.ctrlKey) {
-      const delta = -event.deltaY * 0.0015;
-      setZoom(prev => clampZoom(prev + delta));
+      const direction = event.deltaY === 0 ? 0 : event.deltaY < 0 ? 1 : -1;
+      if (direction !== 0) {
+        handleZoomChange(direction * ZOOM_STEP);
+      }
     } else {
       setPan(prev => ({
         x: prev.x - event.deltaX,
@@ -544,6 +685,9 @@ const filterButtonClasses = (active: boolean) =>
     const actualZoom = parseZoomDisplay(zoomInputValue);
     if (Number.isFinite(actualZoom)) {
       const normalized = clampZoom(actualZoom);
+      if (normalized !== zoomRef.current) {
+        userZoomOverrideRef.current = true;
+      }
       setZoom(normalized);
       setZoomInputValue(formatZoom(normalized));
     } else {
@@ -557,6 +701,12 @@ const filterButtonClasses = (active: boolean) =>
       'absolute rounded-xl px-3 py-2.5 flex flex-col gap-2 text-left transition-shadow duration-200 bg-white/95 dark:bg-v-mid-dark/90 backdrop-blur-sm border border-v-light-border/90 dark:border-v-border/80 shadow-sm overflow-hidden';
     const scopeLabel = node.scope === AgentScope.Project ? 'Project' : 'Global';
     const showTooltip = hoveredNodeId === node.id;
+    const getNodeZIndex = (n: LayoutNode) => {
+      if (n.kind === 'root') return 20;
+      if (n.kind === 'group') return 30;
+      return showTooltip ? 60 : 40;
+    };
+    const nodeZIndex = getNodeZIndex(node);
 
     const handleTooltipEnter = () => {
       if (tooltipHideTimeoutRef.current) {
@@ -580,13 +730,14 @@ const filterButtonClasses = (active: boolean) =>
         <div
           key={node.id}
           className={baseClasses}
-          style={{
-            width: node.width,
-            minHeight: node.height,
-            left: node.x + layout.offsetX,
-            top: node.y + layout.offsetY
-          }}
-        >
+        style={{
+          width: node.width,
+          minHeight: node.height,
+          left: node.x + layout.offsetX,
+          top: node.y + layout.offsetY,
+          zIndex: nodeZIndex
+        }}
+      >
           <p className="text-[11px] uppercase tracking-wide text-v-light-text-secondary dark:text-v-text-secondary">
             Overview
           </p>
@@ -609,7 +760,8 @@ const filterButtonClasses = (active: boolean) =>
             width: node.width,
             minHeight: node.height,
             left: node.x + layout.offsetX,
-            top: node.y + layout.offsetY
+            top: node.y + layout.offsetY,
+            zIndex: nodeZIndex
           }}
         >
           <div className="flex items-start justify-between gap-2">
@@ -666,18 +818,27 @@ const filterButtonClasses = (active: boolean) =>
       : toolsState.explicitNone
         ? 'No tools'
         : `${toolsState.list.length} tool${toolsState.list.length === 1 ? '' : 's'}`;
+    const agentFavorited = Boolean(node.agent?.isFavorite);
+    const agentClasses = `${baseClasses} hover:shadow-md cursor-pointer ${
+      favoritesFilterActive
+        ? agentFavorited
+          ? 'ring-2 ring-v-accent/60'
+          : 'opacity-60'
+        : ''
+    }`;
 
     return (
       <div
         key={node.id}
         data-tour="team-node"
-        className={`${baseClasses} hover:shadow-md cursor-pointer`}
+        className={agentClasses}
         style={{
           width: node.width,
           minHeight: node.height,
           left: node.x + layout.offsetX,
           top: node.y + layout.offsetY,
-          overflow: 'visible'
+          overflow: 'visible',
+          zIndex: nodeZIndex
         }}
         data-stop-pan="true"
         onMouseEnter={handleTooltipEnter}
@@ -715,7 +876,7 @@ const filterButtonClasses = (active: boolean) =>
         </div>
         {node.agent && (
           <div
-            className={`absolute left-1/2 top-full mt-3 w-64 -translate-x-1/2 transition-opacity duration-150 z-20 ${
+            className={`absolute left-1/2 top-full mt-3 w-64 -translate-x-1/2 transition-opacity duration-150 z-[80] ${
               showTooltip ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
             }`}
             onMouseEnter={handleTooltipEnter}
@@ -772,11 +933,11 @@ const filterButtonClasses = (active: boolean) =>
             <div className="w-px bg-v-light-border dark:bg-v-border opacity-50"></div>
             <button
               onClick={() => {}}
-              title="Visualise"
+              title="Swarm View"
               className="px-3 py-2 text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 bg-v-accent/10 text-v-accent"
             >
               <NetworkIcon className="h-4 w-4" />
-              <span className="hidden sm:inline">Visualise</span>
+              <span className="hidden sm:inline">Swarm View</span>
             </button>
             <div className="w-px bg-v-light-border dark:bg-v-border opacity-50"></div>
             <button
@@ -864,13 +1025,13 @@ const filterButtonClasses = (active: boolean) =>
         </div>
         <div data-tour="team-graph">
           <div className="text-xs uppercase tracking-[0.2em] text-v-light-text-secondary dark:text-v-text-secondary mb-1">
-            Agents / Visualise graph
+            Agents / Swarm View graph
           </div>
           <h1 className="text-2xl font-semibold text-v-light-text-primary dark:text-v-text-primary">
             {userName ? `${userName}'s Organisation` : 'Your Organisation'}
           </h1>
           <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
-            Visualise relationships between project and personal agents to spot gaps quickly.
+            Explore your swarm of subagents from a bird&apos;s-eye view.
           </p>
         </div>
         {showEmptyBanner && (
@@ -892,6 +1053,7 @@ const filterButtonClasses = (active: boolean) =>
 
       <div ref={panelsRef} className="flex flex-col lg:flex-row gap-4">
         <aside
+          data-tour="team-filters"
           className="rounded-2xl border border-v-light-border/70 dark:border-v-border/70 bg-v-light-bg/60 dark:bg-v-dark/40 px-4 py-4 space-y-4 lg:w-72 flex-shrink-0 overflow-auto"
           style={maxPanelHeight ? { height: maxPanelHeight } : { minHeight: 420 }}
         >
@@ -939,12 +1101,49 @@ const filterButtonClasses = (active: boolean) =>
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
-              onPointerLeave={handlePointerUp}
+              onPointerLeave={(event) => {
+                setIsViewportHovered(false);
+                handlePointerUp(event);
+              }}
               onPointerCancel={handlePointerUp}
               onWheel={handleWheel}
+              onPointerEnter={() => setIsViewportHovered(true)}
             >
               <div
+                className={`absolute top-4 right-4 z-50 transition-opacity duration-150 ${isViewportHovered ? 'opacity-100' : 'opacity-0'} pointer-events-none`}
+              >
+                <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-v-light-border/70 dark:border-v-border/70 bg-v-light-bg/80 dark:bg-v-mid-dark/80 backdrop-blur-sm shadow-lg px-2 py-1">
+                  <button
+                    type="button"
+                    onClick={() => handleZoomChange(-ZOOM_STEP)}
+                    className="h-8 w-8 flex items-center justify-center rounded-full text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark transition-colors"
+                    aria-label="Zoom out"
+                  >
+                    −
+                  </button>
+                  <span className="text-xs font-semibold text-v-light-text-primary dark:text-v-text-primary w-12 text-center">
+                    {zoomInputValue}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleZoomChange(ZOOM_STEP)}
+                    className="h-8 w-8 flex items-center justify-center rounded-full text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark transition-colors"
+                    aria-label="Zoom in"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleZoomReset}
+                    className="ml-1 text-[11px] font-semibold uppercase tracking-wide text-v-accent hover:text-v-accent-hover"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+              <div
                 className="absolute inset-0"
+                data-graph-grid="true"
                 style={{
                   backgroundImage: `linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px)` ,
                   backgroundSize: '48px 48px',
@@ -961,6 +1160,7 @@ const filterButtonClasses = (active: boolean) =>
                 }}
                 className="relative"
                 data-tour="team-node-area"
+                data-graph-canvas="true"
               >
                 <svg
                   width={layout.canvasWidth}

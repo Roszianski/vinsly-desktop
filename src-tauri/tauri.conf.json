@@ -15,8 +15,8 @@
         "title": "",
         "width": 1220,
         "height": 780,
-        "minWidth": 1000,
-        "minHeight": 700
+        "minWidth": 1025,
+        "minHeight": 599
       }
     ],
     "security": {
@@ -28,27 +28,17 @@
           "windows": ["main"],
           "permissions": [
             "core:default",
-            "dialog:allow-confirm",
-            "dialog:allow-ask",
-            "dialog:allow-message",
             "dialog:allow-open",
             "dialog:allow-save",
-            "fs:allow-read-file",
+            "fs:allow-read-text-file",
+            "fs:allow-write-text-file",
             "fs:allow-write-file",
-            "fs:allow-read-dir",
-            "fs:allow-copy-file",
-            "fs:allow-create",
-            "fs:allow-remove",
-            "fs:allow-rename",
-            "fs:allow-exists",
-            "fs:default",
             "store:allow-get",
             "store:allow-set",
             "store:allow-save",
             "store:allow-load",
             "store:allow-delete",
             "store:allow-clear",
-            "opener:default",
             "opener:allow-reveal-item-in-dir"
           ]
         }
@@ -58,6 +48,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": [
+      "./bin/scan-helper"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -65,5 +58,18 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "dialog": false,
+      "endpoints": [
+        "https://updates.vinsly.app/latest.json"
+      ],
+      "pubkey": "replace-with-tauri-signing-public-key",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

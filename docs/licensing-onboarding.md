@@ -17,7 +17,7 @@ This document captures the planned flow for selling & activating Vinsly using [L
 
 Immediately after activation succeeds, we ask the user for a **display name**. This value:
 
-- Drives the Visualise view heading (`[Name] Organisation`).
+- Drives the Swarm View heading (`[Name] Organisation`).
 - Lives purely on-device (Tauri store) and can be changed any time.
 - Replaces the current hard-coded “Roszianski” placeholder. Until the user sets it, fallback copy can read “Your Organisation”.
 

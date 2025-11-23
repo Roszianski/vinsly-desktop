@@ -7,8 +7,8 @@ A Tauri-powered desktop application for designing, organising, and analysing Cla
 - 🖥️ **Native Desktop Experience** – Built with Tauri 2.0 for a fast, secure, and lightweight desktop application.
 - 📁 **File System Integration** – Direct access to `~/.claude/agents/` and project-level `.claude/agents/` directories.
 - 🔧 **Agent Management** – Create, edit, duplicate, favourite, and organise your Claude agents with a focused editor.
-- 🧠 **Visualise View** – See your “agent organisation” as a mind-map style graph, grouped by scope, with exportable diagrams.
-- 📊 **Analytics Dashboard** – Visualise agent complexity, model distribution, tool usage, and get data-driven recommendations.
+- 🧠 **Swarm View** – See your “agent organisation” as a mind-map style graph, grouped by scope, with exportable diagrams.
+- 📊 **Analytics Dashboard** – Track agent complexity, model distribution, tool usage, and get data-driven recommendations.
 - 🔍 **Scan & Watch** – Scan global and project directories for agents, and configure watched folders for auto‑discovery.
 - 💾 **Persistent Storage** – Settings, layout preferences, and local account details are stored using Tauri Store.
 - 🎨 **Light/Dark Themes** – System-aware theming with a dedicated appearance section in Settings.
@@ -134,7 +134,7 @@ Vinsly-Desktop/
   - `tauri-plugin-store` - Persistent key-value storage
   - `tauri-plugin-dialog` - Native file dialogs
   - `tauri-plugin-fs` - File system access
-  - `tauri-plugin-shell` - Process spawning
+  - `tauri-plugin-opener` - Reveal files in the OS file manager
 
 ## Available Scripts
 
@@ -142,6 +142,12 @@ Vinsly-Desktop/
 - `npm run build` - Build frontend for production
 - `npm run tauri dev` - Run Tauri app in development mode
 - `npm run tauri build` - Build Tauri app for production
+- `npm run reset:user-data` - Remove cached settings/licence data from the OS app-support folder (handy for testing first-run flows)
+
+## Resetting Local Data
+
+Vinsly persists licence details, onboarding flags, and scan preferences via Tauri Store inside the platform app-support directory (`~/Library/Application Support/com.vinsly.desktop` on macOS, `%APPDATA%\com.vinsly.desktop` on Windows, `~/.config/com.vinsly.desktop` on Linux).  
+Run `npm run reset:user-data` any time you need to simulate a clean install on your development machine, or delete the folder manually if you prefer.
 
 ## Tauri Commands
 
@@ -157,6 +163,11 @@ The application exposes several Rust commands for native functionality:
 ### System
 - `get_home_dir()` – Get cross-platform home directory path.
 
+## macOS Home Scan Permissions
+
+The optional “scan home directory for project agents” feature now skips macOS-protected folders (Desktop, Documents, Downloads, Music, Pictures, Movies, Applications, Library/iCloud Drive, etc.) to avoid the OS bombarding users with permission alerts.  
+Add any protected locations you care about as watched folders in Settings if you still need them indexed.
+
 ## Development Notes
 
 ### Debugging
@@ -170,6 +181,16 @@ npm run tauri build
 ```
 
 This creates platform-specific installers in `src-tauri/target/release/bundle/`
+
+### Releasing Updates (Short Version)
+
+- **Release endpoint** – A release endpoint is just a public URL where the app can fetch the small `latest.json` “what’s the newest version?” file. The simplest option is to upload that file as a Release asset in GitHub and point the updater config at `https://github.com/<your‑user>/<your‑repo>/releases/latest/download/latest.json`.
+- **Manual release workflow**:
+  1. Bump the version in `src-tauri/tauri.conf.json` (and `package.json` if you want them in sync).
+  2. Run `npm run tauri build` – this produces new `.dmg` / `.exe` files and, following the Tauri updater docs, a `latest.json` manifest.
+  3. On GitHub, go to **Releases → Draft new release**, give it a tag like `v0.2.0`, and attach the new `.dmg` / `.exe` files **plus** the `latest.json` file (named exactly `latest.json`).
+  4. Publish the release. The updater in Vinsly will now see this as the newest version.
+- **Automated release workflow (later)** – When you’re ready, you can add a GitHub Actions workflow that runs on tags like `v*` and does the same steps (install deps → `npm run tauri build` → upload installers + `latest.json` to the GitHub Release). This repo does not include that workflow yet; it’s optional and can be added when you want fully automatic releases.
 
 ### Permissions
 All permissions are configured in `src-tauri/capabilities/default.json`. The application has access to:
@@ -200,3 +221,16 @@ Vinsly Desktop is intended to be sold as a **pay‑to‑own** product using Lemo
 - **No subscription required** – The goal is a simple, developer‑friendly one‑off purchase rather than a recurring subscription for the core desktop app.
 
 Details may evolve as the product and licensing integration mature, but the intent is to keep activation straightforward: buy on the landing page, receive a Lemon Squeezy licence key, and activate inside the app using the built‑in licence + email flow.
+
+### Lemon Squeezy API Key Expiry
+
+When generating a Lemon Squeezy **License API key** for Vinsly:
+
+- Prefer a **long‑lived key** (e.g. **12 months**), not a short‑lived token.
+- This key is baked into the desktop build via `VITE_LEMON_LICENSE_API_KEY` so the app can call Lemon’s License API to validate keys.
+- If the key expires too soon, older installers become unable to validate licences.
+- Before the key expires:
+  - Create a **new** License API key in Lemon.
+  - Rebuild Vinsly with `VITE_LEMON_LICENSE_API_KEY` set to the new key.
+  - Ship an update and encourage users to upgrade.
+- Once most users are on a build that uses the new key, you can safely revoke the old key in Lemon.

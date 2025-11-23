@@ -11,6 +11,30 @@ import { ScanModal } from './ScanModal';
 import { iconButtonVariants, themeToggleVariants } from '../animations';
 import { getStorageItem, setStorageItem } from '../utils/storage';
 import { useToast } from '../contexts/ToastContext';
+import { PendingUpdateDetails } from '../types/updater';
+
+const ScanSpinner: React.FC = () => (
+  <svg
+    className="h-4 w-4 animate-spin text-v-accent"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+  >
+    <circle
+      className="opacity-25"
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="currentColor"
+      strokeWidth="4"
+      fill="none"
+    />
+    <path
+      className="opacity-75"
+      fill="currentColor"
+      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+    />
+  </svg>
+);
 
 interface HeaderProps {
     theme: Theme;
@@ -18,12 +42,24 @@ interface HeaderProps {
     onStartTour: () => void;
     onNavigateHome: () => void;
     onScan: (options?: LoadAgentsOptions) => Promise<{ total: number; newCount: number }>;
+    isScanning?: boolean;
     licenseInfo: LicenseInfo | null;
     onResetLicense: () => void;
     userDisplayName: string;
     onDisplayNameChange: (name: string) => void;
     scanSettings: ScanSettings;
     onScanSettingsChange?: (settings: ScanSettings) => void;
+    autoUpdateEnabled: boolean;
+    onAutoUpdateChange: (enabled: boolean) => void;
+    onCheckForUpdates: () => void;
+    isCheckingUpdate: boolean;
+    isInstallingUpdate: boolean;
+    pendingUpdate: PendingUpdateDetails | null;
+    appVersion: string;
+    lastUpdateCheckAt: string | null;
+    onInstallUpdate: () => void;
+    isMacPlatform: boolean;
+    macOSVersionMajor?: number | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -32,12 +68,24 @@ export const Header: React.FC<HeaderProps> = ({
   onStartTour,
   onNavigateHome,
   onScan,
+  isScanning = false,
   licenseInfo,
   onResetLicense,
   userDisplayName,
   onDisplayNameChange,
   scanSettings,
-  onScanSettingsChange
+  onScanSettingsChange,
+  autoUpdateEnabled,
+  onAutoUpdateChange,
+  onCheckForUpdates,
+  isCheckingUpdate,
+  isInstallingUpdate,
+  pendingUpdate,
+  appVersion,
+  lastUpdateCheckAt,
+  onInstallUpdate,
+  isMacPlatform,
+  macOSVersionMajor = null,
 }) => {
   const { showToast } = useToast();
   const [showScanModal, setShowScanModal] = useState(false);
@@ -139,8 +187,12 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => setShowScanModal(true)}
               className="px-4 py-2 rounded-lg border border-v-light-border dark:border-v-border text-sm font-medium text-v-light-text-primary dark:text-v-text-primary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer"
               aria-label="Scan for agents"
+              aria-busy={isScanning}
             >
-              Scan
+              <span className="inline-flex items-center gap-2">
+                {isScanning && <ScanSpinner />}
+                <span>{isScanning ? 'Scanning…' : 'Scan'}</span>
+              </span>
             </button>
 
             <button
@@ -210,6 +262,17 @@ export const Header: React.FC<HeaderProps> = ({
         onDisplayNameChange={onDisplayNameChange}
         scanSettings={scanSettings}
         onScanSettingsChange={onScanSettingsChange}
+        autoUpdateEnabled={autoUpdateEnabled}
+        onAutoUpdateChange={onAutoUpdateChange}
+        onCheckForUpdates={onCheckForUpdates}
+        isCheckingUpdate={isCheckingUpdate}
+        isInstallingUpdate={isInstallingUpdate}
+        pendingUpdate={pendingUpdate}
+        appVersion={appVersion}
+        lastUpdateCheckAt={lastUpdateCheckAt}
+        onInstallUpdate={onInstallUpdate}
+        isMacPlatform={isMacPlatform}
+        macOSVersionMajor={macOSVersionMajor}
         onResetLicense={() => {
           setShowSettingsModal(false);
           onResetLicense();
@@ -222,6 +285,7 @@ export const Header: React.FC<HeaderProps> = ({
         onClose={() => setShowScanModal(false)}
         onScan={onScan}
         scanSettings={scanSettings}
+        isMacPlatform={isMacPlatform}
       />
     </header>
   );

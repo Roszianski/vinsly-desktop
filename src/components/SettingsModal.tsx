@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { open } from '@tauri-apps/plugin-dialog';
 import { ScanSettings } from '../types';
 import { getScanSettings, saveScanSettings, addWatchedDirectory, removeWatchedDirectory } from '../utils/scanSettings';
 import { DeleteIcon } from './icons/DeleteIcon';
 import { LicenseInfo } from '../types/licensing';
+import { PendingUpdateDetails } from '../types/updater';
+import { checkFullDiskAccess, openFullDiskAccessSettings } from '../utils/tauriCommands';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -20,9 +22,20 @@ interface SettingsModalProps {
   onResetLicense: () => Promise<void> | void;
   onScanSettingsChange?: (settings: ScanSettings) => void;
   scanSettings: ScanSettings;
+  autoUpdateEnabled: boolean;
+  onAutoUpdateChange: (enabled: boolean) => Promise<void> | void;
+  onCheckForUpdates: () => Promise<void> | void;
+  isCheckingUpdate: boolean;
+  isInstallingUpdate: boolean;
+  pendingUpdate: PendingUpdateDetails | null;
+  appVersion: string;
+  lastUpdateCheckAt: string | null;
+  onInstallUpdate: () => Promise<void> | void;
+  isMacPlatform?: boolean;
+  macOSVersionMajor?: number | null;
 }
 
-type SettingsSection = 'appearance' | 'scanning' | 'account';
+type SettingsSection = 'appearance' | 'scanning' | 'account' | 'permissions';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -38,13 +51,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onResetLicense,
   onScanSettingsChange,
   scanSettings,
+  autoUpdateEnabled,
+  onAutoUpdateChange,
+  onCheckForUpdates,
+  isCheckingUpdate,
+  isInstallingUpdate,
+  pendingUpdate,
+  appVersion,
+  lastUpdateCheckAt,
+  onInstallUpdate,
+  isMacPlatform = false,
+  macOSVersionMajor = null,
 }) => {
   const [activeSection, setActiveSection] = useState<SettingsSection>('account');
   const [localScanSettings, setLocalScanSettings] = useState<ScanSettings>(scanSettings);
   const [displayNameInput, setDisplayNameInput] = useState(userDisplayName);
+  const [displayNameSaveState, setDisplayNameSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
+  const [fullDiskStatus, setFullDiskStatus] = useState<'unknown' | 'checking' | 'granted' | 'denied'>('unknown');
+  const [isOpeningFullDiskSettings, setIsOpeningFullDiskSettings] = useState(false);
+  const [fullDiskStatusMessage, setFullDiskStatusMessage] = useState<{ tone: 'info' | 'warn'; text: string } | null>(null);
+  const [showSequoiaTip, setShowSequoiaTip] = useState(false);
+  const displayNameSaveTimeoutRef = useRef<number | null>(null);
+  const postGrantCheckTimeoutRef = useRef<number | null>(null);
+  const lastCheckedLabel = lastUpdateCheckAt
+    ? new Date(lastUpdateCheckAt).toLocaleString()
+    : 'Not checked yet';
+  const fullDiskStatusLabel =
+    fullDiskStatus === 'granted'
+      ? 'Granted'
+      : fullDiskStatus === 'checking'
+        ? 'Checking…'
+        : fullDiskStatus === 'denied'
+          ? 'Not granted'
+          : 'Not checked';
+  const fullDiskStatusTone =
+    fullDiskStatus === 'granted'
+      ? 'bg-green-500/10 text-green-500 dark:text-green-400'
+      : fullDiskStatus === 'checking'
+        ? 'bg-v-light-border/60 dark:bg-v-border/40 text-v-light-text-secondary dark:text-v-text-secondary'
+        : 'bg-amber-500/10 text-amber-600 dark:text-amber-300';
+  const fullDiskMessageClass =
+    fullDiskStatusMessage?.tone === 'warn'
+      ? 'text-amber-600 dark:text-amber-300'
+      : 'text-v-light-text-secondary dark:text-v-text-secondary';
+  const trimmedDisplayName = displayNameInput.trim();
+  const isDisplayNameDirty = trimmedDisplayName.length > 0 && trimmedDisplayName !== userDisplayName.trim();
+  const isDisplayNameSaving = displayNameSaveState === 'saving';
+  const isDisplayNameSaved = displayNameSaveState === 'success';
+  const isSequoiaOrNewer = isMacPlatform && typeof macOSVersionMajor === 'number' && macOSVersionMajor >= 15;
 
   useEffect(() => {
     setDisplayNameInput(userDisplayName);
+    setDisplayNameSaveState('idle');
+    if (displayNameSaveTimeoutRef.current) {
+      window.clearTimeout(displayNameSaveTimeoutRef.current);
+      displayNameSaveTimeoutRef.current = null;
+    }
   }, [userDisplayName]);
 
   // Sync scan settings when modal opens or external state changes
@@ -89,6 +151,145 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setLocalScanSettings(updated);
     onScanSettingsChange?.(updated);
   };
+
+  const refreshFullDiskStatus = useCallback(async () => {
+    if (!isMacPlatform) {
+      setFullDiskStatus('granted');
+      setFullDiskStatusMessage(null);
+      return;
+    }
+    setFullDiskStatus('checking');
+    setFullDiskStatusMessage(null);
+    try {
+      const granted = await checkFullDiskAccess();
+      setFullDiskStatus(granted ? 'granted' : 'denied');
+      if (!granted) {
+        let pendingSave: ScanSettings | null = null;
+        setLocalScanSettings(prev => {
+          if (!prev.fullDiskAccessEnabled) {
+            return prev;
+          }
+          const next = { ...prev, fullDiskAccessEnabled: false };
+          pendingSave = next;
+          return next;
+        });
+        if (pendingSave) {
+          await saveScanSettings(pendingSave);
+          onScanSettingsChange?.(pendingSave);
+          setFullDiskStatusMessage({
+            tone: 'warn',
+            text: 'macOS is still blocking Desktop/Documents. Grant Full Disk Access or keep using watched folders.',
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check full disk access:', error);
+      setFullDiskStatus('denied');
+      setFullDiskStatusMessage({
+        tone: 'warn',
+        text: 'Unable to verify Full Disk Access right now. Try again or keep using watched folders.',
+      });
+    }
+  }, [isMacPlatform, onScanSettingsChange]);
+
+  const handleOpenFullDiskSettings = useCallback(async () => {
+    if (!isMacPlatform) {
+      setFullDiskStatusMessage({
+        tone: 'info',
+        text: 'Full Disk Access applies only to macOS. Windows/Linux already provide full access.',
+      });
+      return;
+    }
+    setIsOpeningFullDiskSettings(true);
+    setFullDiskStatusMessage(null);
+    try {
+      await openFullDiskAccessSettings();
+      setFullDiskStatusMessage({
+        tone: 'info',
+        text: 'System Settings opened. In Privacy & Security → Full Disk Access (HT210595), add or enable Vinsly, then choose “Check again”.',
+      });
+      if (postGrantCheckTimeoutRef.current) {
+        window.clearTimeout(postGrantCheckTimeoutRef.current);
+      }
+      postGrantCheckTimeoutRef.current = window.setTimeout(() => {
+        void refreshFullDiskStatus();
+        postGrantCheckTimeoutRef.current = null;
+      }, 2500);
+    } catch (error) {
+      console.error('Failed to open Full Disk Access settings:', error);
+      const details = error instanceof Error ? error.message : String(error);
+      setFullDiskStatusMessage({
+        tone: 'warn',
+        text: `Unable to open System Settings automatically (${details}). Please open Privacy & Security → Full Disk Access manually.`,
+      });
+    } finally {
+      setIsOpeningFullDiskSettings(false);
+    }
+  }, [isMacPlatform]);
+
+  const handleFullDiskAccessToggle = useCallback(async (enabled: boolean) => {
+    if (enabled && isMacPlatform && fullDiskStatus !== 'granted') {
+      setFullDiskStatusMessage({
+        tone: 'warn',
+        text: 'Grant Full Disk Access in System Settings and press “Check again” before enabling it.',
+      });
+      return;
+    }
+    const newSettings = { ...localScanSettings, fullDiskAccessEnabled: enabled };
+    setLocalScanSettings(newSettings);
+    await saveScanSettings(newSettings);
+    onScanSettingsChange?.(newSettings);
+    if (!enabled) {
+      setFullDiskStatusMessage({
+        tone: 'info',
+        text: 'Full Disk Access disabled—use watched folders below to scan Desktop or Documents individually.',
+      });
+    } else {
+      setFullDiskStatusMessage(null);
+    }
+  }, [fullDiskStatus, isMacPlatform, localScanSettings, onScanSettingsChange]);
+
+  const handleDisplayNameSave = useCallback(async () => {
+    const trimmed = displayNameInput.trim();
+    if (!trimmed || trimmed === userDisplayName.trim()) {
+      return;
+    }
+    setDisplayNameSaveState('saving');
+    try {
+      await Promise.resolve(onDisplayNameChange(trimmed));
+      setDisplayNameSaveState('success');
+      if (displayNameSaveTimeoutRef.current) {
+        window.clearTimeout(displayNameSaveTimeoutRef.current);
+      }
+      displayNameSaveTimeoutRef.current = window.setTimeout(() => {
+        setDisplayNameSaveState('idle');
+        displayNameSaveTimeoutRef.current = null;
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to update display name:', error);
+      setDisplayNameSaveState('idle');
+    }
+  }, [displayNameInput, onDisplayNameChange, userDisplayName]);
+
+  useEffect(() => {
+    if (isOpen) {
+      void refreshFullDiskStatus();
+    } else {
+      setFullDiskStatus('unknown');
+      setFullDiskStatusMessage(null);
+    }
+  }, [isOpen, refreshFullDiskStatus]);
+
+  useEffect(() => {
+    return () => {
+      if (displayNameSaveTimeoutRef.current) {
+        window.clearTimeout(displayNameSaveTimeoutRef.current);
+      }
+      if (postGrantCheckTimeoutRef.current) {
+        window.clearTimeout(postGrantCheckTimeoutRef.current);
+      }
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -165,6 +366,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       }`}
                     >
                       Agents & Scanning
+                    </button>
+                    <button
+                      onClick={() => setActiveSection('permissions')}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                        activeSection === 'permissions'
+                          ? 'bg-v-light-hover dark:bg-v-light-dark text-v-accent font-medium'
+                          : 'text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark'
+                      }`}
+                    >
+                      Permissions
                     </button>
                   </nav>
                 </div>
@@ -416,6 +627,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           </button>
                         </div>
                       </div>
+
+                      <div className="border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                              Updates
+                            </p>
+                            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                              Control how Vinsly delivers new versions
+                            </p>
+                          </div>
+                          {pendingUpdate && (
+                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-v-accent/10 text-v-accent">
+                              Update available
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="text-v-light-text-secondary dark:text-v-text-secondary">Current version</span>
+                            <span className="font-mono text-v-light-text-primary dark:text-v-text-primary">{appVersion || '—'}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-v-light-text-secondary dark:text-v-text-secondary">Last checked</span>
+                            <span className="text-v-light-text-primary dark:text-v-text-primary">{lastCheckedLabel}</span>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                          <button
+                            onClick={() => void onAutoUpdateChange(!autoUpdateEnabled)}
+                            className={`px-4 py-2 rounded-lg border transition-colors ${
+                              autoUpdateEnabled
+                                ? 'border-v-accent text-v-accent bg-v-accent/10'
+                                : 'border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent/50'
+                            }`}
+                          >
+                            {autoUpdateEnabled ? 'Auto-update enabled' : 'Enable auto-update'}
+                          </button>
+                          <button
+                            onClick={() => void onCheckForUpdates()}
+                            disabled={isCheckingUpdate}
+                            className="px-4 py-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent/50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {isCheckingUpdate ? 'Checking…' : 'Check for updates'}
+                          </button>
+                          {pendingUpdate && (
+                            <button
+                              onClick={() => void onInstallUpdate()}
+                              disabled={isInstallingUpdate}
+                              className="px-4 py-2 rounded-lg bg-v-accent text-white font-semibold hover:bg-v-accent-hover disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                            >
+                              {isInstallingUpdate ? 'Installing…' : `Install ${pendingUpdate.version}`}
+                            </button>
+                          )}
+                        </div>
+
+                        {pendingUpdate?.notes && (
+                          <div className="mt-4 p-3 rounded-lg border border-dashed border-v-light-border dark:border-v-border bg-v-light-surface dark:bg-v-mid-dark text-xs text-v-light-text-secondary dark:text-v-text-secondary whitespace-pre-line">
+                            {pendingUpdate.notes.length > 600 ? `${pendingUpdate.notes.slice(0, 600)}…` : pendingUpdate.notes}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -533,6 +808,143 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   )}
 
+                  {activeSection === 'permissions' && (
+                    <div className="max-w-2xl space-y-6">
+                      <div>
+                        <h3 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary mb-1">
+                          Permissions
+                        </h3>
+                        <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
+                          Choose between one-time Full Disk Access or selective folder monitoring.
+                        </p>
+                      </div>
+
+                      {isMacPlatform ? (
+                        <>
+                          <div className="space-y-4 border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                                  Full Disk Access (macOS)
+                                </p>
+                                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                                  Grant this once so Vinsly can scan Desktop, Documents, iCloud Drive, and other protected folders.
+                                </p>
+                              </div>
+                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${fullDiskStatusTone}`}>
+                                {fullDiskStatusLabel}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => void handleOpenFullDiskSettings()}
+                                disabled={isOpeningFullDiskSettings}
+                                className="px-4 py-2 rounded-lg text-sm font-medium bg-v-accent text-white hover:bg-v-accent-hover disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                              >
+                                {isOpeningFullDiskSettings ? 'Opening…' : 'Grant Full Disk Access'}
+                              </button>
+                              <button
+                                onClick={() => fullDiskStatus !== 'checking' && void refreshFullDiskStatus()}
+                                disabled={fullDiskStatus === 'checking'}
+                                className="px-4 py-2 rounded-lg text-sm font-medium border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-light-text-primary dark:hover:text-v-text-primary disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                              >
+                                {fullDiskStatus === 'checking' ? 'Checking…' : 'Check status'}
+                              </button>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                                  Use Full Disk Access for home scans
+                                </p>
+                                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                                  Turn this on to automatically include Desktop/Documents when you run a home scan.
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => void handleFullDiskAccessToggle(!localScanSettings.fullDiskAccessEnabled)}
+                                disabled={fullDiskStatus !== 'granted'}
+                                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-v-accent ${
+                                  localScanSettings.fullDiskAccessEnabled ? 'bg-v-accent' : 'bg-v-light-border dark:bg-v-border'
+                                } ${fullDiskStatus !== 'granted' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                role="switch"
+                                aria-checked={localScanSettings.fullDiskAccessEnabled}
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                                    localScanSettings.fullDiskAccessEnabled ? 'translate-x-5' : 'translate-x-0'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                            {fullDiskStatus !== 'granted' && (
+                              <p className="text-xs text-amber-600 dark:text-amber-300">
+                                Add Vinsly in System Settings → Privacy &amp; Security → Full Disk Access, then click “Check status”.
+                              </p>
+                            )}
+                            {fullDiskStatusMessage && (
+                              <div className={`text-xs ${fullDiskMessageClass}`}>
+                                {fullDiskStatusMessage.text}
+                              </div>
+                            )}
+                            {isSequoiaOrNewer && (
+                              <div className="text-xs text-v-light-text-secondary dark:text-v-text-secondary border border-dashed border-v-light-border/80 dark:border-v-border/70 rounded-lg p-3 bg-v-light-bg/40 dark:bg-v-dark/40">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowSequoiaTip(prev => !prev)}
+                                  className="font-semibold text-v-accent hover:text-v-accent-hover"
+                                >
+                                  Having trouble on macOS 15 (Sequoia)?
+                                </button>
+                                {showSequoiaTip && (
+                                  <p className="mt-2">
+                                    Apple’s latest beta can hide helper tools in the Full Disk Access list. Even if Vinsly isn’t visible, macOS still honors the entitlement once you grant it (FB20662270). Click “Check status” here to verify.
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="border border-dashed border-v-light-border dark:border-v-border rounded-lg p-4 bg-v-light-bg/60 dark:bg-v-dark/60 space-y-2">
+                            <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">Prefer selective access?</p>
+                            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                              Leave Full Disk Access off and add Desktop, Documents, or any other folder manually under Settings → Agents &amp; Scanning → Watched Directories.
+                            </p>
+                            <button
+                              onClick={() => setActiveSection('scanning')}
+                              className="inline-flex items-center text-xs font-semibold text-v-accent hover:text-v-accent-hover transition-colors"
+                            >
+                              Go to Agents &amp; Scanning →
+                            </button>
+                          </div>
+
+                          <div className="border border-v-light-border dark:border-v-border rounded-lg p-4 bg-v-light-bg/40 dark:bg-v-dark/60 space-y-2">
+                            <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">Need an admin shortcut?</p>
+                            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                              Follow&nbsp;
+                              <a href="https://support.apple.com/HT210595" target="_blank" rel="noreferrer" className="text-v-accent hover:text-v-accent-hover underline">
+                                Apple HT210595
+                              </a>
+                              &nbsp;or deploy a&nbsp;
+                              <a
+                                href="https://developer.apple.com/documentation/devicemanagement/privacy_preferences_policy_control"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-v-accent hover:text-v-accent-hover underline"
+                              >
+                                PrivacyPreferencesPolicyControl
+                              </a>
+                              &nbsp;payload allowing <code className="font-mono">kTCCServiceSystemPolicyAllFiles</code> for <code className="font-mono">com.vinsly.desktop</code>. Users who skip Full Disk Access can keep scanning via watched directories.
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg/60 dark:bg-v-dark/60 text-sm text-v-light-text-secondary dark:text-v-text-secondary">
+                          Your operating system already lets Vinsly read your home directory. Use watched directories if you want to scope scanning to specific projects.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {activeSection === 'account' && (
                     <div className="max-w-2xl space-y-8">
                       <div>
@@ -588,29 +1000,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               Display name
                             </p>
                             <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                              Used across the app (e.g. Visualise view)
+                              Used across the app (e.g. Swarm View)
                             </p>
                           </div>
                           <div className="flex items-center gap-3">
                             <input
                               type="text"
                               value={displayNameInput}
-                              onChange={(event) => setDisplayNameInput(event.target.value)}
+                              onChange={(event) => {
+                                setDisplayNameInput(event.target.value);
+                                if (displayNameSaveState !== 'idle') {
+                                  setDisplayNameSaveState('idle');
+                                  if (displayNameSaveTimeoutRef.current) {
+                                    window.clearTimeout(displayNameSaveTimeoutRef.current);
+                                    displayNameSaveTimeoutRef.current = null;
+                                  }
+                                }
+                              }}
                               className="flex-1 px-4 py-2 rounded-lg border border-v-light-border dark:border-v-border bg-transparent text-v-light-text-primary dark:text-v-text-primary focus-visible:outline-none focus:ring-2 focus:ring-v-accent"
                               placeholder="e.g. Lunar Labs"
                             />
                             <button
-                              onClick={() => {
-                                const trimmed = displayNameInput.trim();
-                                if (trimmed) {
-                                  onDisplayNameChange(trimmed);
-                                }
-                              }}
-                              disabled={!displayNameInput.trim()}
-                              className="px-4 py-2 rounded-lg bg-v-accent text-white text-sm font-semibold hover:bg-v-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => void handleDisplayNameSave()}
+                              disabled={!isDisplayNameDirty || isDisplayNameSaving}
+                              className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                isDisplayNameSaved
+                                  ? 'bg-green-600 text-white'
+                                  : 'bg-v-accent text-white hover:bg-v-accent-hover'
+                              }`}
                               type="button"
                             >
-                              Save
+                              {isDisplayNameSaving && (
+                                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                  <circle
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    strokeDasharray="60"
+                                    strokeDashoffset="20"
+                                    strokeLinecap="round"
+                                  />
+                                </svg>
+                              )}
+                              {isDisplayNameSaved && !isDisplayNameSaving && (
+                                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                  <path
+                                    d="M5 13l4 4L19 7"
+                                    stroke="currentColor"
+                                    strokeWidth="3"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              )}
+                              <span>{isDisplayNameSaved ? 'Saved' : isDisplayNameSaving ? 'Saving…' : 'Save'}</span>
                             </button>
                           </div>
                         </div>

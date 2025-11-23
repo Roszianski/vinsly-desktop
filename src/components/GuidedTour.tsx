@@ -45,8 +45,8 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ isActive, onComplete, to
     },
     {
       targetSelector: '[data-tour="team-view"]',
-      title: 'Visualise Relationships',
-      description: 'Open the Visualise view to see mind-map style connections and collaboration paths between agents.',
+      title: 'Swarm View Relationships',
+      description: 'Open Swarm View to see mind-map style connections and collaboration paths between agents.',
       position: 'bottom'
     },
     {
@@ -60,9 +60,21 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ isActive, onComplete, to
   const teamTourSteps: TourStep[] = [
     {
       targetSelector: '[data-tour="team-graph"]',
-      title: 'Agent Relationship Graph',
-      description: 'This graph shows all your agents as nodes. The layout helps you visualise your agent ecosystem at a glance—hover an agent to inspect its details instantly.',
+      title: 'Swarm View Overview',
+      description: 'Start here for the high-level summary. It gives you context on what this view is optimising for and how to interpret it.',
       position: 'bottom'
+    },
+    {
+      targetSelector: '[data-tour="team-filters"]',
+      title: 'Filter & Focus',
+      description: 'Use these chips to toggle scopes, highlight favourites, and reset quickly. Mix and match filters without losing sight of the rest of the map.',
+      position: 'right'
+    },
+    {
+      targetSelector: '[data-tour="team-node-area"]',
+      title: 'Explore the Graph',
+      description: 'Pan, zoom, and hover nodes to open detailed cards. Favourites float to the top when highlighted so you can track critical agents instantly.',
+      position: 'top'
     }
   ];
 

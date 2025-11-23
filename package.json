@@ -6,9 +6,12 @@
   "description": "Vinsly - Agent Studio Desktop Application",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build:web": "tsc && vite build",
+    "build:helper": "node ./scripts/build-scan-helper.mjs",
+    "build": "npm run build:web && npm run build:helper",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "node ./scripts/run-tauri.mjs",
+    "reset:user-data": "node ./scripts/reset-user-data.mjs"
   },
   "dependencies": {
     "@fontsource/fira-code": "^5.2.7",
@@ -17,8 +20,9 @@
     "@tauri-apps/plugin-dialog": "^2.4.2",
     "@tauri-apps/plugin-fs": "^2.4.4",
     "@tauri-apps/plugin-opener": "^2",
-    "@tauri-apps/plugin-shell": "^2.3.3",
+    "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-store": "^2.4.1",
+    "@tauri-apps/plugin-updater": "^2.9.0",
     "framer-motion": "^12.23.24",
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
