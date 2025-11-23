@@ -475,8 +475,12 @@ fn read_tcc_full_disk_entry() -> Result<Option<bool>, String> {
         return Ok(None);
     }
 
+    // Ventura and newer record Full Disk Access decisions via auth_value=2 while leaving
+    // the legacy allowed column at 0, so prefer auth_value but keep the older flag as a fallback.
     let query = format!(
-        "SELECT allowed FROM access WHERE client='{}' AND service='kTCCServiceSystemPolicyAllFiles' ORDER BY last_modified DESC LIMIT 1;",
+        "SELECT CASE WHEN auth_value IN (2,5) THEN 1 WHEN allowed = 1 THEN 1 ELSE 0 END AS granted \
+        FROM access WHERE client='{}' AND service='kTCCServiceSystemPolicyAllFiles' \
+        ORDER BY last_modified DESC LIMIT 1;",
         MACOS_BUNDLE_IDENTIFIER
     );
 
@@ -500,10 +504,10 @@ fn read_tcc_full_disk_entry() -> Result<Option<bool>, String> {
         return Ok(None);
     }
 
-    let allowed: i64 = stdout
+    let granted: i64 = stdout
         .parse()
         .map_err(|err| format!("Unexpected sqlite3 output '{}': {}", stdout, err))?;
-    Ok(Some(allowed == 1))
+    Ok(Some(granted == 1))
 }
 
 #[tauri::command]
