@@ -9,14 +9,24 @@ function getLemonApiBaseUrl(): string {
   return raw.replace(/\/+$/, '');
 }
 
+function getLemonApiKey(): string {
+  const key = import.meta.env.VITE_LEMON_LICENSE_API_KEY as string | undefined;
+  if (!key) {
+    throw new Error('VITE_LEMON_LICENSE_API_KEY is not configured');
+  }
+  return key;
+}
+
 export async function validateLicenseWithLemon(licenseKey: string): Promise<LemonLicenseValidationResult> {
   const baseUrl = getLemonApiBaseUrl();
+  const apiKey = getLemonApiKey();
 
   const response = await fetch(`${baseUrl}/v1/licenses/validate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Accept: 'application/json'
+      Accept: 'application/json',
+      Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
       license_key: licenseKey.trim()

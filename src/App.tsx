@@ -24,6 +24,8 @@ import { DEFAULT_HOME_DISCOVERY_DEPTH, discoverHomeDirectories } from './utils/h
 import { useUpdater } from './hooks/useUpdater';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { validateLicenseWithLemon } from './utils/lemonLicensingClient';
+import { activateLicense, sendHeartbeat, LicenseServerError, RemoteLicenseStatus } from './utils/licensingClient';
+import { getOrCreateDeviceFingerprint } from './utils/deviceFingerprint';
 
 type View = 'list' | 'team' | 'analytics' | 'edit' | 'create' | 'duplicate';
 export type Theme = 'light' | 'dark';
@@ -94,6 +96,38 @@ const detectMacOSMajorVersion = (): number | null => {
   return major;
 };
 
+const mapRemoteStatus = (status: RemoteLicenseStatus): LicenseInfo['status'] => {
+  if (status === 'active') {
+    return 'active';
+  }
+  if (status === 'expired') {
+    return 'expired';
+  }
+  return 'revoked';
+};
+
+const getPlatformIdentifier = (): string => {
+  if (typeof navigator === 'undefined') {
+    return 'unknown';
+  }
+  const platformSource =
+    ((navigator as any).userAgentData?.platform as string | undefined) ??
+    navigator.platform ??
+    navigator.userAgent ??
+    '';
+  const normalized = platformSource.toLowerCase();
+  if (normalized.includes('mac')) {
+    return 'mac';
+  }
+  if (normalized.includes('win')) {
+    return 'win';
+  }
+  if (normalized.includes('linux')) {
+    return 'linux';
+  }
+  return 'unknown';
+};
+
 const App: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isScanBusy, setIsScanBusy] = useState(false);
@@ -106,6 +140,8 @@ const App: React.FC = () => {
   const [returnDestination, setReturnDestination] = useState<'list' | 'team'>('list');
   const [isTourActive, setIsTourActive] = useState(false);
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
+  const [deviceFingerprint, setDeviceFingerprint] = useState<string | null>(null);
+  const [licenseBootstrapComplete, setLicenseBootstrapComplete] = useState(false);
   const [userDisplayName, setUserDisplayName] = useState('');
   const [isActivationOpen, setIsActivationOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
@@ -191,21 +227,101 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const loadAccountData = async () => {
-      const storedLicense = await getStorageItem<LicenseInfo>('vinsly-license-info');
-      if (storedLicense) {
-        setLicenseInfo(storedLicense);
-        setIsOnboardingComplete(true);
-      } else {
-        setIsOnboardingComplete(false);
-      }
+    const loadDisplayName = async () => {
       const storedName = await getStorageItem<string>('vinsly-display-name');
       if (storedName) {
         setUserDisplayName(storedName);
       }
     };
-    loadAccountData();
+    loadDisplayName();
   }, []);
+
+  useEffect(() => {
+    const resolveFingerprint = async () => {
+      try {
+        const fingerprint = await getOrCreateDeviceFingerprint();
+        setDeviceFingerprint(fingerprint);
+      } catch (error) {
+        console.error('Unable to initialize device fingerprint', error);
+      }
+    };
+    void resolveFingerprint();
+  }, []);
+
+  useEffect(() => {
+    if (!deviceFingerprint) {
+      return;
+    }
+    let cancelled = false;
+
+    const hydrateLicense = async () => {
+      const storedLicense = await getStorageItem<LicenseInfo>('vinsly-license-info');
+      if (!storedLicense) {
+        if (!cancelled) {
+          setLicenseInfo(null);
+          setIsOnboardingComplete(false);
+          setLicenseBootstrapComplete(true);
+        }
+        return;
+      }
+
+      if (!storedLicense.token || !storedLicense.deviceFingerprint) {
+        await removeStorageItem('vinsly-license-info');
+        if (!cancelled) {
+          setLicenseInfo(null);
+          setIsOnboardingComplete(false);
+          setLicenseBootstrapComplete(true);
+        }
+        return;
+      }
+
+      if (storedLicense.deviceFingerprint !== deviceFingerprint) {
+        await removeStorageItem('vinsly-license-info');
+        if (!cancelled) {
+          setLicenseInfo(null);
+          setIsOnboardingComplete(false);
+          setLicenseBootstrapComplete(true);
+        }
+        return;
+      }
+
+      try {
+        await sendHeartbeat({
+          token: storedLicense.token,
+          deviceFingerprint,
+          appVersion: appVersion || undefined,
+        });
+        const refreshed: LicenseInfo = {
+          ...storedLicense,
+          status: 'active',
+          lastChecked: new Date().toISOString(),
+        };
+        await setStorageItem('vinsly-license-info', refreshed);
+        if (!cancelled) {
+          setLicenseInfo(refreshed);
+          setIsOnboardingComplete(true);
+        }
+      } catch (error) {
+        console.error('Heartbeat validation failed:', error);
+        await removeStorageItem('vinsly-license-info');
+        if (!cancelled) {
+          setLicenseInfo(null);
+          setIsOnboardingComplete(false);
+          showToast('error', 'We need to verify your licence again.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLicenseBootstrapComplete(true);
+        }
+      }
+    };
+
+    void hydrateLicense();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceFingerprint, appVersion, showToast]);
 
   useEffect(() => {
     const loadAppVersion = async () => {
@@ -257,13 +373,16 @@ const App: React.FC = () => {
   }, [updateSnooze]);
 
   useEffect(() => {
-    if (!showSplash && !activationPresented && !licenseInfo) {
-      setIsActivationOpen(true);
-      setActivationPresented(true);
-    } else if (!showSplash && !activationPresented) {
+    if (activationPresented || !licenseBootstrapComplete) {
+      return;
+    }
+    if (!showSplash) {
+      if (!licenseInfo) {
+        setIsActivationOpen(true);
+      }
       setActivationPresented(true);
     }
-  }, [licenseInfo, showSplash, activationPresented]);
+  }, [licenseInfo, showSplash, activationPresented, licenseBootstrapComplete]);
 
   useEffect(() => {
     if (!licenseInfo || autoUpdateEnabled) {
@@ -1030,31 +1149,65 @@ const App: React.FC = () => {
         defaultFullDiskAccess={scanSettings.fullDiskAccessEnabled}
         isMacPlatform={isMacLike}
         macOSVersionMajor={macOSMajorVersion}
-        onValidateLicense={async ({ licenseKey, email }) => {
+        onValidateLicense={async ({ licenseKey }) => {
           const result = await validateLicenseWithLemon(licenseKey);
-          if (!result.valid) {
+          const status = result.status?.toLowerCase();
+          if (!result.valid || (status && status !== 'active')) {
             const message =
               result.error === 'invalid'
                 ? 'This licence key was not recognised.'
-                : result.error === 'revoked'
+                : result.error === 'revoked' || status === 'revoked'
                   ? 'This licence has been revoked or refunded.'
                   : 'Unable to validate your licence right now.';
             throw new Error(message);
           }
-
-          const nextLicense: LicenseInfo = {
-            licenseKey,
-            email,
-            status: 'active',
-            lastChecked: new Date().toISOString()
-          };
-
-          setLicenseInfo(nextLicense);
-          await setStorageItem('vinsly-license-info', nextLicense);
         }}
         onComplete={async ({ licenseKey, email, displayName, autoScanGlobal, autoScanHome, fullDiskAccessEnabled }) => {
-          setUserDisplayName(displayName);
-          await setStorageItem('vinsly-display-name', displayName);
+          const trimmedLicenseKey = licenseKey.trim();
+          const trimmedEmail = email.trim();
+          const trimmedDisplayName = displayName.trim();
+
+          const resolvedFingerprint = deviceFingerprint ?? (await getOrCreateDeviceFingerprint());
+          if (!deviceFingerprint) {
+            setDeviceFingerprint(resolvedFingerprint);
+          }
+
+          let activationResult;
+          try {
+            activationResult = await activateLicense({
+              licenseKey: trimmedLicenseKey,
+              deviceFingerprint: resolvedFingerprint,
+              platform: getPlatformIdentifier(),
+              appVersion: appVersion || undefined,
+            });
+          } catch (error) {
+            console.error('Activation completion failed:', error);
+            if (error instanceof LicenseServerError) {
+              if (error.code === 'device_limit_reached') {
+                throw new Error('This licence is already active on the maximum number of devices.');
+              }
+              if (error.code === 'license_revoked_or_refunded') {
+                throw new Error('This licence has been revoked or refunded.');
+              }
+            }
+            throw new Error('Unable to activate your licence right now. Please try again.');
+          }
+
+          const licenseRecord: LicenseInfo = {
+            licenseKey: trimmedLicenseKey,
+            email: trimmedEmail,
+            status: mapRemoteStatus(activationResult.licenseStatus),
+            lastChecked: new Date().toISOString(),
+            token: activationResult.token,
+            deviceFingerprint: resolvedFingerprint,
+            maxDevices: activationResult.maxDevices,
+          };
+          setLicenseInfo(licenseRecord);
+          await setStorageItem('vinsly-license-info', licenseRecord);
+          setLicenseBootstrapComplete(true);
+
+          setUserDisplayName(trimmedDisplayName);
+          await setStorageItem('vinsly-display-name', trimmedDisplayName);
 
           const updatedScanSettings: ScanSettings = {
             ...scanSettingsRef.current,

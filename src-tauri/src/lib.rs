@@ -210,7 +210,10 @@ async fn list_agents(
 // Read a single agent file
 #[tauri::command]
 async fn read_agent(path: String) -> Result<String, String> {
-    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read agent file: {}", e))
+    let expanded_path = expand_path(&path)?;
+    ensure_path_in_agents_dir(&expanded_path)?;
+    std::fs::read_to_string(&expanded_path)
+        .map_err(|e| format!("Failed to read agent file: {}", e))
 }
 
 // Write an agent file
@@ -227,6 +230,7 @@ async fn write_agent(
     // Create directory if it doesn't exist
     std::fs::create_dir_all(&agents_dir)
         .map_err(|e| format!("Failed to create directory: {}", e))?;
+    ensure_path_in_agents_dir(&agents_dir)?;
 
     let mut file_path = agents_dir;
     file_path.push(format!("{}.md", name));
