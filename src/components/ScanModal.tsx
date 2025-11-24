@@ -28,14 +28,33 @@ const SourceChip: React.FC<SourceChipProps> = ({ label, description, active, dis
     type="button"
     onClick={onClick}
     disabled={disabled}
+    aria-pressed={active}
     className={`px-4 py-3 rounded-xl border transition-colors text-left ${
       active
         ? 'border-v-accent bg-v-accent/10 text-v-light-text-primary dark:text-v-text-primary'
         : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent'
     } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
   >
-    <p className="text-sm font-semibold">{label}</p>
-    <p className="text-xs mt-1 leading-snug">{description}</p>
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex-1">
+        <p className="text-sm font-semibold">{label}</p>
+        <p className="text-xs mt-1 leading-snug">{description}</p>
+      </div>
+      <span
+        className={`mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-md border transition-colors ${
+          active
+            ? 'border-v-accent bg-v-accent text-white'
+            : 'border-v-light-border dark:border-v-border bg-transparent text-transparent'
+        }`}
+        aria-hidden="true"
+      >
+        {active && (
+          <svg className="w-3 h-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 10.5l3 3 7-7" />
+          </svg>
+        )}
+      </span>
+    </div>
   </button>
 );
 
@@ -305,7 +324,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                   Pick your sources
                 </p>
                 <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                  Vinsly will scan everything that’s turned on below.
+                  Turn on one or multiple sources—Vinsly scans everything you enable below.
                 </p>
 
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">

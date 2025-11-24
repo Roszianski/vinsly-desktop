@@ -558,7 +558,7 @@ const App: React.FC = () => {
       applyScanSettings(storedSettings);
 
       let homeDirectories: string[] = [];
-      if (storedSettings.autoScanHomeDirectoryOnStartup) {
+      if (storedSettings.autoScanHomeDirectoryOnStartup && storedSettings.fullDiskAccessEnabled) {
         try {
           homeDirectories = await discoverHomeDirectories({
             maxDepth: HOME_DISCOVERY_MAX_DEPTH,
@@ -567,9 +567,12 @@ const App: React.FC = () => {
         } catch (error) {
           console.error('Error discovering home directories:', error);
         }
+      } else if (storedSettings.autoScanHomeDirectoryOnStartup && !storedSettings.fullDiskAccessEnabled) {
+        console.info('Skipping automatic home scan because Full Disk Access is disabled.');
       }
 
-      const shouldScanWatched = (storedSettings.autoScanGlobalOnStartup || storedSettings.autoScanHomeDirectoryOnStartup)
+      const homeScanEnabled = storedSettings.autoScanHomeDirectoryOnStartup && storedSettings.fullDiskAccessEnabled;
+      const shouldScanWatched = (storedSettings.autoScanGlobalOnStartup || homeScanEnabled)
         && storedSettings.watchedDirectories.length > 0;
 
       await loadAgents({
@@ -1063,7 +1066,7 @@ const App: React.FC = () => {
           applyScanSettings(updatedScanSettings);
 
           let onboardingDirectories: string[] = [];
-          if (autoScanHome) {
+          if (autoScanHome && fullDiskAccessEnabled) {
             try {
               onboardingDirectories = await discoverHomeDirectories({
                 maxDepth: HOME_DISCOVERY_MAX_DEPTH,
@@ -1073,11 +1076,14 @@ const App: React.FC = () => {
             } catch (error) {
               console.error('Error discovering home directories during onboarding:', error);
             }
+          } else if (autoScanHome && !fullDiskAccessEnabled) {
+            console.info('Skipping onboarding home scan because Full Disk Access is disabled.');
           }
 
           setIsOnboardingComplete(true);
 
-          const shouldScanWatched = (autoScanGlobal || autoScanHome) && updatedScanSettings.watchedDirectories.length > 0;
+          const homeScanActive = autoScanHome && fullDiskAccessEnabled;
+          const shouldScanWatched = (autoScanGlobal || homeScanActive) && updatedScanSettings.watchedDirectories.length > 0;
 
           await loadAgents({
             includeGlobal: autoScanGlobal,

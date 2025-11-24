@@ -84,6 +84,11 @@ const scopeCopy: Record<AgentScope, { title: string; text: string }> = {
   }
 };
 
+const DEFAULT_SCOPE_VISIBILITY: ScopeVisibility = {
+  [AgentScope.Global]: true,
+  [AgentScope.Project]: true
+};
+
 const colorPalette: Record<string, string> = {
   red: '#ef4444',
   blue: '#3b82f6',
@@ -125,10 +130,7 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({ agents, onBack, on
   const [isExporting, setIsExporting] = useState(false);
   const [maxPanelHeight, setMaxPanelHeight] = useState<number | null>(null);
   const [favoritesFilterActive, setFavoritesFilterActive] = useState(false);
-  const [scopeVisibility, setScopeVisibility] = useState<ScopeVisibility>({
-    [AgentScope.Global]: true,
-    [AgentScope.Project]: true
-  });
+  const [scopeVisibility, setScopeVisibility] = useState<ScopeVisibility>({ ...DEFAULT_SCOPE_VISIBILITY });
   const [collapsedGroups, setCollapsedGroups] = useState<CollapsedGroupState>({
     [AgentScope.Global]: false,
     [AgentScope.Project]: false
@@ -169,17 +171,10 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({ agents, onBack, on
   }, [agents, scopeVisibility, favoritesFilterActive]);
 
   const toggleScopeVisibility = (scope: AgentScope) => {
-    setScopeVisibility(prev => {
-      const activeCount = Object.values(prev).filter(Boolean).length;
-      const isLastActive = prev[scope] && activeCount === 1;
-      if (isLastActive && !favoritesFilterActive) {
-        return prev;
-      }
-      return {
-        ...prev,
-        [scope]: !prev[scope]
-      };
-    });
+    setScopeVisibility(prev => ({
+      ...prev,
+      [scope]: !prev[scope]
+    }));
   };
 
   const toggleGroupCollapse = (scope: AgentScope) => {
@@ -191,10 +186,7 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({ agents, onBack, on
 
   const resetFilters = () => {
     setFavoritesFilterActive(false);
-    setScopeVisibility({
-      [AgentScope.Global]: true,
-      [AgentScope.Project]: true
-    });
+    setScopeVisibility({ ...DEFAULT_SCOPE_VISIBILITY });
   };
 
   const scopeFilterOptions = useMemo(
@@ -221,26 +213,44 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({ agents, onBack, on
         ? 'border-v-accent text-v-accent bg-v-accent/10'
         : 'border-v-light-border/60 dark:border-v-border/60 text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
     }`;
+  const clearFilters = () => {
+    setFavoritesFilterActive(false);
+    setScopeVisibility({
+      [AgentScope.Global]: false,
+      [AgentScope.Project]: false
+    });
+  };
+  const handleAllChipClick = () => {
+    if (allFiltersActive) {
+      clearFilters();
+      return;
+    }
+    resetFilters();
+  };
+  const handleFavoritesToggle = () => {
+    setFavoritesFilterActive(prev => !prev);
+  };
+
   const filterChips = [
     {
       key: 'all',
       label: 'All',
       active: allFiltersActive,
-      onClick: resetFilters
+      onClick: handleAllChipClick
     },
     ...scopeFilterOptions.map(({ scope, label, Icon }) => ({
       key: scope,
       label,
       icon: Icon,
-      active: scopeVisibility[scope],
+      active: allFiltersActive ? true : scopeVisibility[scope],
       onClick: () => toggleScopeVisibility(scope)
     })),
     {
       key: 'favorites',
       label: 'Favorites',
       icon: StarIcon,
-      active: favoritesFilterActive,
-      onClick: () => setFavoritesFilterActive(prev => !prev)
+      active: allFiltersActive ? true : favoritesFilterActive,
+      onClick: handleFavoritesToggle
     }
   ];
   const updatePanelHeight = useCallback(() => {
