@@ -14,7 +14,6 @@ import { DeleteIcon } from '../icons/DeleteIcon';
 import { FolderIcon } from '../icons/FolderIcon';
 import { GlobeIcon } from '../icons/GlobeIcon';
 import { EditIcon } from '../icons/EditIcon';
-import { InfoIcon } from '../icons/InfoIcon';
 import { StarIcon } from '../icons/StarIcon';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { getStorageItem, setStorageItem } from '../../utils/storage';
@@ -369,7 +368,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
     <div className="divide-y divide-v-light-border dark:divide-v-border">
       <div
         className="grid gap-4 px-4 py-2 border-b border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary text-xs uppercase font-bold tracking-wider items-center"
-        style={{ gridTemplateColumns: '60px minmax(0,1.5fr) minmax(0,2.4fr) minmax(0,1fr) minmax(0,1.6fr) 120px' }}
+        style={{ gridTemplateColumns: '60px minmax(0,1.5fr) minmax(0,2fr) minmax(0,1.4fr) minmax(0,1.6fr) minmax(0,1.8fr) 120px' }}
       >
         <div className="flex justify-center">
           <input
@@ -386,6 +385,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
         <span>Description</span>
         <span>Scope</span>
         <span>Tools</span>
+        <span>Path</span>
         <span className="text-right pr-2">Actions</span>
       </div>
       {filteredSkills.length > 0 ? (
@@ -577,29 +577,21 @@ const SkillGridCard: React.FC<SkillGridCardProps> = ({
             </span>
             <button
               onClick={onToggleFavorite}
-              className={`inline-flex items-center justify-center h-7 w-7 rounded-md border transition-colors ${
-                skill.isFavorite
-                  ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
-                  : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent'
-              }`}
-              title={skill.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-              aria-label={skill.isFavorite ? 'Unpin skill' : 'Pin skill'}
-            >
-              <StarIcon className="h-4 w-4" filled={Boolean(skill.isFavorite)} />
-            </button>
-            <button
-              type="button"
-              className="text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent transition-colors"
-              title={fullPath}
-              aria-label={`Path: ${fullPath}`}
-            >
-              <InfoIcon className="h-4 w-4" />
-            </button>
-          </div>
-          <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary mt-1 line-clamp-2">
-            {highlightText(skill.frontmatter.description || 'No description provided.', highlightTerm)}
-          </p>
+            className={`inline-flex items-center justify-center h-7 w-7 rounded-md border transition-colors ${
+              skill.isFavorite
+                ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
+                : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent'
+            }`}
+            title={skill.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            aria-label={skill.isFavorite ? 'Unpin skill' : 'Pin skill'}
+          >
+            <StarIcon className="h-4 w-4" filled={Boolean(skill.isFavorite)} />
+          </button>
         </div>
+        <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary mt-1 line-clamp-2">
+          {highlightText(skill.frontmatter.description || 'No description provided.', highlightTerm)}
+        </p>
+      </div>
       </div>
       <div className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary line-clamp-3">
         Allowed tools: {allowedSummary}
@@ -704,7 +696,7 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
   return (
     <div
       className="grid gap-4 px-4 py-3 items-center text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover/50 dark:hover:bg-v-light-dark/40 transition-colors"
-      style={{ gridTemplateColumns: '60px minmax(0,1.5fr) minmax(0,2.4fr) minmax(0,1fr) minmax(0,1.6fr) 120px' }}
+      style={{ gridTemplateColumns: '60px minmax(0,1.5fr) minmax(0,2fr) minmax(0,1.4fr) minmax(0,1.6fr) minmax(0,1.8fr) 120px' }}
     >
       <div className="flex justify-center">
         <input
@@ -722,29 +714,21 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
           </p>
           <button
             onClick={() => onToggleFavorite(skill)}
-            className={`inline-flex items-center justify-center h-6 w-6 rounded-md border transition-colors ${
-              skill.isFavorite
-                ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
-                : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent'
-            }`}
-            title={skill.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-            aria-label={skill.isFavorite ? 'Unpin skill' : 'Pin skill'}
-          >
-            <StarIcon className="h-3.5 w-3.5" filled={Boolean(skill.isFavorite)} />
-          </button>
-          <button
-            type="button"
-            className="text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent transition-colors"
-            title={fullPath}
-            aria-label={`Path: ${fullPath}`}
-          >
-            <InfoIcon className="h-4 w-4" />
-          </button>
-        </div>
+          className={`inline-flex items-center justify-center h-6 w-6 rounded-md border transition-colors ${
+            skill.isFavorite
+              ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
+              : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent'
+          }`}
+          title={skill.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          aria-label={skill.isFavorite ? 'Unpin skill' : 'Pin skill'}
+        >
+          <StarIcon className="h-3.5 w-3.5" filled={Boolean(skill.isFavorite)} />
+        </button>
       </div>
-      <div className="text-sm text-v-light-text-secondary dark:text-v-text-secondary line-clamp-2">
-        {highlightText(skill.frontmatter.description || '—', highlightTerm)}
-      </div>
+    </div>
+    <div className="text-sm text-v-light-text-secondary dark:text-v-text-secondary line-clamp-2">
+      {highlightText(skill.frontmatter.description || '—', highlightTerm)}
+    </div>
       <div>
         <span className={`px-2 py-0.5 text-xs font-medium rounded ${scopePillClasses}`}>
           {skill.scope}
@@ -752,6 +736,9 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
       </div>
       <div className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary line-clamp-2">
         {allowedSummary}
+      </div>
+      <div className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate" title={fullPath}>
+        {fullPath}
       </div>
       <div className="flex justify-end items-center gap-2 relative">
         <button
