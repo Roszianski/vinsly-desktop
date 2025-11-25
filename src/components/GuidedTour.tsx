@@ -9,7 +9,7 @@ interface TourStep {
   position?: TooltipPosition;
 }
 
-export type TourType = 'main' | 'team' | 'analytics' | 'editor';
+export type TourType = 'main' | 'skills' | 'team' | 'analytics' | 'editor';
 export type EditorTourMode = 'wizard' | 'form';
 
 interface GuidedTourProps {
@@ -54,6 +54,33 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ isActive, onComplete, to
       title: 'Dive Into Analytics',
       description: 'Open the Analytics dashboard for deeper insights: model usage, tool coverage, and complexity trends across your fleet.',
       position: 'bottom'
+    }
+  ];
+
+  const skillsTourSteps: TourStep[] = [
+    {
+      targetSelector: '[data-tour="skill-view-switcher"]',
+      title: 'Switch Contexts',
+      description: 'Jump between subagents, skills, Swarm View, and analytics without losing your place.',
+      position: 'bottom'
+    },
+    {
+      targetSelector: '[data-tour="skill-toolbar"]',
+      title: 'Search & Filter',
+      description: 'Use search, scope filters, import/export, and bulk actions to manage skills quickly.',
+      position: 'bottom'
+    },
+    {
+      targetSelector: '[data-tour="skill-layout"]',
+      title: 'Pick Your Layout',
+      description: 'Toggle between table and grid while keeping the column headers visible for reference.',
+      position: 'bottom'
+    },
+    {
+      targetSelector: '[data-tour="create-skill"]',
+      title: 'Create New Skills',
+      description: 'Start a new skill from scratch—perfect for reusable workflows Claude can call on demand.',
+      position: 'left'
     }
   ];
 
@@ -108,14 +135,14 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ isActive, onComplete, to
   const editorWizardSteps: TourStep[] = [
     {
       targetSelector: '[data-tour="wizard-steps"]',
-      title: 'Plan Your Agent',
-      description: 'Use this overview to see every step, track progress, and jump directly to the section you need.',
+      title: 'Plan Your Build',
+      description: 'Use this overview to see every step, track progress, and jump directly to the section you need for this agent or skill.',
       position: 'right'
     },
     {
       targetSelector: '[data-tour="wizard-config-panel"]',
-      title: 'Configure the Agent',
-      description: 'This panel is where you fill out each step—scope, metadata, and instructions live here.',
+      title: 'Configure the Details',
+      description: 'This panel is where you fill out each step—scope, metadata, instructions, and workflow notes live here.',
       position: 'left'
     }
   ];
@@ -149,7 +176,9 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ isActive, onComplete, to
   const steps =
     tourType === 'main'
       ? mainTourSteps
-      : tourType === 'team'
+      : tourType === 'skills'
+        ? skillsTourSteps
+        : tourType === 'team'
         ? teamTourSteps
         : tourType === 'analytics'
           ? analyticsTourSteps

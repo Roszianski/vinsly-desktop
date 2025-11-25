@@ -32,8 +32,10 @@ interface AgentListScreenProps {
   onDelete: (agentId: string) => void;
   onBulkDelete: (agentIds: string[]) => void;
   onShowTeam: () => void;
-  onShowList: () => void;
+  onShowSubagents: () => void;
+  onShowSkills: () => void;
   onShowAnalytics: () => void;
+  activeView: 'subagents' | 'skills' | 'team' | 'analytics';
   onToggleFavorite: (agent: Agent) => void;
   onImport?: (agents: Agent[], errors: string[]) => void;
   shortcutHint?: string;
@@ -60,8 +62,10 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
   onDelete,
   onBulkDelete,
   onShowTeam,
-  onShowList,
+  onShowSubagents,
+  onShowSkills,
   onShowAnalytics,
+  activeView,
   onToggleFavorite,
   onImport,
   shortcutHint
@@ -348,37 +352,78 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
 
   const listContent = (
     <>
+      <div data-tour="agent-list" className="space-y-4 scroll-mt-24">
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Total agents', value: totalAgents, icon: LayersIcon },
+            { label: 'Global agents', value: globalAgents, icon: GlobeIcon },
+            { label: 'Project agents', value: projectAgents, icon: FolderIcon },
+          ].map(stat => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={stat.label}
+                className="rounded-xl bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border px-4 py-3.5 shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-3 group hover:border-v-accent/30 transform hover:-translate-y-0.5"
+              >
+                <div className="flex-shrink-0 p-2 rounded-lg bg-v-accent/10 group-hover:bg-v-accent/20 transition-colors">
+                  <Icon className="h-5 w-5 text-v-accent" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-v-light-text-secondary dark:text-v-text-secondary/90 font-medium">{stat.label}</p>
+                  <p className="text-3xl font-bold text-v-light-text-primary dark:text-v-text-primary mt-0.5 tabular-nums">{stat.value}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* View Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-stretch border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark">
-          <button
-            onClick={onShowList}
-            title="List View"
-            className="px-3 py-2 text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 bg-v-accent/10 text-v-accent"
-          >
-            <ListIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">List</span>
-          </button>
-          <div className="w-px bg-v-light-border dark:bg-v-border opacity-50"></div>
-          <button
-            onClick={onShowTeam}
-            data-tour="team-view"
-            title="Swarm View"
-            className="px-3 py-2 text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary hover:bg-v-accent/10 dark:hover:bg-v-light-dark"
-          >
-            <NetworkIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Swarm View</span>
-          </button>
-          <div className="w-px bg-v-light-border dark:bg-v-border opacity-50"></div>
-          <button
-            onClick={onShowAnalytics}
-            data-tour="analytics-view"
-            title="Analytics"
-            className="px-3 py-2 text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary hover:bg-v-accent/10 dark:hover:bg-v-light-dark"
-          >
-            <ChartIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Analytics</span>
-          </button>
+          {[
+            {
+              key: 'subagents',
+              label: 'Subagents',
+              icon: <ListIcon className="h-4 w-4" />,
+              action: onShowSubagents,
+            },
+            {
+              key: 'skills',
+              label: 'Skills',
+              icon: <LayersIcon className="h-4 w-4" />,
+              action: onShowSkills,
+            },
+            {
+              key: 'team',
+              label: 'Network',
+              icon: <NetworkIcon className="h-4 w-4" />,
+              action: onShowTeam,
+            },
+            {
+              key: 'analytics',
+              label: 'Analytics',
+              icon: <ChartIcon className="h-4 w-4" />,
+              action: onShowAnalytics,
+            },
+          ].map((item, index, array) => (
+            <React.Fragment key={item.key}>
+              <button
+                onClick={item.action}
+                className={`px-3 py-2 text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 ${
+                  activeView === item.key
+                    ? 'bg-v-accent/10 text-v-accent'
+                    : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary hover:bg-v-accent/10 dark:hover:bg-v-light-dark'
+                }`}
+              >
+                {item.icon}
+                <span className="hidden sm:inline">{item.label}</span>
+              </button>
+              {index < array.length - 1 && (
+                <div className="w-px bg-v-light-border dark:bg-v-border opacity-50" />
+              )}
+            </React.Fragment>
+          ))}
         </div>
 
         <div className="flex items-center gap-1 border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark text-sm font-medium">
@@ -414,30 +459,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
         </div>
       </div>
 
-      <div data-tour="agent-list" className="space-y-4 scroll-mt-24">
-        <div className="grid gap-4 sm:grid-cols-3">
-          {[
-            { label: 'Total agents', value: totalAgents, icon: LayersIcon },
-            { label: 'Global agents', value: globalAgents, icon: GlobeIcon },
-            { label: 'Project agents', value: projectAgents, icon: FolderIcon },
-          ].map(stat => {
-            const Icon = stat.icon;
-            return (
-              <div
-                key={stat.label}
-                className="rounded-xl bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border px-4 py-3.5 shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-3 group hover:border-v-accent/30 transform hover:-translate-y-0.5"
-              >
-                <div className="flex-shrink-0 p-2 rounded-lg bg-v-accent/10 group-hover:bg-v-accent/20 transition-colors">
-                  <Icon className="h-5 w-5 text-v-accent" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-v-light-text-secondary dark:text-v-text-secondary/90 font-medium">{stat.label}</p>
-                  <p className="text-3xl font-bold text-v-light-text-primary dark:text-v-text-primary mt-0.5 tabular-nums">{stat.value}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      <div className="space-y-4">
 
         <div className="flex justify-between items-center gap-4 min-h-[38px]">
           {selectedAgentIds.size > 0 ? (

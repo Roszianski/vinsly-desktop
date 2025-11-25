@@ -687,20 +687,32 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
         );
       case 'prompt':
         return (
-          <div className="space-y-2" data-tour="agent-prompt">
-            <label htmlFor="wizard-body" className="block text-sm font-medium text-v-light-text-secondary dark:text-v-text-secondary">
-              System prompt
-            </label>
-            <CodeEditor
-              id="wizard-body"
-              value={formData.body}
-              onChange={handleBodyChange}
-              rows={14}
-              placeholder="e.g. You are a helpful agent that assists with code review..."
-            />
-            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-              Enter the system prompt for your agent. Be comprehensive for best results. Markdown is supported.
-            </p>
+          <div className="space-y-4" data-tour="agent-prompt">
+            <div>
+              <label htmlFor="wizard-body" className="block text-sm font-medium text-v-light-text-secondary dark:text-v-text-secondary">
+                System prompt
+              </label>
+              <CodeEditor
+                id="wizard-body"
+                value={formData.body}
+                onChange={handleBodyChange}
+                rows={14}
+                placeholder="e.g. You are a helpful agent that assists with code review..."
+              />
+            </div>
+            <div className="space-y-2 p-4 bg-v-light-hover/30 dark:bg-v-light-dark/30 rounded-lg border border-v-light-border/50 dark:border-v-border/50">
+              <p className="text-xs font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                💡 Best practices for system prompts:
+              </p>
+              <ul className="text-xs text-v-light-text-secondary dark:text-v-text-secondary space-y-1 list-disc list-inside">
+                <li><strong>Be specific:</strong> Treat Claude like a new employee—provide explicit instructions, context, and success criteria</li>
+                <li><strong>Define the role:</strong> Clearly state what the agent does and its area of expertise</li>
+                <li><strong>Use examples:</strong> Include 2-3 concrete examples showing desired input/output format</li>
+                <li><strong>Structure with XML:</strong> Use tags like &lt;instructions&gt;, &lt;examples&gt;, &lt;context&gt; for clarity</li>
+                <li><strong>Specify outputs:</strong> State exact format, length, and tone requirements</li>
+                <li><strong>Single responsibility:</strong> Focus on one clear task rather than multiple responsibilities</li>
+              </ul>
+            </div>
           </div>
         );
       case 'description':

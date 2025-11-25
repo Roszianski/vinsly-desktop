@@ -303,7 +303,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                   Scan
                 </p>
                 <h2 className="text-xl font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                  Find agents on this device
+                  Find subagents and skills
                 </h2>
               </div>
               <button
@@ -324,13 +324,13 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                   Pick your sources
                 </p>
                 <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                  Turn on one or multiple sources—Vinsly scans everything you enable below.
+                  Turn on one or multiple sources. Vinsly scans everything you enable below.
                 </p>
 
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <SourceChip
                     label="Home directory"
-                    description="Desktop, Documents, iCloud Drive — needs macOS Full Disk Access."
+                    description="Scan your entire home directory - requires macOS Full Disk Access."
                     active={selectedSources.has('home')}
                     disabled={(!canUseHomeSource && isMacPlatform) || isScanning || isDiscoveringHome}
                     onClick={ensureHomeSource}
@@ -364,7 +364,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                   >
                     <p className="text-sm font-semibold">+ Custom folder</p>
                     <p className="text-xs mt-1 text-v-light-text-secondary dark:text-v-text-secondary">
-                      Scan another folder once without adding it to watched directories.
+                      Scan one or more specific folders without adding to watched directories
                     </p>
                   </button>
                 </div>

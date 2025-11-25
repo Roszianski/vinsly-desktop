@@ -15,7 +15,7 @@ interface MetricCardProps {
 export const MetricCard: React.FC<MetricCardProps> = ({ title, value, subtitle, icon, trend }) => {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="h-full">
-      <div className="h-full bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg p-6 shadow-sm hover:shadow-md transition-all duration-200 transform hover:-translate-y-0.5">
+      <div className="h-full bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg p-6 shadow-sm hover:shadow-md transition-all duration-200 transform hover:-translate-y-0.5 hover:border-v-accent/30">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <p className="text-xs font-medium text-v-light-text-secondary dark:text-v-text-secondary uppercase tracking-wider">

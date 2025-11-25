@@ -38,6 +38,24 @@ export interface Agent {
   isFavorite?: boolean;
 }
 
+export interface Skill {
+  id: string;
+  name: string;
+  scope: AgentScope;
+  directoryPath: string;
+  path: string;
+  frontmatter: {
+    name: string;
+    description: string;
+    allowedTools?: string[]; // Array of tool names per official SKILL.md spec
+    license?: string;
+    [key: string]: unknown;
+  };
+  body: string;
+  hasAssets?: boolean;
+  isFavorite?: boolean;
+}
+
 // Scan Settings Types
 export interface ScanSettings {
   autoScanGlobalOnStartup: boolean;

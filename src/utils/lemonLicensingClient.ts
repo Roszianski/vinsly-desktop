@@ -10,16 +10,25 @@ function getLemonApiBaseUrl(): string {
 }
 
 function getLemonApiKey(): string {
-  const key = import.meta.env.VITE_LEMON_LICENSE_API_KEY as string | undefined;
-  if (!key) {
-    throw new Error('VITE_LEMON_LICENSE_API_KEY is not configured');
+  const env = import.meta.env as Record<string, unknown>;
+  const primaryKey = env.VITE_LEMON_LICENSE_API_KEY as string | undefined;
+  const testKey = env.VITE_LEMON_LICENSE_API_KEY_TEST as string | undefined;
+  const isDev = Boolean(env.DEV);
+
+  const resolvedKey =
+    (isDev && testKey) ? testKey : (primaryKey ?? testKey);
+
+  if (!resolvedKey) {
+    throw new Error('Set VITE_LEMON_LICENSE_API_KEY (and optionally VITE_LEMON_LICENSE_API_KEY_TEST for dev builds).');
   }
-  return key;
+
+  return resolvedKey;
 }
 
 export async function validateLicenseWithLemon(licenseKey: string): Promise<LemonLicenseValidationResult> {
   const baseUrl = getLemonApiBaseUrl();
   const apiKey = getLemonApiKey();
+  const trimmedKey = licenseKey.trim();
 
   const response = await fetch(`${baseUrl}/v1/licenses/validate`, {
     method: 'POST',
@@ -29,13 +38,19 @@ export async function validateLicenseWithLemon(licenseKey: string): Promise<Lemo
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      license_key: licenseKey.trim()
+      license_key: trimmedKey
     })
   });
 
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
+    console.error('[Lemon] licence validation failed', {
+      status: response.status,
+      statusText: response.statusText,
+      body: payload,
+      requestedLicenseKey: trimmedKey
+    });
     const code = payload?.error ?? 'request_failed';
     return { valid: false, error: code ?? 'request_failed' };
   }

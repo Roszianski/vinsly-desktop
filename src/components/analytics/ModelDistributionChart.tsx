@@ -4,6 +4,8 @@ import { ModelDistribution } from '../../utils/analytics';
 
 interface ModelDistributionChartProps {
   data: ModelDistribution[];
+  title?: string;
+  itemLabel?: string;
 }
 
 const MODEL_COLORS: Record<string, string> = {
@@ -23,7 +25,11 @@ const tooltipStyle = {
   padding: '10px 14px'
 };
 
-export const ModelDistributionChart: React.FC<ModelDistributionChartProps> = ({ data }) => {
+export const ModelDistributionChart: React.FC<ModelDistributionChartProps> = ({
+  data,
+  title = 'Model Distribution',
+  itemLabel = 'agents'
+}) => {
   const chartData = useMemo(
     () =>
       data.map(item => ({
@@ -41,7 +47,7 @@ export const ModelDistributionChart: React.FC<ModelDistributionChartProps> = ({ 
   return (
     <div className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg p-6">
       <h3 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary mb-4">
-        Model Distribution
+        {title}
       </h3>
       <div className="h-80">
         <ResponsiveContainer width="100%" height="100%">
@@ -66,7 +72,7 @@ export const ModelDistributionChart: React.FC<ModelDistributionChartProps> = ({ 
             </Pie>
             <Tooltip
               contentStyle={tooltipStyle}
-              formatter={(value: number, name: string) => [`${value} agents`, name]}
+              formatter={(value: number, name: string) => [`${value} ${itemLabel}`, name]}
             />
             <Legend
               verticalAlign="bottom"

@@ -2,13 +2,18 @@ pub mod scanner;
 
 use scanner::{scan_project_directories, DEFAULT_DISCOVERY_DEPTH};
 use serde::{Deserialize, Serialize};
-use std::io::ErrorKind;
+use std::ffi::OsStr;
+use std::fs;
+use std::io::{ErrorKind, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 #[cfg(target_os = "macos")]
 use std::{env, process::Command};
 use tokio::sync::Mutex;
+use walkdir::WalkDir;
+use zip::write::FileOptions;
+use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 const HOME_DISCOVERY_CACHE_TTL_SECS: u64 = 120;
 #[cfg(target_os = "macos")]
@@ -101,7 +106,17 @@ struct AgentFile {
     scope: String, // "project" or "global"
 }
 
-fn validate_agent_name(name: &str) -> Result<(), String> {
+#[derive(Debug, Serialize, Deserialize)]
+struct SkillFile {
+    name: String,
+    directory: String,
+    path: String,
+    content: String,
+    scope: String,
+    has_assets: bool,
+}
+
+fn validate_entry_name(name: &str) -> Result<(), String> {
     if name.trim().is_empty() {
         return Err("Agent name cannot be empty".to_string());
     }
@@ -117,15 +132,14 @@ fn validate_agent_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn ensure_path_in_agents_dir(path: &Path) -> Result<(), String> {
-    let canonical =
-        std::fs::canonicalize(path).map_err(|e| format!("Failed to resolve path: {}", e))?;
+fn ensure_path_in_claude_subdir(path: &Path, subdir: &str) -> Result<(), String> {
+    let canonical = fs::canonicalize(path).map_err(|e| format!("Failed to resolve path: {}", e))?;
 
     let mut saw_claude = false;
     for component in canonical.components() {
         match component {
             Component::Normal(part) => {
-                if saw_claude && part == "agents" {
+                if saw_claude && part == subdir {
                     return Ok(());
                 }
                 saw_claude = part == ".claude";
@@ -134,7 +148,18 @@ fn ensure_path_in_agents_dir(path: &Path) -> Result<(), String> {
         }
     }
 
-    Err("Refusing to modify files outside .claude/agents".to_string())
+    Err(format!(
+        "Refusing to modify files outside .claude/{}",
+        subdir
+    ))
+}
+
+fn ensure_path_in_agents_dir(path: &Path) -> Result<(), String> {
+    ensure_path_in_claude_subdir(path, "agents")
+}
+
+fn ensure_path_in_skills_dir(path: &Path) -> Result<(), String> {
+    ensure_path_in_claude_subdir(path, "skills")
 }
 
 // Get the .claude/agents directory path based on scope
@@ -162,6 +187,73 @@ fn get_agents_dir(scope: &str, project_path: Option<String>) -> Result<PathBuf, 
         }
         _ => Err(format!("Invalid scope: {}", scope)),
     }
+}
+
+fn get_skills_dir(scope: &str, project_path: Option<String>) -> Result<PathBuf, String> {
+    match scope {
+        "project" => {
+            if let Some(proj_path) = project_path {
+                let mut path = PathBuf::from(proj_path);
+                path.push(".claude");
+                path.push("skills");
+                Ok(path)
+            } else {
+                Err("Project scope requires a project_path parameter".to_string())
+            }
+        }
+        "global" => {
+            let home_dir =
+                dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+            let mut path = home_dir;
+            path.push(".claude");
+            path.push("skills");
+            Ok(path)
+        }
+        _ => Err(format!("Invalid scope: {}", scope)),
+    }
+}
+
+fn skill_has_additional_assets(dir: &Path) -> bool {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Ok(file_type) = entry.file_type() {
+                if file_type.is_dir() {
+                    return true;
+                }
+                if entry.file_name() != OsStr::new("SKILL.md") {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn build_skill_from_dir(dir: &Path, scope: &str) -> Result<Option<SkillFile>, String> {
+    if !dir.is_dir() {
+        return Ok(None);
+    }
+    let skill_file = dir.join("SKILL.md");
+    if !skill_file.exists() {
+        return Ok(None);
+    }
+
+    let content =
+        fs::read_to_string(&skill_file).map_err(|e| format!("Failed to read skill file: {}", e))?;
+    let name = dir
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| "Skill directory missing valid name".to_string())?
+        .to_string();
+
+    Ok(Some(SkillFile {
+        name,
+        directory: dir.to_string_lossy().to_string(),
+        path: skill_file.to_string_lossy().to_string(),
+        content,
+        scope: scope.to_string(),
+        has_assets: skill_has_additional_assets(dir),
+    }))
 }
 
 // List all agent files from a directory
@@ -212,8 +304,7 @@ async fn list_agents(
 async fn read_agent(path: String) -> Result<String, String> {
     let expanded_path = expand_path(&path)?;
     ensure_path_in_agents_dir(&expanded_path)?;
-    std::fs::read_to_string(&expanded_path)
-        .map_err(|e| format!("Failed to read agent file: {}", e))
+    std::fs::read_to_string(&expanded_path).map_err(|e| format!("Failed to read agent file: {}", e))
 }
 
 // Write an agent file
@@ -224,7 +315,7 @@ async fn write_agent(
     content: String,
     project_path: Option<String>,
 ) -> Result<String, String> {
-    validate_agent_name(&name)?;
+    validate_entry_name(&name)?;
     let agents_dir = get_agents_dir(&scope, project_path)?;
 
     // Create directory if it doesn't exist
@@ -301,6 +392,346 @@ async fn list_agents_from_directory(directory: String) -> Result<Vec<AgentFile>,
     }
 
     Ok(agents)
+}
+
+#[tauri::command]
+async fn list_skills(
+    scope: String,
+    project_path: Option<String>,
+) -> Result<Vec<SkillFile>, String> {
+    let skills_dir = get_skills_dir(&scope, project_path)?;
+    if !skills_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut skills = Vec::new();
+    let entries =
+        fs::read_dir(&skills_dir).map_err(|e| format!("Failed to read directory: {}", e))?;
+
+    for entry in entries.flatten() {
+        if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+            if let Some(skill) = build_skill_from_dir(&entry.path(), &scope)? {
+                skills.push(skill);
+            }
+        }
+    }
+
+    Ok(skills)
+}
+
+#[tauri::command]
+async fn write_skill(
+    scope: String,
+    name: String,
+    content: String,
+    project_path: Option<String>,
+) -> Result<String, String> {
+    validate_entry_name(&name)?;
+    let skills_dir = get_skills_dir(&scope, project_path)?;
+    fs::create_dir_all(&skills_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+    ensure_path_in_skills_dir(&skills_dir)?;
+
+    let mut skill_dir = skills_dir;
+    skill_dir.push(&name);
+    fs::create_dir_all(&skill_dir).map_err(|e| format!("Failed to create skill folder: {}", e))?;
+
+    let skill_file = skill_dir.join("SKILL.md");
+    fs::write(&skill_file, content).map_err(|e| format!("Failed to write skill: {}", e))?;
+    Ok(skill_file.to_string_lossy().to_string())
+}
+
+fn resolve_skill_directory(path: &Path) -> Option<PathBuf> {
+    if path.is_dir() {
+        Some(path.to_path_buf())
+    } else {
+        path.parent().map(|parent| parent.to_path_buf())
+    }
+}
+
+#[tauri::command]
+async fn delete_skill(path: String) -> Result<(), String> {
+    let expanded_path = expand_path(&path)?;
+    let Some(directory) = resolve_skill_directory(&expanded_path) else {
+        return Err("Unable to resolve skill directory".to_string());
+    };
+    ensure_path_in_skills_dir(&directory)?;
+    if directory.exists() {
+        fs::remove_dir_all(&directory)
+            .map_err(|e| format!("Failed to delete skill folder: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn list_skills_from_directory(directory: String) -> Result<Vec<SkillFile>, String> {
+    let mut skills_path = PathBuf::from(directory);
+    skills_path.push(".claude");
+    skills_path.push("skills");
+
+    if !skills_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut skills = Vec::new();
+    let entries =
+        fs::read_dir(&skills_path).map_err(|e| format!("Failed to read directory: {}", e))?;
+    for entry in entries.flatten() {
+        if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+            if let Some(skill) = build_skill_from_dir(&entry.path(), "project")? {
+                skills.push(skill);
+            }
+        }
+    }
+
+    Ok(skills)
+}
+
+fn zip_skill_directory(source_dir: &Path, destination: &Path) -> Result<(), String> {
+    let Some(parent) = source_dir.parent() else {
+        return Err("Invalid skill directory".to_string());
+    };
+
+    let file =
+        fs::File::create(destination).map_err(|e| format!("Failed to create archive: {}", e))?;
+    let mut zip = ZipWriter::new(file);
+    let options = FileOptions::default().compression_method(CompressionMethod::Deflated);
+
+    for entry in WalkDir::new(source_dir) {
+        let entry = entry.map_err(|e| format!("Failed to walk directory: {}", e))?;
+        let path = entry.path();
+        let relative = path
+            .strip_prefix(parent)
+            .map_err(|e| format!("Failed to compute relative path: {}", e))?;
+        let name = relative.to_string_lossy().replace('\\', "/");
+
+        if entry.file_type().is_dir() {
+            zip.add_directory(name, options)
+                .map_err(|e| format!("Failed to add directory to archive: {}", e))?;
+        } else {
+            zip.start_file(name, options)
+                .map_err(|e| format!("Failed to add file to archive: {}", e))?;
+            let mut file =
+                fs::File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+            let mut buffer = Vec::new();
+            file.read_to_end(&mut buffer)
+                .map_err(|e| format!("Failed to read file: {}", e))?;
+            zip.write_all(&buffer)
+                .map_err(|e| format!("Failed to write to archive: {}", e))?;
+        }
+    }
+
+    zip.finish()
+        .map_err(|e| format!("Failed to finalise archive: {}", e))?;
+    Ok(())
+}
+
+fn next_available_skill_directory(base: &Path, desired: &str) -> PathBuf {
+    let mut candidate = base.join(desired);
+    if !candidate.exists() {
+        return candidate;
+    }
+
+    let mut counter = 1;
+    loop {
+        let name = format!("{}-{}", desired, counter);
+        candidate = base.join(&name);
+        if !candidate.exists() {
+            return candidate;
+        }
+        counter += 1;
+    }
+}
+
+fn extract_skill_archive(archive_path: &Path, base: &Path) -> Result<PathBuf, String> {
+    let file =
+        fs::File::open(archive_path).map_err(|e| format!("Failed to open archive: {}", e))?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|e| format!("Failed to read archive: {}", e))?;
+
+    let mut root_name: Option<String> = None;
+    for i in 0..archive.len() {
+        let entry = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to inspect archive entry: {}", e))?;
+        if let Some(enclosed) = entry.enclosed_name() {
+            if let Some(Component::Normal(part)) = enclosed.components().next() {
+                let part_str = part.to_string_lossy().to_string();
+                if part_str.starts_with("__MACOSX") {
+                    continue;
+                }
+                match &root_name {
+                    Some(existing) if existing != &part_str => {
+                        return Err(
+                            "Archive must contain a single root folder (zip the skill directory)"
+                                .to_string(),
+                        )
+                    }
+                    None => root_name = Some(part_str),
+                    _ => {}
+                }
+            }
+        } else {
+            return Err("Archive contains invalid paths".to_string());
+        }
+    }
+
+    let Some(root) = root_name else {
+        return Err("Archive missing skill folder".to_string());
+    };
+
+    let target_dir = next_available_skill_directory(base, &root);
+    fs::create_dir_all(&target_dir)
+        .map_err(|e| format!("Failed to create skill directory: {}", e))?;
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to extract archive entry: {}", e))?;
+        let Some(enclosed) = entry.enclosed_name() else {
+            continue;
+        };
+
+        let mut components = enclosed.components();
+        let Some(Component::Normal(root_component)) = components.next() else {
+            continue;
+        };
+        let root_component_str = root_component.to_string_lossy();
+        if root_component_str.starts_with("__MACOSX") {
+            continue;
+        }
+        let relative_path: PathBuf = components.collect();
+        let output_path = if relative_path.as_os_str().is_empty() {
+            target_dir.clone()
+        } else {
+            target_dir.join(relative_path)
+        };
+
+        if entry.is_dir() {
+            fs::create_dir_all(&output_path)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        } else {
+            if let Some(parent) = output_path.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+            }
+            let mut file = fs::File::create(&output_path)
+                .map_err(|e| format!("Failed to create file: {}", e))?;
+            std::io::copy(&mut entry, &mut file)
+                .map_err(|e| format!("Failed to write file: {}", e))?;
+        }
+    }
+
+    let skill_manifest = target_dir.join("SKILL.md");
+    if !skill_manifest.exists() {
+        let _ = fs::remove_dir_all(&target_dir);
+        return Err("Imported archive did not contain SKILL.md".to_string());
+    }
+
+    Ok(target_dir)
+}
+
+#[tauri::command]
+async fn export_skill_directory(directory: String, destination: String) -> Result<(), String> {
+    let expanded_directory = expand_path(&directory)?;
+    ensure_path_in_skills_dir(&expanded_directory)?;
+    if !expanded_directory.exists() {
+        return Err("Skill directory does not exist".to_string());
+    }
+
+    let destination_path = PathBuf::from(destination);
+    if let Some(parent) = destination_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to prepare destination: {}", e))?;
+        }
+    }
+
+    zip_skill_directory(&expanded_directory, &destination_path)?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn import_skill_archive(
+    archive_path: String,
+    scope: String,
+    project_path: Option<String>,
+) -> Result<String, String> {
+    let expanded_archive = expand_path(&archive_path)?;
+    if !expanded_archive.exists() {
+        return Err("Archive does not exist".to_string());
+    }
+
+    let skills_dir = get_skills_dir(&scope, project_path)?;
+    fs::create_dir_all(&skills_dir)
+        .map_err(|e| format!("Failed to prepare skills directory: {}", e))?;
+    ensure_path_in_skills_dir(&skills_dir)?;
+
+    let target_dir = extract_skill_archive(&expanded_archive, &skills_dir)?;
+    Ok(target_dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn export_skills_archive(directories: Vec<String>, destination: String) -> Result<(), String> {
+    if directories.is_empty() {
+        return Err("No skill directories provided".to_string());
+    }
+
+    let destination_path = PathBuf::from(&destination);
+    if let Some(parent) = destination_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to prepare destination: {}", e))?;
+        }
+    }
+
+    let file =
+        fs::File::create(&destination_path).map_err(|e| format!("Failed to create archive: {}", e))?;
+    let mut zip = ZipWriter::new(file);
+    let options = FileOptions::default().compression_method(CompressionMethod::Deflated);
+
+    for directory in directories {
+        let expanded = expand_path(&directory)?;
+        if !expanded.exists() {
+            continue;
+        }
+        ensure_path_in_skills_dir(&expanded)?;
+        let root_name = expanded
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| "Skill directory missing valid name".to_string())?;
+
+        for entry in WalkDir::new(&expanded) {
+            let entry = entry.map_err(|e| format!("Failed to walk directory: {}", e))?;
+            let path = entry.path();
+            let relative = path
+                .strip_prefix(&expanded)
+                .map_err(|e| format!("Failed to compute relative path: {}", e))?;
+            let mut archive_path = PathBuf::from(root_name);
+            if !relative.as_os_str().is_empty() {
+                archive_path = archive_path.join(relative);
+            }
+            let archive_name = archive_path.to_string_lossy().replace('\\', "/");
+
+            if entry.file_type().is_dir() {
+                zip.add_directory(archive_name, options)
+                    .map_err(|e| format!("Failed to add directory: {}", e))?;
+            } else {
+                zip.start_file(archive_name, options)
+                    .map_err(|e| format!("Failed to add file: {}", e))?;
+                let mut file =
+                    fs::File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+                let mut buffer = Vec::new();
+                file.read_to_end(&mut buffer)
+                    .map_err(|e| format!("Failed to read file: {}", e))?;
+                zip.write_all(&buffer)
+                    .map_err(|e| format!("Failed to write to archive: {}", e))?;
+            }
+        }
+    }
+
+    zip.finish()
+        .map_err(|e| format!("Failed to finalise archive: {}", e))?;
+    Ok(())
 }
 
 // Get cross-platform home directory
@@ -614,6 +1045,13 @@ pub fn run() {
             write_agent,
             delete_agent,
             list_agents_from_directory,
+            list_skills,
+            write_skill,
+            delete_skill,
+            list_skills_from_directory,
+            export_skill_directory,
+            import_skill_archive,
+            export_skills_archive,
             get_home_dir,
             discover_project_directories,
             check_full_disk_access,

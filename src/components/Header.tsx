@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Theme } from '../App';
+import { Theme } from '../hooks/useTheme';
 import { LicenseInfo } from '../types/licensing';
 import { LoadAgentsOptions, ScanSettings } from '../types';
 import { SunIcon } from './icons/SunIcon';
@@ -177,7 +177,7 @@ export const Header: React.FC<HeaderProps> = ({
               VINSLY
             </span>
             <span className="ml-3 text-sm text-v-light-text-secondary dark:text-v-text-secondary font-mono">
-              / Agent Studio
+              / Studio
             </span>
           </button>
           <div className="flex items-center gap-3">

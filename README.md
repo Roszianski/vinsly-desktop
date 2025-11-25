@@ -7,6 +7,7 @@ A Tauri-powered desktop application for designing, organising, and analysing Cla
 - 🖥️ **Native Desktop Experience** – Built with Tauri 2.0 for a fast, secure, and lightweight desktop application.
 - 📁 **File System Integration** – Direct access to `~/.claude/agents/` and project-level `.claude/agents/` directories.
 - 🔧 **Agent Management** – Create, edit, duplicate, favourite, and organise your Claude agents with a focused editor.
+- 🧰 **Skill Library** – Inspect and edit Claude Code Skills (folders with `SKILL.md`) alongside your subagents, keeping workflows and personas in sync.
 - 🧠 **Swarm View** – See your “agent organisation” as a mind-map style graph, grouped by scope, with exportable diagrams.
 - 📊 **Analytics Dashboard** – Track agent complexity, model distribution, tool usage, and get data-driven recommendations.
 - 🔍 **Scan & Watch** – Scan global and project directories for agents, and configure watched folders for auto‑discovery.
@@ -103,6 +104,16 @@ Vinsly-Desktop/
 │   ├── constants.ts             # Application constants
 │   ├── animations.ts            # Framer Motion animations
 │   └── App.tsx                  # Main application shell (routing, tours, activation)
+│   └── hooks/                   # Custom hooks extracted from App
+│       ├── useTheme.ts          # Theme + DOM class management
+│       ├── usePlatformInfo.ts   # Platform detection + macOS version
+│       ├── useUserProfile.ts    # Display name persistence
+│       ├── useNavigation.ts     # View/selection routing + templates
+│       ├── useLicense.ts        # Licence bootstrap/reset + heartbeat
+│       ├── useScanSettings.ts   # Scan settings state + ref
+│       ├── useWorkspace.ts      # Agents/skills scan + CRUD + cache
+│       └── useUpdater.ts        # Updater (existing)
+│
 ├── src-tauri/                   # Rust backend
 │   ├── src/
 │   │   └── lib.rs              # Tauri commands and plugins
@@ -197,6 +208,26 @@ All permissions are configured in `src-tauri/capabilities/default.json`. The app
 - File system read/write
 - Dialog (open/save)
 - Store (persistent storage)
+
+## Hook Architecture & Call Order
+
+`App.tsx` composes the custom hooks in this order:
+- `useTheme` → `usePlatformInfo` → `useUserProfile` → `useNavigation` (independent UI state)
+- `useLicense` (depends on platformIdentifier; exposes reset + onboarding flags)
+- `useScanSettings` (scan settings state + ref for synchronous reads)
+- `useWorkspace` (depends on `scanSettingsRef` + `isOnboardingComplete`; handles scanning, CRUD, cache)
+- `useUpdater` (unchanged)
+
+Integration example: activation completion calls `useLicense.setLicense`, applies scan settings via `useScanSettings`, then triggers `useWorkspace.loadAgents`.
+
+## Quick Manual QA Checklist
+
+- Activation/onboarding: licence validation, display name, scan defaults, home directory scan gating.
+- Theme toggle: header toggle flips DOM class and persists.
+- Agents: create/edit/duplicate/delete, bulk delete, import/export, favorites, watched directory scan.
+- Skills: create/edit/delete, import/export, favorites, reveal/export selected skills.
+- Navigation: list ↔ team ↔ skills ↔ analytics transitions; shortcuts (⌘/Ctrl + N) open create.
+- Auto-update: manual check, snooze, auto-update toggle feedback.
 - Shell (process spawning)
 - Event system (for streaming CLI output)
 

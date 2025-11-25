@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getVersion } from '@tauri-apps/api/app';
-import { Agent, AgentScope, ScanSettings, LoadAgentsOptions } from './types';
+import { Agent, ScanSettings, Skill } from './types';
 import { LicenseInfo } from './types/licensing';
 import { AgentListScreen } from './components/screens/AgentListScreen';
+import { SkillListScreen } from './components/screens/SkillListScreen';
 import { AgentEditorScreen } from './components/screens/AgentEditorScreen';
+import { SkillEditorScreen } from './components/screens/SkillEditorScreen';
 import { AgentTeamView } from './components/screens/AgentTeamView';
 import { AnalyticsDashboardScreen } from './components/screens/AnalyticsDashboardScreen';
 import { Header } from './components/Header';
@@ -13,88 +15,29 @@ import { pageTransition } from './animations';
 import { getStorageItem, setStorageItem, removeStorageItem } from './utils/storage';
 import { useToast } from './contexts/ToastContext';
 import { ToastContainer } from './components/Toast';
-import { listAgents, writeAgent, deleteAgent, listAgentsFromDirectory } from './utils/tauriCommands';
-import { markdownToAgent } from './utils/agentImport';
-import { agentToMarkdown } from './utils/agentExport';
-import { getScanSettings, saveScanSettings } from './utils/scanSettings';
+import { exportSkillDirectory, importSkillArchive, exportSkillsArchive } from './utils/tauriCommands';
+import { saveScanSettings } from './utils/scanSettings';
 import { ActivationModal } from './components/ActivationModal';
 import { SplashScreen } from './components/SplashScreen';
-import { extractProjectRootFromAgentPath } from './utils/path';
 import { DEFAULT_HOME_DISCOVERY_DEPTH, discoverHomeDirectories } from './utils/homeDiscovery';
 import { useUpdater } from './hooks/useUpdater';
+import { useTheme, Theme } from './hooks/useTheme';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { validateLicenseWithLemon } from './utils/lemonLicensingClient';
-import { activateLicense, sendHeartbeat, LicenseServerError, RemoteLicenseStatus } from './utils/licensingClient';
-import { getOrCreateDeviceFingerprint } from './utils/deviceFingerprint';
-
-type View = 'list' | 'team' | 'analytics' | 'edit' | 'create' | 'duplicate';
-export type Theme = 'light' | 'dark';
-
-const DEFAULT_SCAN_SETTINGS: ScanSettings = {
-  autoScanGlobalOnStartup: false,
-  autoScanHomeDirectoryOnStartup: false,
-  fullDiskAccessEnabled: false,
-  watchedDirectories: [],
-};
-const HOME_DISCOVERY_MAX_DEPTH = DEFAULT_HOME_DISCOVERY_DEPTH;
-const AGENT_CACHE_KEY = 'vinsly-agent-cache';
+import { activateLicense, LicenseServerError, RemoteLicenseStatus } from './utils/licensingClient';
+import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { usePlatformInfo } from './hooks/usePlatformInfo';
+import { useUserProfile } from './hooks/useUserProfile';
+import { useNavigation, View } from './hooks/useNavigation';
+import { useLicense } from './hooks/useLicense';
+import { useScanSettings } from './hooks/useScanSettings';
+import { useWorkspace } from './hooks/useWorkspace';
 const AUTO_UPDATE_KEY = 'vinsly-auto-update-enabled';
 const UPDATE_SNOOZE_KEY = 'vinsly-update-snooze';
 const UPDATE_SNOOZE_DURATION_MS = 1000 * 60 * 60 * 6; // 6 hours
 const UPDATE_CHECK_INTERVAL_MS = 1000 * 60 * 60 * 24; // 24 hours
-
-const normalizeProjectRootPath = (input?: string | null): string | null => {
-  if (!input) {
-    return null;
-  }
-  return input.replace(/\\/g, '/').replace(/\/+$/, '');
-};
-
-const getAgentProjectRootPath = (agent: Agent): string | null => {
-  const agentPath = agent.path || agent.id || '';
-  return normalizeProjectRootPath(extractProjectRootFromAgentPath(agentPath));
-};
-
-const getInitialTheme = (): Theme => {
-  if (typeof window !== 'undefined' && window.matchMedia) {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  }
-  return 'dark';
-};
-
-const detectMacOSMajorVersion = (): number | null => {
-  if (typeof navigator === 'undefined') {
-    return null;
-  }
-
-  const uaData = (navigator as any).userAgentData;
-  if (uaData?.platform && /mac/i.test(uaData.platform) && typeof uaData.platformVersion === 'string') {
-    const parsed = parseInt(uaData.platformVersion.split('.')[0], 10);
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
-  }
-
-  const userAgent = navigator.userAgent || '';
-  const match = userAgent.match(/Mac OS X (\d+)[._](\d+)/i);
-  if (!match) {
-    return null;
-  }
-
-  const major = parseInt(match[1], 10);
-  if (Number.isNaN(major)) {
-    return null;
-  }
-
-  if (major === 10) {
-    const minor = parseInt(match[2], 10);
-    if (!Number.isNaN(minor) && minor >= 16) {
-      return minor - 5;
-    }
-  }
-
-  return major;
-};
+const HOME_DISCOVERY_MAX_DEPTH = DEFAULT_HOME_DISCOVERY_DEPTH;
 
 const mapRemoteStatus = (status: RemoteLicenseStatus): LicenseInfo['status'] => {
   if (status === 'active') {
@@ -106,57 +49,78 @@ const mapRemoteStatus = (status: RemoteLicenseStatus): LicenseInfo['status'] => 
   return 'revoked';
 };
 
-const getPlatformIdentifier = (): string => {
-  if (typeof navigator === 'undefined') {
-    return 'unknown';
-  }
-  const platformSource =
-    ((navigator as any).userAgentData?.platform as string | undefined) ??
-    navigator.platform ??
-    navigator.userAgent ??
-    '';
-  const normalized = platformSource.toLowerCase();
-  if (normalized.includes('mac')) {
-    return 'mac';
-  }
-  if (normalized.includes('win')) {
-    return 'win';
-  }
-  if (normalized.includes('linux')) {
-    return 'linux';
-  }
-  return 'unknown';
-};
-
 const App: React.FC = () => {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [isScanBusy, setIsScanBusy] = useState(false);
-  const [currentView, setCurrentView] = useState<View>('list');
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
-  const [themeLoaded, setThemeLoaded] = useState(false);
-  const [isMacLike, setIsMacLike] = useState(false);
-  const [macOSMajorVersion, setMacOSMajorVersion] = useState<number | null>(null);
-  const [returnDestination, setReturnDestination] = useState<'list' | 'team'>('list');
-  const [isTourActive, setIsTourActive] = useState(false);
-  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
-  const [deviceFingerprint, setDeviceFingerprint] = useState<string | null>(null);
-  const [licenseBootstrapComplete, setLicenseBootstrapComplete] = useState(false);
-  const [userDisplayName, setUserDisplayName] = useState('');
+  const themeHook = useTheme();
+  const { theme, toggleTheme: toggleThemeHook } = themeHook;
+  const platform = usePlatformInfo();
+  const { isMacLike, macOSMajorVersion, platformIdentifier } = platform;
+  const { userDisplayName, setDisplayName } = useUserProfile();
+  const { showToast, toasts, removeToast } = useToast();
+  const scanSettingsHook = useScanSettings();
+  const { scanSettings, scanSettingsRef, applyScanSettings, loadInitialSettings } = scanSettingsHook;
+  const [appVersion, setAppVersion] = useState('');
+  const workspaceClearRef = useRef<(() => Promise<void>) | null>(null);
+  const license = useLicense({
+    showToast,
+    platformIdentifier,
+    appVersion,
+    onResetComplete: async () => {
+      if (workspaceClearRef.current) {
+        await workspaceClearRef.current();
+      }
+    },
+  });
+  const {
+    licenseInfo,
+    deviceFingerprint,
+    licenseBootstrapComplete,
+    isOnboardingComplete,
+    setLicense,
+    resetLicense,
+    ensureDeviceFingerprint,
+  } = license;
+  const workspace = useWorkspace({
+    showToast,
+    scanSettingsRef,
+    isOnboardingComplete,
+  });
+  const {
+    agents,
+    skills,
+    isScanBusy,
+    loadAgents,
+    saveAgent: saveAgentToWorkspace,
+    deleteAgent: deleteAgentFromWorkspace,
+    bulkDeleteAgents,
+    importAgents,
+    toggleAgentFavorite,
+    saveSkill: saveSkillToWorkspace,
+    deleteSkill: deleteSkillFromWorkspace,
+    toggleSkillFavorite,
+  } = workspace;
+  useEffect(() => {
+    workspaceClearRef.current = workspace.clearWorkspaceCache;
+  }, [workspace.clearWorkspaceCache]);
+  const navigation = useNavigation({ agents: workspace.agents });
+  const {
+    currentView,
+    selectedAgent,
+    selectedSkill,
+    navigateHome,
+    navigateToEdit,
+    navigateToCreate,
+    navigateToDuplicate,
+    navigateToSkillEdit,
+    navigateToSkillCreate,
+    navigateToView,
+    cancelEditing,
+  } = navigation;
   const [isActivationOpen, setIsActivationOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
-  const [activationPresented, setActivationPresented] = useState(false);
-  const [scanSettings, setScanSettingsState] = useState<ScanSettings>(DEFAULT_SCAN_SETTINGS);
-  const { showToast, toasts, removeToast } = useToast();
+  const [activationPresented, setActivationPresented] = useState(true);
+  const [isTourActive, setIsTourActive] = useState(false);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
-  const [appVersion, setAppVersion] = useState('');
   const [updateSnooze, setUpdateSnooze] = useState<{ version: string; until: string } | null>(null);
-  const agentsRef = useRef<Agent[]>([]);
-  const agentCacheHydrated = useRef(false);
-  const themeResolvedRef = useRef(false);
-  const scanSettingsRef = useRef<ScanSettings>(DEFAULT_SCAN_SETTINGS);
-  const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
-  const inFlightScanCount = useRef(0);
   const autoUpdateTimerRef = useRef<number | null>(null);
   const {
     isChecking: isCheckingUpdate,
@@ -167,161 +131,14 @@ const App: React.FC = () => {
     installUpdate,
   } = useUpdater();
 
-  useEffect(() => {
-    agentsRef.current = agents;
-  }, [agents]);
-
-  const applyScanSettings = useCallback((next: ScanSettings) => {
-    scanSettingsRef.current = next;
-    setScanSettingsState(next);
-  }, []);
-
-  const resolveProjectPath = (preferredPath?: string, existingPath?: string): string | undefined => {
-    if (preferredPath && preferredPath.trim().length > 0) {
-      return preferredPath.trim();
-    }
-    return extractProjectRootFromAgentPath(existingPath) || undefined;
-  };
-
-  useEffect(() => {
-    if (!isOnboardingComplete || agentCacheHydrated.current) {
-      return;
-    }
-
-    const hydrateAgentsFromCache = async () => {
-      const cachedAgents = await getStorageItem<Agent[]>(AGENT_CACHE_KEY);
-      if (cachedAgents && cachedAgents.length > 0 && agentsRef.current.length === 0) {
-        setAgents(cachedAgents);
-      }
-      agentCacheHydrated.current = true;
-    };
-    hydrateAgentsFromCache();
-  }, [isOnboardingComplete]);
-
-  useEffect(() => {
-    if (!agentCacheHydrated.current) return;
-    setStorageItem(AGENT_CACHE_KEY, agents);
-  }, [agents]);
-
-  const makeAgentKey = (agent: Agent) => {
-    const scopePrefix = agent.scope === AgentScope.Project ? 'project' : 'global';
-    const idPart = agent.path || agent.id || agent.name;
-    return `${scopePrefix}:${idPart}`;
-  };
-
-  useEffect(() => {
-    if (typeof navigator === 'undefined') {
-      setIsMacLike(false);
-      setMacOSMajorVersion(null);
-      return;
-    }
-    const platform = (navigator as any).userAgentData?.platform || navigator.platform || '';
-    const isMacPlatform = /mac|iphone|ipad|ipod/i.test(platform);
-    setIsMacLike(isMacPlatform);
-    setMacOSMajorVersion(isMacPlatform ? detectMacOSMajorVersion() : null);
-  }, []);
+  const refreshGlobalSkills = useCallback(async () => {
+    await workspace.refreshGlobalSkills();
+  }, [workspace.refreshGlobalSkills]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setShowSplash(false), 1200);
     return () => window.clearTimeout(timer);
   }, []);
-
-  useEffect(() => {
-    const loadDisplayName = async () => {
-      const storedName = await getStorageItem<string>('vinsly-display-name');
-      if (storedName) {
-        setUserDisplayName(storedName);
-      }
-    };
-    loadDisplayName();
-  }, []);
-
-  useEffect(() => {
-    const resolveFingerprint = async () => {
-      try {
-        const fingerprint = await getOrCreateDeviceFingerprint();
-        setDeviceFingerprint(fingerprint);
-      } catch (error) {
-        console.error('Unable to initialize device fingerprint', error);
-      }
-    };
-    void resolveFingerprint();
-  }, []);
-
-  useEffect(() => {
-    if (!deviceFingerprint) {
-      return;
-    }
-    let cancelled = false;
-
-    const hydrateLicense = async () => {
-      const storedLicense = await getStorageItem<LicenseInfo>('vinsly-license-info');
-      if (!storedLicense) {
-        if (!cancelled) {
-          setLicenseInfo(null);
-          setIsOnboardingComplete(false);
-          setLicenseBootstrapComplete(true);
-        }
-        return;
-      }
-
-      if (!storedLicense.token || !storedLicense.deviceFingerprint) {
-        await removeStorageItem('vinsly-license-info');
-        if (!cancelled) {
-          setLicenseInfo(null);
-          setIsOnboardingComplete(false);
-          setLicenseBootstrapComplete(true);
-        }
-        return;
-      }
-
-      if (storedLicense.deviceFingerprint !== deviceFingerprint) {
-        await removeStorageItem('vinsly-license-info');
-        if (!cancelled) {
-          setLicenseInfo(null);
-          setIsOnboardingComplete(false);
-          setLicenseBootstrapComplete(true);
-        }
-        return;
-      }
-
-      try {
-        await sendHeartbeat({
-          token: storedLicense.token,
-          deviceFingerprint,
-          appVersion: appVersion || undefined,
-        });
-        const refreshed: LicenseInfo = {
-          ...storedLicense,
-          status: 'active',
-          lastChecked: new Date().toISOString(),
-        };
-        await setStorageItem('vinsly-license-info', refreshed);
-        if (!cancelled) {
-          setLicenseInfo(refreshed);
-          setIsOnboardingComplete(true);
-        }
-      } catch (error) {
-        console.error('Heartbeat validation failed:', error);
-        await removeStorageItem('vinsly-license-info');
-        if (!cancelled) {
-          setLicenseInfo(null);
-          setIsOnboardingComplete(false);
-          showToast('error', 'We need to verify your licence again.');
-        }
-      } finally {
-        if (!cancelled) {
-          setLicenseBootstrapComplete(true);
-        }
-      }
-    };
-
-    void hydrateLicense();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [deviceFingerprint, appVersion, showToast]);
 
   useEffect(() => {
     const loadAppVersion = async () => {
@@ -446,18 +263,6 @@ const App: React.FC = () => {
     }
   }, [pendingUpdate, updateSnooze]);
 
-  const beginScan = useCallback(() => {
-    inFlightScanCount.current += 1;
-    setIsScanBusy(true);
-  }, []);
-
-  const endScan = useCallback(() => {
-    inFlightScanCount.current = Math.max(0, inFlightScanCount.current - 1);
-    if (inFlightScanCount.current === 0) {
-      setIsScanBusy(false);
-    }
-  }, []);
-
   const handleManualUpdateCheck = useCallback(async () => {
     try {
       const update = await checkForUpdate();
@@ -514,158 +319,7 @@ const App: React.FC = () => {
     await setStorageItem(UPDATE_SNOOZE_KEY, payload);
   }, [pendingUpdate]);
 
-  // Load agents from filesystem
-  const loadAgents = useCallback(async (
-    options: LoadAgentsOptions = {}
-  ): Promise<{ total: number; newCount: number }> => {
-    beginScan();
-    const currentScanSettings = scanSettingsRef.current;
-    const {
-      projectPaths,
-      includeGlobal = true,
-      scanWatchedDirectories = false,
-      additionalDirectories = [],
-    } = options;
-
-    try {
-      const previousAgents = agentsRef.current;
-      const seen = new Set<string>();
-      const projectPathList = projectPaths
-        ? (Array.isArray(projectPaths) ? projectPaths : [projectPaths]).filter(path => typeof path === 'string' && path.trim().length > 0)
-        : [];
-
-      const directoriesToScan = new Set<string>();
-      additionalDirectories
-        .filter((dir): dir is string => typeof dir === 'string' && dir.trim().length > 0)
-        .forEach(dir => directoriesToScan.add(dir));
-      if (scanWatchedDirectories) {
-        currentScanSettings.watchedDirectories
-          .filter(dir => dir && dir.trim().length > 0)
-          .forEach(directory => directoriesToScan.add(directory));
-      }
-
-      const normalizedScannedRoots = new Set<string>();
-      const addNormalizedRoot = (input?: string | null) => {
-        const normalized = normalizeProjectRootPath(input);
-        if (normalized) {
-          normalizedScannedRoots.add(normalized);
-        }
-      };
-      projectPathList.forEach(addNormalizedRoot);
-      directoriesToScan.forEach(directory => addNormalizedRoot(directory));
-
-      const shouldReplaceProjectAgent = (agent: Agent) => {
-        if (normalizedScannedRoots.size === 0) {
-          return false;
-        }
-        const agentRoot = getAgentProjectRootPath(agent);
-        return !!agentRoot && normalizedScannedRoots.has(agentRoot);
-      };
-
-      const addAgent = (agent: Agent | null) => {
-        if (!agent) return;
-        const key = makeAgentKey(agent);
-        if (seen.has(key)) {
-          return;
-        }
-        seen.add(key);
-        allAgents.push(agent);
-      };
-
-      const allAgents: Agent[] = [];
-
-      // Retain existing agents that aren't part of this refresh cycle
-      for (const agent of previousAgents) {
-        if (agent.scope === AgentScope.Global) {
-          if (!includeGlobal) {
-            addAgent(agent);
-          }
-          continue;
-        }
-
-        if (agent.scope === AgentScope.Project && shouldReplaceProjectAgent(agent)) {
-          continue;
-        }
-
-        addAgent(agent);
-      }
-
-      // Parse global agents
-      if (includeGlobal) {
-        const globalAgents = await listAgents('global');
-        for (const agentFile of globalAgents) {
-          addAgent(markdownToAgent(agentFile.content, agentFile.name, AgentScope.Global, agentFile.path));
-        }
-      }
-
-      // Parse project agents
-      for (const projectPath of projectPathList) {
-        try {
-          const projectAgents = await listAgents('project', projectPath);
-          for (const agentFile of projectAgents) {
-            addAgent(markdownToAgent(agentFile.content, agentFile.name, AgentScope.Project, agentFile.path));
-          }
-        } catch (error) {
-          console.error(`Error scanning project directory ${projectPath}:`, error);
-          // Continue with other project paths
-        }
-      }
-
-      for (const directory of directoriesToScan) {
-        try {
-          const watchedAgents = await listAgentsFromDirectory(directory);
-          for (const agentFile of watchedAgents) {
-            addAgent(markdownToAgent(agentFile.content, agentFile.name, AgentScope.Project, agentFile.path));
-          }
-        } catch (error) {
-          console.error(`Error scanning directory ${directory}:`, error);
-        }
-      }
-
-      const previousKeys = new Set(previousAgents.map(makeAgentKey));
-      const newCount = allAgents.filter(agent => !previousKeys.has(makeAgentKey(agent))).length;
-
-      setAgents(allAgents);
-      return { total: allAgents.length, newCount };
-    } catch (error) {
-      console.error('Error loading agents:', error);
-      showToast('error', 'Failed to load agents from filesystem');
-      throw error;
-    } finally {
-      endScan();
-    }
-  }, [beginScan, endScan, showToast]);
-
-  const getSystemTheme = (): Theme => {
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    return 'dark';
-  };
-
   useEffect(() => {
-    // Check for saved theme preference or fall back to stored theme/system preference
-    const loadTheme = async () => {
-      if (themeResolvedRef.current) return;
-      const savedPreference = await getStorageItem<'system' | Theme>('vinsly-theme-preference');
-      const systemTheme = getSystemTheme();
-
-      if (savedPreference) {
-        const initialTheme = savedPreference === 'system' ? systemTheme : savedPreference;
-        if (themeResolvedRef.current) return;
-        themeResolvedRef.current = true;
-        setThemeMode(initialTheme);
-        return;
-      }
-
-      const savedTheme = await getStorageItem<Theme>('vinsly-theme');
-      const fallbackTheme = savedTheme || systemTheme;
-      if (themeResolvedRef.current) return;
-      themeResolvedRef.current = true;
-      setThemeMode(fallbackTheme);
-    };
-
-    loadTheme();
 
     // Gate agent loading until onboarding completes and activation is closed
     if (!isOnboardingComplete || isActivationOpen) {
@@ -673,8 +327,7 @@ const App: React.FC = () => {
     }
 
     const initializeAgents = async () => {
-      const storedSettings = await getScanSettings();
-      applyScanSettings(storedSettings);
+      const storedSettings = await loadInitialSettings();
 
       let homeDirectories: string[] = [];
       if (storedSettings.autoScanHomeDirectoryOnStartup && storedSettings.fullDiskAccessEnabled) {
@@ -702,42 +355,38 @@ const App: React.FC = () => {
     };
 
     initializeAgents();
-  }, [applyScanSettings, isActivationOpen, isOnboardingComplete, loadAgents]);
-
-
-  useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove(theme === 'dark' ? 'light' : 'dark');
-    root.classList.add(theme);
-    if (themeLoaded) {
-      setStorageItem('vinsly-theme', theme);
-    }
-  }, [theme, themeLoaded]);
-
-  const setThemeMode = (mode: Theme) => {
-    setThemeLoaded(true);
-    setTheme(mode);
-  };
-
-  const toggleTheme = () => {
-    themeResolvedRef.current = true;
-    setThemeMode(theme === 'dark' ? 'light' : 'dark');
-  };
+  }, [isActivationOpen, isOnboardingComplete, loadAgents, loadInitialSettings]);
 
   const startTour = () => {
     setIsTourActive(true);
   };
 
   const getTourType = (): TourType => {
+    if (currentView === 'skills') return 'skills';
     if (currentView === 'team') return 'team';
     if (currentView === 'analytics') return 'analytics';
-    if (currentView === 'edit' || currentView === 'create' || currentView === 'duplicate') return 'editor';
+    if (
+      currentView === 'edit' ||
+      currentView === 'create' ||
+      currentView === 'duplicate' ||
+      currentView === 'create-skill' ||
+      currentView === 'edit-skill'
+    ) {
+      return 'editor';
+    }
     return 'main';
   };
 
   const getEditorMode = (): EditorTourMode | null => {
     if (currentView === 'edit') return 'form';
-    if (currentView === 'create' || currentView === 'duplicate') return 'wizard';
+    if (
+      currentView === 'create' ||
+      currentView === 'duplicate' ||
+      currentView === 'create-skill' ||
+      currentView === 'edit-skill'
+    ) {
+      return 'wizard';
+    }
     return null;
   };
 
@@ -746,28 +395,17 @@ const App: React.FC = () => {
   };
 
   const handleNavigateHome = () => {
-    setCurrentView('list');
-    setReturnDestination('list');
-    setSelectedAgent(null);
+    navigateHome();
     setIsTourActive(false);
   };
 
   const handleCreateAgent = useCallback(() => {
-    const newAgentTemplate: Agent = {
-      id: '',
-      name: '',
-      scope: AgentScope.Global,
-      path: '',
-      frontmatter: {
-        name: '',
-        description: '',
-      },
-      body: ''
-    };
-    setSelectedAgent(newAgentTemplate);
-    setReturnDestination(currentView === 'team' ? 'team' : 'list');
-    setCurrentView('create');
-  }, [currentView]);
+    navigateToCreate(currentView === 'team' ? 'team' : 'subagents');
+  }, [currentView, navigateToCreate]);
+
+  const handleCreateSkill = useCallback(() => {
+    navigateToSkillCreate();
+  }, [navigateToSkillCreate]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -783,217 +421,171 @@ const App: React.FC = () => {
   }, [isMacLike, handleCreateAgent]);
 
   const handleEditAgent = (agent: Agent) => {
-    setSelectedAgent(agent);
-    setReturnDestination(currentView === 'team' ? 'team' : 'list');
-    setCurrentView('edit');
+    navigateToEdit(agent, currentView === 'team' ? 'team' : 'subagents');
   };
 
   const handleDuplicateAgent = (agent: Agent) => {
-    const duplicatedAgent: Agent = JSON.parse(JSON.stringify(agent)); // Deep copy
+    navigateToDuplicate(agent, currentView === 'team' ? 'team' : 'subagents');
+  };
 
-    let newName = `${agent.name}-copy`;
-    let i = 1;
-    while(agents.some(a => a.name === newName)) {
-      i++;
-      newName = `${agent.name}-copy-${i}`;
-    }
+  const handleEditSkill = (skill: Skill) => {
+    navigateToSkillEdit(skill);
+  };
 
-    duplicatedAgent.name = newName;
-    duplicatedAgent.frontmatter.name = newName;
-    duplicatedAgent.id = '';
-    duplicatedAgent.path = '';
-
-    setSelectedAgent(duplicatedAgent);
-    setReturnDestination(currentView === 'team' ? 'team' : 'list');
-    setCurrentView('duplicate');
+  const handleSaveSkill = async (skillToSave: Skill, options?: { projectPath?: string }) => {
+    await saveSkillToWorkspace(skillToSave, options);
+    cancelEditing();
   };
 
   const handleSaveAgent = async (agentToSave: Agent, options?: { projectPath?: string }) => {
-    try {
-      const markdown = agentToMarkdown(agentToSave);
-      const scope = agentToSave.scope === AgentScope.Project ? 'project' : 'global';
-      const displayPath = `${agentToSave.scope === AgentScope.Project ? '.claude/agents/' : '~/.claude/agents/'}${agentToSave.name}.md`;
-      const projectPath = scope === 'project' ? resolveProjectPath(options?.projectPath, agentToSave.path) : undefined;
-
-      if (scope === 'project' && !projectPath) {
-        throw new Error('Select a project folder before saving a project agent.');
-      }
-
-      // writeAgent returns the absolute file path
-      const absolutePath = await writeAgent(scope, agentToSave.name, markdown, projectPath);
-      const persistedAgent: Agent = {
-        ...agentToSave,
-        id: absolutePath || displayPath,
-        path: absolutePath || displayPath, // Use the absolute path returned from backend
-      };
-
-      if (currentView === 'create' || currentView === 'duplicate') {
-        setAgents(prev => [...prev, persistedAgent]);
-        showToast('success', `Agent "${agentToSave.name}" created successfully`);
-      } else {
-        setAgents(prev => prev.map(agent => agent.id === agentToSave.id ? persistedAgent : agent));
-        if (agentToSave.path && agentToSave.path !== absolutePath) {
-          try {
-            await deleteAgent(agentToSave.path);
-          } catch (cleanupError) {
-            console.warn('Failed to remove previous agent file:', cleanupError);
-          }
-        }
-        showToast('success', `Agent "${agentToSave.name}" updated successfully`);
-      }
-
-      setCurrentView(returnDestination);
-      setSelectedAgent(null);
-    } catch (error) {
-      console.error('Error saving agent:', error);
-      showToast('error', `Failed to save agent: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    await saveAgentToWorkspace(agentToSave, options);
+    cancelEditing();
   };
   
   const handleDeleteAgent = async (agentIdToDelete: string) => {
-    try {
-      const agent = agents.find(a => a.id === agentIdToDelete);
-      if (!agent) return;
-
-      await deleteAgent(agent.path);
-      setAgents(prev => prev.filter(a => a.id !== agentIdToDelete));
-      showToast('success', `Agent "${agent.name}" deleted successfully`);
-    } catch (error) {
-      console.error('Error deleting agent:', error);
-      showToast('error', `Failed to delete agent: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    await deleteAgentFromWorkspace(agentIdToDelete);
   };
 
-  const handleBulkDelete = async (agentIdsToDelete: string[]) => {
-    try {
-      const agentsToDelete = agents.filter(a => agentIdsToDelete.includes(a.id));
+  const handleDeleteSkill = async (skillIdToDelete: string) => {
+    await deleteSkillFromWorkspace(skillIdToDelete);
+  };
 
-      for (const agent of agentsToDelete) {
-        await deleteAgent(agent.path);
+  const handleRevealSkill = useCallback(
+    async (skill: Skill) => {
+      const targetPath = skill.directoryPath || skill.path;
+      if (!targetPath) {
+        showToast('error', 'Skill path is missing.');
+        return;
+      }
+      try {
+        await revealItemInDir(targetPath);
+      } catch (error) {
+        console.error('Failed to reveal skill folder:', error);
+        showToast('error', 'Failed to reveal the skill folder.');
+      }
+    },
+    [showToast]
+  );
+
+  const handleExportSkill = useCallback(
+    async (skill: Skill) => {
+      const directoryPath = skill.directoryPath || skill.path;
+      if (!directoryPath) {
+        showToast('error', 'Skill folder is missing.');
+        return;
       }
 
-      setAgents(prev => prev.filter(agent => !agentIdsToDelete.includes(agent.id)));
-      showToast('success', `Deleted ${agentsToDelete.length} agent(s) successfully`);
+      try {
+        const destination = await saveDialog({
+          defaultPath: `${skill.name || 'skill'}.zip`,
+          filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+        });
+        if (!destination) {
+          return;
+        }
+        await exportSkillDirectory(directoryPath, destination);
+        showToast('success', `Exported "${skill.name}"`);
+      } catch (error) {
+        console.error('Error exporting skill:', error);
+        showToast('error', 'Failed to export the skill.');
+      }
+    },
+    [showToast]
+  );
+
+  const handleExportSkills = useCallback(
+    async (skillsToExport: Skill[]) => {
+      if (skillsToExport.length === 0) {
+        return;
+      }
+      const destination = await saveDialog({
+        defaultPath:
+          skillsToExport.length === 1
+            ? `${skillsToExport[0].name || 'skill'}.zip`
+            : 'skills-archive.zip',
+        filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+      });
+      if (!destination) {
+        return;
+      }
+      const directories = skillsToExport
+        .map(skill => skill.directoryPath || skill.path)
+        .filter((dir): dir is string => Boolean(dir));
+      if (directories.length === 0) {
+        showToast('error', 'Selected skills are missing directories.');
+        return;
+      }
+      await exportSkillsArchive(directories, destination);
+      showToast('success', `Exported ${skillsToExport.length} skill(s)`);
+    },
+    [showToast]
+  );
+
+  const handleImportSkill = useCallback(async () => {
+    try {
+      const selection = await openDialog({
+        multiple: false,
+        filters: [{ name: 'Skill Archive', extensions: ['zip'] }],
+      });
+      if (!selection) {
+        return;
+      }
+      const archivePath = Array.isArray(selection) ? selection[0] : selection;
+      await importSkillArchive(archivePath, 'global');
+      await refreshGlobalSkills();
+      showToast('success', 'Skill imported into ~/.claude/skills');
     } catch (error) {
-      console.error('Error deleting agents:', error);
-      showToast('error', `Failed to delete agents: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error importing skill:', error);
+      showToast('error', 'Failed to import skill archive.');
     }
+  }, [refreshGlobalSkills, showToast]);
+
+  const handleBulkDelete = async (agentIdsToDelete: string[]) => {
+    await bulkDeleteAgents(agentIdsToDelete);
   };
 
   const handleImportAgents = async (importedAgents: Agent[], errors: string[]) => {
-    if (importedAgents.length > 0) {
-      // Check for name conflicts and adjust names if needed
-      const adjustedAgents = importedAgents.map(agent => {
-        let newName = agent.name;
-        let counter = 1;
-
-        while (agents.some(a => a.name === newName)) {
-          newName = `${agent.name}-${counter}`;
-          counter++;
-        }
-
-        if (newName !== agent.name) {
-          return {
-            ...agent,
-            name: newName,
-            frontmatter: { ...agent.frontmatter, name: newName },
-            id: `${agent.scope === AgentScope.Project ? '.claude/agents/' : '~/.claude/agents/'}${newName}.md`,
-            path: `${agent.scope === AgentScope.Project ? '.claude/agents/' : '~/.claude/agents/'}${newName}.md`
-          };
-        }
-
-        return agent;
-      });
-
-      // Persist imported agents to filesystem
-      try {
-        const persistedAgents: Agent[] = [];
-        for (const agent of adjustedAgents) {
-          const markdown = agentToMarkdown(agent);
-          const scope = agent.scope === AgentScope.Project ? 'project' : 'global';
-          const projectPathForImport =
-            scope === 'project'
-              ? resolveProjectPath(extractProjectRootFromAgentPath(agent.path) || undefined, agent.path)
-              : undefined;
-
-          if (scope === 'project' && !projectPathForImport) {
-            console.warn(`Skipping project agent "${agent.name}" import due to missing project path`);
-            continue;
-          }
-
-          const absolutePath = await writeAgent(scope, agent.name, markdown, projectPathForImport);
-          persistedAgents.push({
-            ...agent,
-            id: absolutePath,
-            path: absolutePath,
-          });
-        }
-
-        setAgents(prev => [...prev, ...persistedAgents]);
-
-        if (errors.length > 0) {
-          showToast('error', `Imported ${importedAgents.length} agent(s) with ${errors.length} error(s).`);
-        } else {
-          showToast('success', `Successfully imported ${importedAgents.length} agent(s).`);
-        }
-      } catch (error) {
-        console.error('Error persisting imported agents:', error);
-        showToast('error', `Failed to persist imported agents: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
+    await importAgents(importedAgents, errors);
   };
 
   const handleToggleFavorite = (agentToToggle: Agent) => {
-    setAgents(prev =>
-      prev.map(agent => {
-        const toggleKey = agentToToggle.id || agentToToggle.name;
-        const currentKey = agent.id || agent.name;
-        if (currentKey === toggleKey) {
-          return {
-            ...agent,
-            isFavorite: !agent.isFavorite
-          };
-        }
-        return agent;
-      })
-    );
+    toggleAgentFavorite(agentToToggle);
+  };
+
+  const handleToggleSkillFavorite = (skillToToggle: Skill) => {
+    toggleSkillFavorite(skillToToggle);
   };
 
   const handleCancel = () => {
-    setCurrentView(returnDestination);
-    setSelectedAgent(null);
+    cancelEditing();
   };
 
   const handleShowTeam = () => {
-    setCurrentView('team');
-    setReturnDestination('team');
+    navigateToView('team');
   };
 
-  const handleShowList = () => {
-    setCurrentView('list');
-    setReturnDestination('list');
+  const handleShowSubagents = () => {
+    navigateToView('subagents');
+  };
+
+  const handleShowSkills = () => {
+    navigateToView('skills');
   };
 
   const handleShowAnalytics = () => {
-    setCurrentView('analytics');
+    navigateToView('analytics');
   };
 
   const handlePersistDisplayName = useCallback(async (name: string) => {
-    const trimmed = name.trim();
-    setUserDisplayName(trimmed);
-    await setStorageItem('vinsly-display-name', trimmed);
-  }, []);
+    await setDisplayName(name);
+  }, [setDisplayName]);
 
   const handleResetLicense = useCallback(async () => {
-    setLicenseInfo(null);
-    setIsOnboardingComplete(false);
-    setAgents([]);
-    agentsRef.current = [];
-    agentCacheHydrated.current = false;
-    await removeStorageItem('vinsly-license-info');
-    await removeStorageItem(AGENT_CACHE_KEY);
+    await resetLicense();
+    cancelEditing();
+    navigateHome();
     setIsActivationOpen(true);
-  }, []);
+  }, [cancelEditing, navigateHome, resetLicense]);
 
   const renderContent = () => {
     switch(currentView) {
@@ -1018,6 +610,26 @@ const App: React.FC = () => {
             />
           </motion.div>
         );
+      case 'create-skill':
+      case 'edit-skill':
+        if (!selectedSkill) return null;
+        return (
+          <motion.div
+            key={`skill-editor-${currentView}`}
+            variants={pageTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <SkillEditorScreen
+              skill={selectedSkill}
+              onSave={handleSaveSkill}
+              onCancel={handleCancel}
+              mode={currentView}
+              existingNames={skills.map(skill => skill.name).filter(name => name !== selectedSkill.name)}
+            />
+          </motion.div>
+        );
       case 'analytics':
         return (
           <motion.div
@@ -1029,8 +641,10 @@ const App: React.FC = () => {
           >
             <AnalyticsDashboardScreen
               agents={agents}
-              onShowList={handleShowList}
+              skills={skills}
+              onShowList={handleShowSubagents}
               onShowTeam={handleShowTeam}
+              onShowSkills={handleShowSkills}
             />
           </motion.div>
         );
@@ -1045,20 +659,50 @@ const App: React.FC = () => {
           >
             <AgentTeamView
               agents={agents}
-              onBack={handleShowList}
-              onShowList={handleShowList}
+              skills={skills}
+              onBack={handleShowSubagents}
+              onShowList={handleShowSubagents}
+              onShowSkills={handleShowSkills}
               onShowAnalytics={handleShowAnalytics}
               onEdit={handleEditAgent}
               onToggleFavorite={handleToggleFavorite}
+              onToggleSkillFavorite={handleToggleSkillFavorite}
               userName={userDisplayName || 'Your'}
             />
           </motion.div>
         );
-      case 'list':
+      case 'skills':
+        return (
+          <motion.div
+            key="skills"
+            variants={pageTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <SkillListScreen
+              skills={skills}
+              onCreateSkill={handleCreateSkill}
+              onEditSkill={handleEditSkill}
+              onDeleteSkill={handleDeleteSkill}
+              onRevealSkill={handleRevealSkill}
+              onExportSkill={handleExportSkill}
+              onExportSkills={handleExportSkills}
+              onImportSkill={handleImportSkill}
+              onShowSubagents={handleShowSubagents}
+              onShowSkills={handleShowSkills}
+              onShowTeam={handleShowTeam}
+              onShowAnalytics={handleShowAnalytics}
+              activeView="skills"
+              onToggleFavorite={handleToggleSkillFavorite}
+            />
+          </motion.div>
+        );
+      case 'subagents':
       default:
         return (
           <motion.div
-            key="list"
+            key="subagents"
             variants={pageTransition}
             initial="initial"
             animate="animate"
@@ -1072,8 +716,10 @@ const App: React.FC = () => {
               onDelete={handleDeleteAgent}
               onBulkDelete={handleBulkDelete}
               onShowTeam={handleShowTeam}
-              onShowList={handleShowList}
+              onShowSubagents={handleShowSubagents}
+              onShowSkills={handleShowSkills}
               onShowAnalytics={handleShowAnalytics}
+              activeView="subagents"
               onToggleFavorite={handleToggleFavorite}
               onImport={handleImportAgents}
               shortcutHint={isMacLike ? '⌘ N' : 'Ctrl + N'}
@@ -1095,7 +741,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-v-light-bg dark:bg-v-dark text-v-light-text-primary dark:text-v-text-primary transition-colors duration-200">
       <Header
         theme={theme}
-        onToggleTheme={toggleTheme}
+        onToggleTheme={toggleThemeHook}
         onStartTour={startTour}
         onNavigateHome={handleNavigateHome}
         onScan={loadAgents}
@@ -1167,9 +813,9 @@ const App: React.FC = () => {
           const trimmedEmail = email.trim();
           const trimmedDisplayName = displayName.trim();
 
-          const resolvedFingerprint = deviceFingerprint ?? (await getOrCreateDeviceFingerprint());
-          if (!deviceFingerprint) {
-            setDeviceFingerprint(resolvedFingerprint);
+          const resolvedFingerprint = deviceFingerprint ?? (await ensureDeviceFingerprint());
+          if (!resolvedFingerprint) {
+            throw new Error('Unable to initialize device fingerprint.');
           }
 
           let activationResult;
@@ -1177,7 +823,7 @@ const App: React.FC = () => {
             activationResult = await activateLicense({
               licenseKey: trimmedLicenseKey,
               deviceFingerprint: resolvedFingerprint,
-              platform: getPlatformIdentifier(),
+              platform: platformIdentifier,
               appVersion: appVersion || undefined,
             });
           } catch (error) {
@@ -1202,12 +848,9 @@ const App: React.FC = () => {
             deviceFingerprint: resolvedFingerprint,
             maxDevices: activationResult.maxDevices,
           };
-          setLicenseInfo(licenseRecord);
-          await setStorageItem('vinsly-license-info', licenseRecord);
-          setLicenseBootstrapComplete(true);
+          await setLicense(licenseRecord);
 
-          setUserDisplayName(trimmedDisplayName);
-          await setStorageItem('vinsly-display-name', trimmedDisplayName);
+          await setDisplayName(trimmedDisplayName);
 
           const updatedScanSettings: ScanSettings = {
             ...scanSettingsRef.current,
@@ -1232,8 +875,6 @@ const App: React.FC = () => {
           } else if (autoScanHome && !fullDiskAccessEnabled) {
             console.info('Skipping onboarding home scan because Full Disk Access is disabled.');
           }
-
-          setIsOnboardingComplete(true);
 
           const homeScanActive = autoScanHome && fullDiskAccessEnabled;
           const shouldScanWatched = (autoScanGlobal || homeScanActive) && updatedScanSettings.watchedDirectories.length > 0;

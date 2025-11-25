@@ -4,6 +4,9 @@ import { ToolCategoryBreakdown } from '../../utils/analytics';
 
 interface ToolsBreakdownChartProps {
   data: ToolCategoryBreakdown[];
+  title?: string;
+  subtitle?: string;
+  itemLabel?: string;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -25,7 +28,12 @@ const TOOLTIP_STYLE = {
   padding: '10px 14px'
 };
 
-export const ToolsBreakdownChart: React.FC<ToolsBreakdownChartProps> = ({ data }) => {
+export const ToolsBreakdownChart: React.FC<ToolsBreakdownChartProps> = ({
+  data,
+  title = 'Tool Permission Breakdown',
+  subtitle = 'Distribution of tool categories across all agents',
+  itemLabel = 'Count'
+}) => {
   const chartData = data.map(item => ({
     category: item.category,
     count: item.count,
@@ -35,11 +43,13 @@ export const ToolsBreakdownChart: React.FC<ToolsBreakdownChartProps> = ({ data }
   return (
     <div className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg p-6">
       <h3 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary mb-4">
-        Tool Permission Breakdown
+        {title}
       </h3>
-      <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary mb-4">
-        Distribution of tool categories across all agents
-      </p>
+      {subtitle && (
+        <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary mb-4">
+          {subtitle}
+        </p>
+      )}
       <div className="h-80">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
@@ -59,7 +69,7 @@ export const ToolsBreakdownChart: React.FC<ToolsBreakdownChartProps> = ({ data }
               cursor={{ fill: 'var(--tool-breakdown-cursor, rgba(240, 240, 238, 0.65))' }}
               formatter={(value: number, name: string, props: any) => [
                 `${value} uses (${props.payload.percentage}%)`,
-                'Count'
+                itemLabel
               ]}
             />
             <Bar dataKey="count" radius={[8, 8, 0, 0]}>

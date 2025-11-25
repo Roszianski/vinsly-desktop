@@ -11,6 +11,7 @@ interface TextareaFieldProps {
   rows?: number;
   name?: string;
   placeholder?: string;
+  required?: boolean;
 }
 
 export const TextareaField: React.FC<TextareaFieldProps> = ({
@@ -22,7 +23,8 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
   warning,
   rows = 10,
   name,
-  placeholder
+  placeholder,
+  required,
 }) => (
   <div>
     <label htmlFor={id} className="block text-sm font-medium text-v-light-text-secondary dark:text-v-text-secondary mb-1">
@@ -35,6 +37,7 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
       onChange={onChange}
       rows={rows}
       placeholder={placeholder}
+      required={required}
       className="w-full bg-v-light-bg dark:bg-v-dark border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary px-3 py-2 focus:ring-2 focus:ring-v-accent focus:outline-none focus:border-v-accent transition duration-150 ease-in-out font-sans text-sm custom-scrollbar rounded-md placeholder:text-v-light-text-secondary/50 dark:placeholder:text-v-text-secondary/50 placeholder:italic"
     />
     {hint && !warning && (
