@@ -368,7 +368,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
     <div className="divide-y divide-v-light-border dark:divide-v-border">
       <div
         className="grid gap-4 px-4 py-2 border-b border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary text-xs uppercase font-bold tracking-wider items-center"
-        style={{ gridTemplateColumns: '60px minmax(0,1.5fr) minmax(0,2fr) minmax(0,1.4fr) minmax(0,1.6fr) minmax(0,1.8fr) 120px' }}
+        style={{ gridTemplateColumns: '60px minmax(0,2.2fr) minmax(0,2fr) minmax(0,1.2fr) minmax(0,1.6fr) 140px' }}
       >
         <div className="flex justify-center">
           <input
@@ -382,10 +382,9 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
           />
         </div>
         <span>Name</span>
-        <span>Description</span>
+        <span>Path</span>
         <span>Scope</span>
         <span>Tools</span>
-        <span>Path</span>
         <span className="text-right pr-2">Actions</span>
       </div>
       {filteredSkills.length > 0 ? (
@@ -698,7 +697,7 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
   return (
     <div
       className="grid gap-4 px-4 py-3 items-center text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover/50 dark:hover:bg-v-light-dark/40 transition-colors"
-      style={{ gridTemplateColumns: '60px minmax(0,1.5fr) minmax(0,2fr) minmax(0,1.4fr) minmax(0,1.6fr) minmax(0,1.8fr) 120px' }}
+      style={{ gridTemplateColumns: '60px minmax(0,2.2fr) minmax(0,2fr) minmax(0,1.2fr) minmax(0,1.6fr) 140px' }}
     >
       <div className="flex justify-center">
         <input
@@ -709,14 +708,11 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
           className="h-4 w-4 bg-v-light-surface dark:bg-v-mid-dark border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent rounded"
         />
       </div>
-      <div className="pr-2 space-y-0.5">
+      <div className="pr-2 space-y-0.5 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="min-w-0">
             <p className="font-semibold text-v-light-text-primary dark:text-v-text-primary truncate">
               {highlightText(skill.name, highlightTerm)}
-            </p>
-            <p className="text-[11px] font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate" title={fullPath}>
-              {fullPath}
             </p>
             <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary truncate">
               {highlightText(skill.frontmatter.description || '—', highlightTerm)}
@@ -736,6 +732,9 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
           </button>
         </div>
       </div>
+      <div className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate" title={fullPath}>
+        {fullPath}
+      </div>
       <div>
         <span className={`px-2 py-0.5 text-xs font-medium rounded ${scopePillClasses}`}>
           {skill.scope}
@@ -743,9 +742,6 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
       </div>
       <div className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary line-clamp-2">
         {allowedSummary}
-      </div>
-      <div className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate" title={fullPath}>
-        {fullPath}
       </div>
       <div className="flex justify-end items-center gap-2 relative">
         <button
