@@ -368,7 +368,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
     <div className="divide-y divide-v-light-border dark:divide-v-border">
       <div
         className="grid gap-4 px-4 py-2 border-b border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary text-xs uppercase font-bold tracking-wider items-center"
-        style={{ gridTemplateColumns: '60px minmax(0,2.2fr) minmax(0,2fr) minmax(0,1.2fr) minmax(0,1.6fr) 140px' }}
+        style={{ gridTemplateColumns: '60px minmax(0,2.3fr) minmax(0,2.3fr) minmax(0,1.1fr) minmax(0,1.4fr) 140px' }}
       >
         <div className="flex justify-center">
           <input
