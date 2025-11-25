@@ -561,10 +561,15 @@ const SkillGridCard: React.FC<SkillGridCardProps> = ({
           className="h-4 w-4 bg-v-light-surface dark:bg-v-mid-dark border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent rounded mt-1"
         />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary truncate" title={skill.name}>
-              {highlightText(skill.name, highlightTerm)}
-            </p>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="min-w-0">
+              <p className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary truncate" title={skill.name}>
+                {highlightText(skill.name, highlightTerm)}
+              </p>
+              <p className="text-[11px] font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate" title={fullPath}>
+                {fullPath}
+              </p>
+            </div>
             <span
               className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold ${
                 skill.scope === AgentScope.Project
@@ -577,29 +582,26 @@ const SkillGridCard: React.FC<SkillGridCardProps> = ({
             </span>
             <button
               onClick={onToggleFavorite}
-            className={`inline-flex items-center justify-center h-7 w-7 rounded-md border transition-colors ${
-              skill.isFavorite
-                ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
-                : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent'
-            }`}
-            title={skill.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-            aria-label={skill.isFavorite ? 'Unpin skill' : 'Pin skill'}
-          >
-            <StarIcon className="h-4 w-4" filled={Boolean(skill.isFavorite)} />
-          </button>
+              className={`inline-flex items-center justify-center h-7 w-7 rounded-md border transition-colors ${
+                skill.isFavorite
+                  ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
+                  : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent'
+              }`}
+              title={skill.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              aria-label={skill.isFavorite ? 'Unpin skill' : 'Pin skill'}
+            >
+              <StarIcon className="h-4 w-4" filled={Boolean(skill.isFavorite)} />
+            </button>
+          </div>
+          <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary mt-1 truncate">
+            {highlightText(skill.frontmatter.description || 'No description provided.', highlightTerm)}
+          </p>
         </div>
-        <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary mt-1 line-clamp-2">
-          {highlightText(skill.frontmatter.description || 'No description provided.', highlightTerm)}
-        </p>
-      </div>
       </div>
       <div className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary line-clamp-3">
         Allowed tools: {allowedSummary}
       </div>
       <div className="flex items-center justify-between gap-3 pt-2 border-t border-dashed border-v-light-border/70 dark:border-v-border/70">
-        <span className="text-[11px] text-v-light-text-secondary dark:text-v-text-secondary font-mono truncate" title={fullPath}>
-          {fullPath}
-        </span>
         <div className="flex items-center gap-2 flex-nowrap">
           <button
             onClick={onEdit}
@@ -708,27 +710,32 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
         />
       </div>
       <div className="pr-2 space-y-0.5">
-        <div className="flex items-center gap-2">
-          <p className="font-semibold text-v-light-text-primary dark:text-v-text-primary truncate">
-            {highlightText(skill.name, highlightTerm)}
-          </p>
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="min-w-0">
+            <p className="font-semibold text-v-light-text-primary dark:text-v-text-primary truncate">
+              {highlightText(skill.name, highlightTerm)}
+            </p>
+            <p className="text-[11px] font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate" title={fullPath}>
+              {fullPath}
+            </p>
+            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary truncate">
+              {highlightText(skill.frontmatter.description || '—', highlightTerm)}
+            </p>
+          </div>
           <button
             onClick={() => onToggleFavorite(skill)}
-          className={`inline-flex items-center justify-center h-6 w-6 rounded-md border transition-colors ${
-            skill.isFavorite
-              ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
-              : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent'
-          }`}
-          title={skill.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-          aria-label={skill.isFavorite ? 'Unpin skill' : 'Pin skill'}
-        >
-          <StarIcon className="h-3.5 w-3.5" filled={Boolean(skill.isFavorite)} />
-        </button>
+            className={`inline-flex items-center justify-center h-6 w-6 rounded-md border transition-colors ${
+              skill.isFavorite
+                ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
+                : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent'
+            }`}
+            title={skill.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            aria-label={skill.isFavorite ? 'Unpin skill' : 'Pin skill'}
+          >
+            <StarIcon className="h-3.5 w-3.5" filled={Boolean(skill.isFavorite)} />
+          </button>
+        </div>
       </div>
-    </div>
-    <div className="text-sm text-v-light-text-secondary dark:text-v-text-secondary line-clamp-2">
-      {highlightText(skill.frontmatter.description || '—', highlightTerm)}
-    </div>
       <div>
         <span className={`px-2 py-0.5 text-xs font-medium rounded ${scopePillClasses}`}>
           {skill.scope}
