@@ -113,3 +113,148 @@ export async function checkFullDiskAccess(): Promise<boolean> {
 export async function openFullDiskAccessSettings(): Promise<void> {
   await invoke('open_full_disk_access_settings');
 }
+
+// ============================================================================
+// CLAUDE.md (Memory) Commands
+// ============================================================================
+
+export interface ClaudeMemoryFile {
+  scope: string;
+  path: string;
+  content: string;
+  exists: boolean;
+}
+
+export async function readClaudeMemory(
+  scope: 'project' | 'global',
+  projectPath?: string
+): Promise<ClaudeMemoryFile> {
+  return await invoke<ClaudeMemoryFile>('read_claude_memory', {
+    scope,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+export async function writeClaudeMemory(
+  scope: 'project' | 'global',
+  content: string,
+  projectPath?: string
+): Promise<string> {
+  return await invoke<string>('write_claude_memory', {
+    scope,
+    content,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+export async function checkClaudeMemoryExists(
+  scope: 'project' | 'global',
+  projectPath?: string
+): Promise<boolean> {
+  return await invoke<boolean>('check_claude_memory_exists', {
+    scope,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+// ============================================================================
+// Slash Commands
+// ============================================================================
+
+export interface SlashCommandFile {
+  name: string;
+  path: string;
+  content: string;
+  scope: string;
+}
+
+export async function listSlashCommands(
+  scope: 'project' | 'global',
+  projectPath?: string
+): Promise<SlashCommandFile[]> {
+  return await invoke<SlashCommandFile[]>('list_slash_commands', {
+    scope,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+export async function readSlashCommand(path: string): Promise<string> {
+  return await invoke<string>('read_slash_command', { path });
+}
+
+export async function writeSlashCommand(
+  scope: 'project' | 'global',
+  name: string,
+  content: string,
+  projectPath?: string
+): Promise<string> {
+  return await invoke<string>('write_slash_command', {
+    scope,
+    name,
+    content,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+export async function deleteSlashCommand(path: string): Promise<void> {
+  return await invoke('delete_slash_command', { path });
+}
+
+export async function listSlashCommandsFromDirectory(
+  directory: string
+): Promise<SlashCommandFile[]> {
+  return await invoke<SlashCommandFile[]>('list_slash_commands_from_directory', {
+    directory,
+  });
+}
+
+// Export slash commands to a zip archive
+export async function exportSlashCommandsArchive(
+  paths: string[],
+  destination: string
+): Promise<void> {
+  return await invoke('export_slash_commands_archive', { paths, destination });
+}
+
+// Import slash commands from a zip archive
+export async function importSlashCommandsArchive(
+  archivePath: string,
+  scope: 'project' | 'global',
+  projectPath?: string
+): Promise<string[]> {
+  return await invoke<string[]>('import_slash_commands_archive', {
+    archivePath,
+    archive_path: archivePath,
+    scope,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+// Export CLAUDE.md memory files to a zip archive
+export async function exportMemoriesArchive(
+  paths: string[],
+  destination: string
+): Promise<void> {
+  return await invoke('export_memories_archive', { paths, destination });
+}
+
+// Import CLAUDE.md memory files from a zip archive
+export async function importMemoriesArchive(
+  archivePath: string,
+  scope: 'project' | 'global',
+  projectPath?: string
+): Promise<string[]> {
+  return await invoke<string[]>('import_memories_archive', {
+    archivePath,
+    archive_path: archivePath,
+    scope,
+    projectPath,
+    project_path: projectPath,
+  });
+}

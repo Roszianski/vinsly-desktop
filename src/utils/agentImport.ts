@@ -6,6 +6,32 @@ import { readTextFile } from '@tauri-apps/plugin-fs';
 
 const FRONTMATTER_REGEX = /^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?([\s\S]*)$/;
 
+// Security and performance limits
+const MAX_ZIP_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB per file
+const IMPORT_TIMEOUT_MS = 30000; // 30 seconds
+
+/**
+ * Validate file size before processing
+ */
+function validateFileSize(file: File, maxSize: number = MAX_FILE_SIZE_BYTES): void {
+  if (file.size > maxSize) {
+    throw new Error(`File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds maximum allowed size (${(maxSize / 1024 / 1024).toFixed(2)}MB)`);
+  }
+}
+
+/**
+ * Add timeout to a promise
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms: ${operation}`)), timeoutMs)
+    )
+  ]);
+}
+
 /**
  * Parse markdown content and extract frontmatter and body
  */
@@ -97,7 +123,11 @@ export async function importAgentFromFile(
   scope: AgentScope = AgentScope.Global
 ): Promise<Agent | null> {
   try {
-    const content = await file.text();
+    // Validate file size
+    validateFileSize(file);
+
+    // Read with timeout
+    const content = await withTimeout(file.text(), IMPORT_TIMEOUT_MS, 'reading file');
 
     if (!hasSubagentDefinition(content)) {
       throw new Error('File does not contain a valid subagent definition');
@@ -122,7 +152,11 @@ export async function importAgentsFromZip(
   const errors: string[] = [];
 
   try {
-    const zip = await JSZip.loadAsync(file);
+    // Validate ZIP file size
+    validateFileSize(file, MAX_ZIP_SIZE_BYTES);
+
+    // Load ZIP with timeout
+    const zip = await withTimeout(JSZip.loadAsync(file), IMPORT_TIMEOUT_MS, 'loading ZIP file');
 
     for (const [fileName, zipEntry] of Object.entries(zip.files)) {
       if (zipEntry.dir || !fileName.endsWith('.md')) {

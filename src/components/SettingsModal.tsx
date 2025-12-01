@@ -627,70 +627,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           </button>
                         </div>
                       </div>
-
-                      <div className="border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                              Updates
-                            </p>
-                            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                              Control how Vinsly delivers new versions
-                            </p>
-                          </div>
-                          {pendingUpdate && (
-                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-v-accent/10 text-v-accent">
-                              Update available
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="space-y-2 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-v-light-text-secondary dark:text-v-text-secondary">Current version</span>
-                            <span className="font-mono text-v-light-text-primary dark:text-v-text-primary">{appVersion || '—'}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-v-light-text-secondary dark:text-v-text-secondary">Last checked</span>
-                            <span className="text-v-light-text-primary dark:text-v-text-primary">{lastCheckedLabel}</span>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 flex flex-wrap gap-3 text-sm">
-                          <button
-                            onClick={() => void onAutoUpdateChange(!autoUpdateEnabled)}
-                            className={`px-4 py-2 rounded-lg border transition-colors ${
-                              autoUpdateEnabled
-                                ? 'border-v-accent text-v-accent bg-v-accent/10'
-                                : 'border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent/50'
-                            }`}
-                          >
-                            {autoUpdateEnabled ? 'Auto-update enabled' : 'Enable auto-update'}
-                          </button>
-                          <button
-                            onClick={() => void onCheckForUpdates()}
-                            disabled={isCheckingUpdate}
-                            className="px-4 py-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent/50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                          >
-                            {isCheckingUpdate ? 'Checking…' : 'Check for updates'}
-                          </button>
-                          {pendingUpdate && (
-                            <button
-                              onClick={() => void onInstallUpdate()}
-                              disabled={isInstallingUpdate}
-                              className="px-4 py-2 rounded-lg bg-v-accent text-white font-semibold hover:bg-v-accent-hover disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                            >
-                              {isInstallingUpdate ? 'Installing…' : `Install ${pendingUpdate.version}`}
-                            </button>
-                          )}
-                        </div>
-
-                        {pendingUpdate?.notes && (
-                          <div className="mt-4 p-3 rounded-lg border border-dashed border-v-light-border dark:border-v-border bg-v-light-surface dark:bg-v-mid-dark text-xs text-v-light-text-secondary dark:text-v-text-secondary whitespace-pre-line">
-                            {pendingUpdate.notes.length > 600 ? `${pendingUpdate.notes.slice(0, 600)}…` : pendingUpdate.notes}
-                          </div>
-                        )}
-                      </div>
                     </div>
                   )}
 
@@ -1058,6 +994,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               <span>{isDisplayNameSaved ? 'Saved' : isDisplayNameSaving ? 'Saving…' : 'Save'}</span>
                             </button>
                           </div>
+                        </div>
+
+                        <div className="border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                                Updates
+                              </p>
+                              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                                Control how Vinsly delivers new versions
+                              </p>
+                            </div>
+                            {pendingUpdate && (
+                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-v-accent/10 text-v-accent">
+                                Update available
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="text-v-light-text-secondary dark:text-v-text-secondary">Current version</span>
+                              <span className="font-mono text-v-light-text-primary dark:text-v-text-primary">{appVersion || '—'}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-v-light-text-secondary dark:text-v-text-secondary">Last checked</span>
+                              <span className="text-v-light-text-primary dark:text-v-text-primary">{lastCheckedLabel}</span>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                            <button
+                              onClick={() => void onAutoUpdateChange(!autoUpdateEnabled)}
+                              className={`px-4 py-2 rounded-lg border transition-colors ${
+                                autoUpdateEnabled
+                                  ? 'border-v-accent text-v-accent bg-v-accent/10'
+                                  : 'border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent/50'
+                              }`}
+                            >
+                              {autoUpdateEnabled ? 'Auto-update enabled' : 'Enable auto-update'}
+                            </button>
+                            <button
+                              onClick={() => void onCheckForUpdates()}
+                              disabled={isCheckingUpdate}
+                              className="px-4 py-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent/50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                            >
+                              {isCheckingUpdate ? 'Checking…' : 'Check for updates'}
+                            </button>
+                            {pendingUpdate && (
+                              <button
+                                onClick={() => void onInstallUpdate()}
+                                disabled={isInstallingUpdate}
+                                className="px-4 py-2 rounded-lg bg-v-accent text-white font-semibold hover:bg-v-accent-hover disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                              >
+                                {isInstallingUpdate ? 'Installing…' : `Install ${pendingUpdate.version}`}
+                              </button>
+                            )}
+                          </div>
+
+                          {pendingUpdate?.notes && (
+                            <div className="mt-4 p-3 rounded-lg border border-dashed border-v-light-border dark:border-v-border bg-v-light-surface dark:bg-v-mid-dark text-xs text-v-light-text-secondary dark:text-v-text-secondary whitespace-pre-line">
+                              {pendingUpdate.notes.length > 600 ? `${pendingUpdate.notes.slice(0, 600)}…` : pendingUpdate.notes}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

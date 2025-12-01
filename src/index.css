@@ -54,13 +54,13 @@ input[type="checkbox"]:checked {
 input[type="checkbox"]:checked::after {
   content: '';
   position: absolute;
-  left: 4px;
-  top: 1px;
+  left: 50%;
+  top: 50%;
   width: 4px;
   height: 8px;
   border: solid white;
   border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
+  transform: translate(-50%, -65%) rotate(45deg);
 }
 
 .custom-scrollbar::-webkit-scrollbar {

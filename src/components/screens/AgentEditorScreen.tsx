@@ -35,12 +35,6 @@ type WizardStepId =
   | 'color'
   | 'review';
 
-type TourStepEventDetail = {
-  tourType: string;
-  stepIndex: number | null;
-  editorMode?: 'wizard' | 'form' | null;
-};
-
 const WIZARD_STEPS: { id: WizardStepId; label: string; description: string; required: boolean }[] = [
   {
     id: 'scope',
@@ -185,33 +179,6 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
     setCurrentStepIndex(0);
     setVisitedSteps(new Set([0]));
   }, [agent, mode]);
-
-  useEffect(() => {
-    if (!isWizard) return;
-
-    const handler = (event: Event) => {
-      const detail = (event as CustomEvent<TourStepEventDetail>).detail;
-      if (!detail || detail.tourType !== 'editor' || detail.editorMode !== 'wizard') return;
-      if (typeof detail.stepIndex !== 'number') return;
-
-      const stepMapping: Record<number, WizardStepId> = {
-        0: 'scope',
-        1: 'scope',
-        2: 'tools',
-      };
-
-      const targetStepId = stepMapping[detail.stepIndex];
-      if (!targetStepId) return;
-
-      const targetIndex = WIZARD_STEPS.findIndex((step) => step.id === targetStepId);
-      if (targetIndex === -1 || targetIndex === currentStepIndex) return;
-
-      goToStep(targetIndex);
-    };
-
-    window.addEventListener('vinsly-tour-step', handler as EventListener);
-    return () => window.removeEventListener('vinsly-tour-step', handler as EventListener);
-  }, [currentStepIndex, isWizard]);
 
   useEffect(() => {
     setRawFrontmatterText(serializeFrontmatter(formData.frontmatter));
@@ -529,6 +496,31 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
     goToStep(currentStepIndex - 1);
   };
 
+  const handleWizardKeyDown = (event: React.KeyboardEvent) => {
+    if (!isWizard) return;
+    if (event.defaultPrevented) return;
+    if (event.key !== 'Enter' || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    const tagName = target?.tagName?.toLowerCase();
+    const isTextArea = tagName === 'textarea';
+    const isContentEditable = target?.isContentEditable;
+    const isCustomTextbox = target?.getAttribute('role') === 'textbox';
+
+    if (isTextArea || isContentEditable || isCustomTextbox) {
+      return;
+    }
+
+    if (isLastStep || !canProceedFromStep(currentStep.id)) {
+      return;
+    }
+
+    event.preventDefault();
+    goToStep(currentStepIndex + 1);
+  };
+
   const resolveProjectPathForSave = () => {
     if (formData.scope !== AgentScope.Project) {
       return undefined;
@@ -671,7 +663,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
         );
       case 'identifier':
         return (
-          <div data-tour="agent-details">
+          <div>
           <InputField
             label="Agent Identifier"
             id="wizard-name"
@@ -687,7 +679,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
         );
       case 'prompt':
         return (
-          <div className="space-y-4" data-tour="agent-prompt">
+          <div className="space-y-4">
             <div>
               <label htmlFor="wizard-body" className="block text-sm font-medium text-v-light-text-secondary dark:text-v-text-secondary">
                 System prompt
@@ -731,7 +723,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
         );
       case 'tools':
         return (
-          <div className="space-y-3" data-tour="agent-tools">
+          <div className="space-y-3">
             <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
               Pick categories or individual tools. Selecting every tool omits the field so the agent inherits the full session toolset.
             </p>
@@ -898,7 +890,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
   }));
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" onKeyDownCapture={handleWizardKeyDown}>
       <div className="space-y-2">
         <button
           onClick={onCancel}
@@ -921,7 +913,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
       </div>
 
       <div className="grid gap-6 md:grid-cols-[260px,1fr]" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.5rem' }}>
-        <aside className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-5 space-y-4" data-tour="wizard-steps">
+        <aside className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-5 space-y-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-v-light-text-secondary dark:text-v-text-secondary">Steps</p>
             <p className="text-base font-semibold text-v-light-text-primary dark:text-v-text-primary">Agent build overview</p>
@@ -993,7 +985,6 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
               animate="center"
               exit="exit"
               className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-6 shadow-xl backdrop-blur-xl"
-              data-tour="wizard-config-panel"
             >
               {renderStepContent()}
             </motion.div>

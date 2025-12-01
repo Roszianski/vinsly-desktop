@@ -127,7 +127,7 @@ export const AgentGridCard: React.FC<AgentGridCardProps> = ({
       className={`relative rounded-2xl border border-v-light-border/80 dark:border-v-border/70 bg-v-light-surface dark:bg-v-mid-dark/90 p-4 shadow-[0_6px_20px_rgba(15,23,42,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:border-v-accent/60 transition-all duration-200 ${
         isSelected ? 'ring-2 ring-v-accent' : ''
       }`}
-      data-tour="agent-list-item"
+     
     >
       <div className="flex items-start justify-between gap-3">
         <label className="flex items-start gap-3 cursor-pointer">

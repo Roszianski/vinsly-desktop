@@ -56,6 +56,28 @@ export interface Skill {
   isFavorite?: boolean;
 }
 
+// CLAUDE.md Memory file
+export interface ClaudeMemory {
+  id: string;           // 'global' or 'project'
+  scope: AgentScope;
+  path: string;         // Full file path
+  content: string;      // Raw markdown content
+  exists: boolean;      // Whether file exists on disk
+  lastModified?: Date;
+  isFavorite?: boolean;
+}
+
+// Slash Command (custom prompt macro)
+export interface SlashCommand {
+  id: string;           // File path
+  name: string;         // Command name (filename without .md)
+  scope: AgentScope;
+  path: string;         // Full file path
+  description?: string; // First line or extracted summary
+  body: string;         // Full markdown content
+  isFavorite?: boolean;
+}
+
 // Scan Settings Types
 export interface ScanSettings {
   autoScanGlobalOnStartup: boolean;

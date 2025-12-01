@@ -618,7 +618,7 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
       </div>
 
       <div className="grid gap-6 md:grid-cols-[260px,1fr]" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.5rem' }}>
-        <aside className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-5 space-y-4" data-tour="wizard-steps">
+        <aside className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-5 space-y-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-v-light-text-secondary dark:text-v-text-secondary">Steps</p>
             <p className="text-base font-semibold text-v-light-text-primary dark:text-v-text-primary">Skill build overview</p>
@@ -684,7 +684,7 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
               animate="center"
               exit="exit"
               className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-6 shadow-xl backdrop-blur-xl"
-              data-tour="wizard-config-panel"
+             
             >
               {renderStepContent()}
             </motion.div>

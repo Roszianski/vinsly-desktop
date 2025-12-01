@@ -3,14 +3,14 @@ import { motion } from 'framer-motion';
 import { toPng } from 'html-to-image';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
-import { Agent, AgentScope, Skill } from '../../types';
+import { Agent, AgentScope } from '../../types';
 import { buttonVariants, fadeIn } from '../../animations';
 import { StarIcon } from '../icons/StarIcon';
 import { ListIcon } from '../icons/ListIcon';
-import { NetworkIcon } from '../icons/NetworkIcon';
-import { ChartIcon } from '../icons/ChartIcon';
 import { LayersIcon } from '../icons/LayersIcon';
 import { GlobeIcon } from '../icons/GlobeIcon';
+import { DocumentIcon } from '../icons/DocumentIcon';
+import { TerminalIcon } from '../icons/TerminalIcon';
 import { FolderIcon } from '../icons/FolderIcon';
 import { InfoIcon } from '../icons/InfoIcon';
 import { useToast } from '../../contexts/ToastContext';
@@ -18,18 +18,17 @@ import { getToolsState } from '../../utils/toolHelpers';
 
 interface AgentTeamViewProps {
   agents: Agent[];
-  skills: Skill[];
   onBack: () => void;
   onShowList: () => void;
   onShowSkills: () => void;
-  onShowAnalytics: () => void;
+  onShowMemory: () => void;
+  onShowCommands: () => void;
   onEdit: (agent: Agent) => void;
   onToggleFavorite: (agent: Agent) => void;
-  onToggleSkillFavorite: (skill: Skill) => void;
   userName?: string;
 }
 
-type NodeKind = 'root' | 'group' | 'agent' | 'skill';
+type NodeKind = 'root' | 'group' | 'agent';
 
 type ScopeVisibility = Record<AgentScope, boolean>;
 type CollapsedGroupState = Record<AgentScope, boolean>;
@@ -41,10 +40,8 @@ interface GraphNode {
   kind: NodeKind;
   scope?: AgentScope;
   agent?: Agent;
-  skill?: Skill;
   collapsed?: boolean;
   totalAgents?: number;
-  totalSkills?: number;
   centerX: number;
   centerY: number;
   width: number;
@@ -57,8 +54,7 @@ interface LayoutNode extends GraphNode {
 }
 
 interface ItemRowEntry {
-  agent?: Agent;
-  skill?: Skill;
+  agent: Agent;
   width: number;
 }
 
@@ -128,14 +124,13 @@ const getAgentCardWidth = (label: string) => {
 
 export const AgentTeamView: React.FC<AgentTeamViewProps> = ({
   agents,
-  skills,
   onBack,
   onShowList,
   onShowSkills,
-  onShowAnalytics,
+  onShowMemory,
+  onShowCommands,
   onEdit,
   onToggleFavorite,
-  onToggleSkillFavorite,
   userName = '',
 }) => {
   const { showToast } = useToast();
@@ -153,7 +148,6 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({
     [AgentScope.Global]: false,
     [AgentScope.Project]: false
   });
-  const [viewMode, setViewMode] = useState<'agents' | 'skills' | 'both'>('agents');
   const [isViewportHovered, setIsViewportHovered] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const graphContainerRef = useRef<HTMLDivElement | null>(null);
@@ -166,8 +160,6 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({
   const gestureStateRef = useRef<{ baseZoom: number } | null>(null);
 
   const filteredAgents = useMemo(() => {
-    if (viewMode === 'skills') return [];
-
     const favorites: Agent[] = [];
     const others: Agent[] = [];
 
@@ -189,33 +181,7 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({
       return [...favorites, ...others];
     }
     return others;
-  }, [agents, scopeVisibility, favoritesFilterActive, viewMode]);
-
-  const filteredSkills = useMemo(() => {
-    if (viewMode === 'agents') return [];
-
-    const favorites: Skill[] = [];
-    const others: Skill[] = [];
-
-    skills.forEach(skill => {
-      const scopeEnabled = scopeVisibility[skill.scope];
-      const favorited = Boolean(skill.isFavorite);
-      const includeViaFavorites = favoritesFilterActive && favorited;
-
-      if (scopeEnabled || includeViaFavorites) {
-        if (favoritesFilterActive && favorited) {
-          favorites.push(skill);
-        } else {
-          others.push(skill);
-        }
-      }
-    });
-
-    if (favoritesFilterActive) {
-      return [...favorites, ...others];
-    }
-    return others;
-  }, [skills, scopeVisibility, viewMode, favoritesFilterActive]);
+  }, [agents, scopeVisibility, favoritesFilterActive]);
 
   const toggleScopeVisibility = (scope: AgentScope) => {
     setScopeVisibility(prev => ({
@@ -248,23 +214,14 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({
   const totalScopeCount = Object.keys(scopeVisibility).length;
   const allFiltersActive = !favoritesFilterActive && activeScopeCount === totalScopeCount;
   const filtersActive = !allFiltersActive;
-  const showEmptyBanner = filteredAgents.length === 0 && filteredSkills.length === 0;
+  const showEmptyBanner = filteredAgents.length === 0;
 
   const emptyBannerMessage = useMemo(() => {
-    if (viewMode === 'agents') {
-      return agents.length === 0
-        ? 'No agents to show in Network yet. Scan or create an agent to populate this view.'
-        : 'No agents match the current filters.';
-    } else if (viewMode === 'skills') {
-      return skills.length === 0
-        ? 'No skills to show in Network yet. Scan or create a skill to populate this view.'
-        : 'No skills match the current filters.';
-    }
-    return agents.length === 0 && skills.length === 0
-      ? 'No agents or skills to show in Network yet. Scan or create an agent or skill to populate this map.'
-      : 'No agents or skills match the current filters.';
-  }, [viewMode, agents.length, skills.length]);
-  const showResetCta = (viewMode === 'agents' ? agents.length > 0 : viewMode === 'skills' ? skills.length > 0 : agents.length > 0 || skills.length > 0) && filtersActive;
+    return agents.length === 0
+      ? 'No agents to show in Network yet. Scan or create an agent to populate this view.'
+      : 'No agents match the current filters.';
+  }, [agents.length]);
+  const showResetCta = agents.length > 0 && filtersActive;
   const filterButtonClasses = (active: boolean) =>
     `inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
       active
@@ -393,39 +350,29 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({
 
     nodes.push(rootNode);
 
-    const groupedItems: { scope: AgentScope; agents: Agent[]; skills: Skill[] }[] = [
+    const groupedItems: { scope: AgentScope; agents: Agent[] }[] = [
       {
         scope: AgentScope.Global,
-        agents: filteredAgents.filter(a => a.scope === AgentScope.Global),
-        skills: filteredSkills.filter(s => s.scope === AgentScope.Global)
+        agents: filteredAgents.filter(a => a.scope === AgentScope.Global)
       },
       {
         scope: AgentScope.Project,
-        agents: filteredAgents.filter(a => a.scope === AgentScope.Project),
-        skills: filteredSkills.filter(s => s.scope === AgentScope.Project)
+        agents: filteredAgents.filter(a => a.scope === AgentScope.Project)
       }
     ];
 
-    const activeGroups = groupedItems.filter(group => group.agents.length > 0 || group.skills.length > 0);
+    const activeGroups = groupedItems.filter(group => group.agents.length > 0);
     const groupsToRender = activeGroups.length > 0 ? activeGroups : groupedItems;
 
     const sortedGroups = groupsToRender.map(group => {
       const sortedAgents = group.agents.slice().sort((a, b) => a.name.localeCompare(b.name));
-      const sortedSkills = group.skills.slice().sort((a, b) => a.name.localeCompare(b.name));
       const isCollapsed = collapsedGroups[group.scope];
       const visibleAgents = isCollapsed ? [] : sortedAgents;
-      const visibleSkills = isCollapsed ? [] : sortedSkills;
 
-      const itemEntries: ItemRowEntry[] = [
-        ...visibleAgents.map(agent => ({
-          agent,
-          width: getAgentCardWidth(agent.name || agent.frontmatter.name || 'agent')
-        })),
-        ...visibleSkills.map(skill => ({
-          skill,
-          width: getAgentCardWidth(skill.name || skill.frontmatter.name || 'skill')
-        }))
-      ];
+      const itemEntries: ItemRowEntry[] = visibleAgents.map(agent => ({
+        agent,
+        width: getAgentCardWidth(agent.name || agent.frontmatter.name || 'agent')
+      }));
 
       const itemRows = buildItemRows(itemEntries);
       const maxRowWidth = itemRows.reduce((max, row) => Math.max(max, row.rowWidth), 0);
@@ -438,7 +385,6 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({
         itemRows,
         clusterWidth,
         totalAgents: sortedAgents.length,
-        totalSkills: sortedSkills.length,
         isCollapsed
       };
     });
@@ -462,8 +408,7 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({
           kind: 'group',
           scope: group.scope,
           collapsed: group.isCollapsed,
-          totalAgents: group.totalAgents,
-          totalSkills: group.totalSkills
+          totalAgents: group.totalAgents
         },
         GROUP_CARD_WIDTH,
         GROUP_CARD_HEIGHT,
@@ -483,41 +428,22 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({
         const rowCenterY = baseItemY + rowIndex * (AGENT_HEIGHT + AGENT_ROW_GAP);
 
         row.entries.forEach(entry => {
-          if (entry.agent) {
-            const node = createNode(
-              {
-                id: entry.agent.id || entry.agent.name,
-                label: entry.agent.name,
-                description: entry.agent.frontmatter.description || 'No description provided.',
-                kind: 'agent',
-                scope: entry.agent.scope,
-                agent: entry.agent
-              },
-              entry.width,
-              AGENT_HEIGHT,
-              groupNode.centerX + itemCursor + entry.width / 2,
-              rowCenterY
-            );
-            nodes.push(node);
-            links.push({ from: groupNode, to: node });
-          } else if (entry.skill) {
-            const node = createNode(
-              {
-                id: entry.skill.id || entry.skill.name,
-                label: entry.skill.name,
-                description: entry.skill.frontmatter.description || 'No description provided.',
-                kind: 'skill',
-                scope: entry.skill.scope,
-                skill: entry.skill
-              },
-              entry.width,
-              AGENT_HEIGHT,
-              groupNode.centerX + itemCursor + entry.width / 2,
-              rowCenterY
-            );
-            nodes.push(node);
-            links.push({ from: groupNode, to: node });
-          }
+          const node = createNode(
+            {
+              id: entry.agent.id || entry.agent.name,
+              label: entry.agent.name,
+              description: entry.agent.frontmatter.description || 'No description provided.',
+              kind: 'agent',
+              scope: entry.agent.scope,
+              agent: entry.agent
+            },
+            entry.width,
+            AGENT_HEIGHT,
+            groupNode.centerX + itemCursor + entry.width / 2,
+            rowCenterY
+          );
+          nodes.push(node);
+          links.push({ from: groupNode, to: node });
           itemCursor += entry.width + AGENT_SPACING;
         });
       });
@@ -544,7 +470,7 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({
       offsetX,
       offsetY
     };
-  }, [collapsedGroups, filteredAgents, filteredSkills]);
+  }, [collapsedGroups, filteredAgents]);
 
   const centerViewport = useCallback((targetZoom?: number) => {
     const viewportEl = viewportRef.current;
@@ -858,8 +784,6 @@ useEffect(() => {
 
     if (node.kind === 'group') {
       const totalAgents = node.totalAgents ?? 0;
-      const totalSkills = node.totalSkills ?? 0;
-      const totalItems = totalAgents + totalSkills;
       const isCollapsedGroup = Boolean(node.collapsed);
       return (
         <div
@@ -904,9 +828,9 @@ useEffect(() => {
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-v-light-text-secondary dark:text-v-text-secondary">
             <span>
-              {totalAgents} agent{totalAgents === 1 ? '' : 's'} · {totalSkills} skill{totalSkills === 1 ? '' : 's'}
+              {totalAgents} agent{totalAgents === 1 ? '' : 's'}
             </span>
-            {totalItems > 0 && (
+            {totalAgents > 0 && (
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${
                   isCollapsedGroup ? 'bg-v-accent/10 text-v-accent' : 'bg-v-light-border/60 dark:bg-v-border/40 text-v-light-text-secondary dark:text-v-text-secondary'
@@ -916,60 +840,6 @@ useEffect(() => {
               </span>
             )}
           </div>
-        </div>
-      );
-    }
-
-    if (node.kind === 'skill') {
-      const skillClasses = `${baseClasses} hover:shadow-md cursor-pointer`;
-      return (
-        <div
-          key={node.id}
-          className={skillClasses}
-          style={{
-            width: node.width,
-            minHeight: node.height,
-            left: node.x + layout.offsetX,
-            top: node.y + layout.offsetY,
-            overflow: 'visible',
-            zIndex: nodeZIndex
-          }}
-          data-stop-pan="true"
-          onMouseEnter={handleTooltipEnter}
-          onMouseLeave={handleTooltipLeave}
-        >
-          <div className="flex items-center justify-between gap-2 min-w-0">
-            <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-              <LayersIcon className="h-3 w-3 text-v-accent flex-shrink-0" />
-              <p className="text-[13px] font-semibold text-v-light-text-primary dark:text-v-text-primary leading-tight truncate">
-                {node.skill?.name || node.label}
-              </p>
-            </div>
-          </div>
-          {node.skill && (
-            <div
-              className={`absolute left-1/2 top-full mt-3 w-64 -translate-x-1/2 transition-opacity duration-150 z-[80] ${
-                showTooltip ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-              }`}
-              onMouseEnter={handleTooltipEnter}
-              onMouseLeave={handleTooltipLeave}
-              data-stop-pan="true"
-            >
-              <div className="rounded-2xl border border-v-light-border/80 dark:border-v-border/70 bg-white dark:bg-v-mid-dark shadow-2xl p-4 space-y-2">
-                <div className="space-y-1">
-                  <span className="text-[11px] uppercase tracking-[0.3em] text-v-light-text-secondary dark:text-v-text-secondary block">
-                    {scopeLabel} · Skill
-                  </span>
-                  <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                    {node.skill.frontmatter.name || node.skill.name}
-                  </p>
-                </div>
-                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary leading-snug line-clamp-5">
-                  {node.description}
-                </p>
-              </div>
-            </div>
-          )}
         </div>
       );
     }
@@ -993,7 +863,7 @@ useEffect(() => {
     return (
       <div
         key={node.id}
-        data-tour="team-node"
+       
         className={agentClasses}
         style={{
           width: node.width,
@@ -1088,18 +958,14 @@ useEffect(() => {
             {[
               { key: 'subagents', label: 'Subagents', icon: <ListIcon className="h-4 w-4" />, action: onShowList },
               { key: 'skills', label: 'Skills', icon: <LayersIcon className="h-4 w-4" />, action: onShowSkills },
-              { key: 'team', label: 'Network', icon: <NetworkIcon className="h-4 w-4" />, action: () => {} },
-              { key: 'analytics', label: 'Analytics', icon: <ChartIcon className="h-4 w-4" />, action: onShowAnalytics },
+              { key: 'memory', label: 'Memory', icon: <DocumentIcon className="h-4 w-4" />, action: onShowMemory },
+              { key: 'commands', label: 'Commands', icon: <TerminalIcon className="h-4 w-4" />, action: onShowCommands },
             ].map((item, index, array) => (
               <React.Fragment key={item.key}>
                 <button
                   onClick={item.action}
                   title={item.label}
-                  className={`px-3 py-2 text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 ${
-                    item.key === 'team'
-                      ? 'bg-v-accent/10 text-v-accent'
-                      : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark'
-                  }`}
+                  className="px-3 py-2 text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark"
                 >
                   {item.icon}
                   <span className="hidden sm:inline">{item.label}</span>
@@ -1108,6 +974,16 @@ useEffect(() => {
               </React.Fragment>
             ))}
           </div>
+          {/* Back to Subagents button */}
+          <button
+            onClick={onShowList}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-v-accent hover:text-v-accent-hover transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to List
+          </button>
           <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-v-light-text-secondary dark:text-v-text-secondary">
             <span>Zoom</span>
             <div className="flex items-center border border-v-light-border dark:border-v-border rounded-md overflow-hidden bg-v-light-bg/60 dark:bg-v-dark/60 h-[34px]">
@@ -1182,15 +1058,15 @@ useEffect(() => {
             </motion.button>
           </div>
         </div>
-        <div data-tour="team-graph">
+        <div>
           <div className="text-xs uppercase tracking-[0.2em] text-v-light-text-secondary dark:text-v-text-secondary mb-1">
-            Agents &amp; Skills / Network
+            Subagents / Network
           </div>
           <h1 className="text-2xl font-semibold text-v-light-text-primary dark:text-v-text-primary">
-            {userName ? `${userName}'s Organisation` : 'Your Organisation'}
+            {userName ? `${userName}'s Agent Network` : 'Your Agent Network'}
           </h1>
           <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
-            Explore how subagents and skills connect from a bird&apos;s-eye view.
+            Explore how your subagents are organized from a bird&apos;s-eye view.
           </p>
         </div>
         {showEmptyBanner && (
@@ -1212,41 +1088,10 @@ useEffect(() => {
 
       <div ref={panelsRef} className="flex flex-col lg:flex-row gap-4">
         <aside
-          data-tour="team-filters"
+         
           className="rounded-2xl border border-v-light-border/70 dark:border-v-border/70 bg-v-light-bg/60 dark:bg-v-dark/40 px-4 py-4 space-y-4 lg:w-72 flex-shrink-0 overflow-auto"
           style={maxPanelHeight ? { height: maxPanelHeight } : { minHeight: 420 }}
         >
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[11px] uppercase tracking-[0.3em] text-v-light-text-secondary dark:text-v-text-secondary">
-                View
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setViewMode('agents')}
-                className={`flex-1 px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${
-                  viewMode === 'agents'
-                    ? 'bg-v-accent text-white border border-v-accent'
-                    : 'bg-v-light-bg dark:bg-v-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary border border-dashed border-v-light-border dark:border-v-border'
-                }`}
-              >
-                Agents
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('skills')}
-                className={`flex-1 px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${
-                  viewMode === 'skills'
-                    ? 'bg-v-accent text-white border border-v-accent'
-                    : 'bg-v-light-bg dark:bg-v-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary border border-dashed border-v-light-border dark:border-v-border'
-                }`}
-              >
-                Skills
-              </button>
-            </div>
-          </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[11px] uppercase tracking-[0.3em] text-v-light-text-secondary dark:text-v-text-secondary">
@@ -1349,7 +1194,7 @@ useEffect(() => {
                   transformOrigin: 'top left'
                 }}
                 className="relative"
-                data-tour="team-node-area"
+               
                 data-graph-canvas="true"
               >
                 <svg

@@ -73,7 +73,7 @@ export const RecommendationsList: React.FC<RecommendationsListProps> = ({ recomm
       : `${activeFilterLabel.toLowerCase()} recommendations`;
 
   const Header = () => (
-    <div className="scroll-mt-24 flex-shrink-0" data-tour="analytics-recommendations">
+    <div className="scroll-mt-24 flex-shrink-0">
       <h3 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary">
         Recommendations
       </h3>

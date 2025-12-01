@@ -247,7 +247,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
     try {
       setScanMessage('Scanning selected sources…');
       const result = await onScan({
-        includeGlobal: includeGlobal || undefined,
+        includeGlobal,
         projectPaths: uniqueDirectories.length > 0 ? uniqueDirectories : undefined,
       });
       setLastResult(result);

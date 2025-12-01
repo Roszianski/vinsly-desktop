@@ -213,6 +213,60 @@ fn get_skills_dir(scope: &str, project_path: Option<String>) -> Result<PathBuf, 
     }
 }
 
+// Get the .claude/commands directory path based on scope
+fn get_commands_dir(scope: &str, project_path: Option<String>) -> Result<PathBuf, String> {
+    match scope {
+        "project" => {
+            if let Some(proj_path) = project_path {
+                let mut path = PathBuf::from(proj_path);
+                path.push(".claude");
+                path.push("commands");
+                Ok(path)
+            } else {
+                Err("Project scope requires a project_path parameter".to_string())
+            }
+        }
+        "global" => {
+            let home_dir =
+                dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+            let mut path = home_dir;
+            path.push(".claude");
+            path.push("commands");
+            Ok(path)
+        }
+        _ => Err(format!("Invalid scope: {}", scope)),
+    }
+}
+
+// Get the CLAUDE.md file path based on scope
+fn get_claude_memory_path(scope: &str, project_path: Option<String>) -> Result<PathBuf, String> {
+    match scope {
+        "project" => {
+            if let Some(proj_path) = project_path {
+                let mut path = PathBuf::from(proj_path);
+                path.push(".claude");
+                path.push("CLAUDE.md");
+                Ok(path)
+            } else {
+                Err("Project scope requires a project_path parameter".to_string())
+            }
+        }
+        "global" => {
+            let home_dir =
+                dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+            let mut path = home_dir;
+            path.push(".claude");
+            path.push("CLAUDE.md");
+            Ok(path)
+        }
+        _ => Err(format!("Invalid scope: {}", scope)),
+    }
+}
+
+fn ensure_path_in_commands_dir(path: &Path) -> Result<(), String> {
+    ensure_path_in_claude_subdir(path, "commands")
+}
+
 fn skill_has_additional_assets(dir: &Path) -> bool {
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -978,6 +1032,467 @@ fn tcc_access_has_allowed_column(db_path: &Path) -> Result<bool, String> {
         .any(|column| column == "allowed"))
 }
 
+// ============================================================================
+// CLAUDE.md (Memory) Commands
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ClaudeMemoryFile {
+    scope: String,
+    path: String,
+    content: String,
+    exists: bool,
+}
+
+#[tauri::command]
+async fn read_claude_memory(
+    scope: String,
+    project_path: Option<String>,
+) -> Result<ClaudeMemoryFile, String> {
+    let memory_path = get_claude_memory_path(&scope, project_path)?;
+
+    if memory_path.exists() {
+        let content = fs::read_to_string(&memory_path)
+            .map_err(|e| format!("Failed to read CLAUDE.md: {}", e))?;
+        Ok(ClaudeMemoryFile {
+            scope,
+            path: memory_path.to_string_lossy().to_string(),
+            content,
+            exists: true,
+        })
+    } else {
+        Ok(ClaudeMemoryFile {
+            scope,
+            path: memory_path.to_string_lossy().to_string(),
+            content: String::new(),
+            exists: false,
+        })
+    }
+}
+
+#[tauri::command]
+async fn write_claude_memory(
+    scope: String,
+    content: String,
+    project_path: Option<String>,
+) -> Result<String, String> {
+    let memory_path = get_claude_memory_path(&scope, project_path)?;
+
+    // Create parent .claude directory if it doesn't exist
+    if let Some(parent) = memory_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create .claude directory: {}", e))?;
+    }
+
+    fs::write(&memory_path, content)
+        .map_err(|e| format!("Failed to write CLAUDE.md: {}", e))?;
+
+    Ok(memory_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn check_claude_memory_exists(
+    scope: String,
+    project_path: Option<String>,
+) -> Result<bool, String> {
+    let memory_path = get_claude_memory_path(&scope, project_path)?;
+    Ok(memory_path.exists())
+}
+
+// ============================================================================
+// Slash Commands
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SlashCommandFile {
+    name: String,
+    path: String,
+    content: String,
+    scope: String,
+}
+
+#[tauri::command]
+async fn list_slash_commands(
+    scope: String,
+    project_path: Option<String>,
+) -> Result<Vec<SlashCommandFile>, String> {
+    let commands_dir = get_commands_dir(&scope, project_path)?;
+
+    if !commands_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut commands = Vec::new();
+
+    let entries = fs::read_dir(&commands_dir)
+        .map_err(|e| format!("Failed to read commands directory: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+        let path = entry.path();
+
+        if path.extension().and_then(|s| s.to_str()) == Some("md") {
+            let content = fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read command file: {}", e))?;
+
+            let name = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+
+            commands.push(SlashCommandFile {
+                name,
+                path: path.to_string_lossy().to_string(),
+                content,
+                scope: scope.clone(),
+            });
+        }
+    }
+
+    Ok(commands)
+}
+
+#[tauri::command]
+async fn read_slash_command(path: String) -> Result<String, String> {
+    let expanded_path = expand_path(&path)?;
+    ensure_path_in_commands_dir(&expanded_path)?;
+    fs::read_to_string(&expanded_path)
+        .map_err(|e| format!("Failed to read command file: {}", e))
+}
+
+#[tauri::command]
+async fn write_slash_command(
+    scope: String,
+    name: String,
+    content: String,
+    project_path: Option<String>,
+) -> Result<String, String> {
+    validate_entry_name(&name)?;
+    let commands_dir = get_commands_dir(&scope, project_path)?;
+
+    // Create directory if it doesn't exist
+    fs::create_dir_all(&commands_dir)
+        .map_err(|e| format!("Failed to create commands directory: {}", e))?;
+    ensure_path_in_commands_dir(&commands_dir)?;
+
+    let mut file_path = commands_dir;
+    file_path.push(format!("{}.md", name));
+
+    fs::write(&file_path, content)
+        .map_err(|e| format!("Failed to write command file: {}", e))?;
+
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn delete_slash_command(path: String) -> Result<(), String> {
+    let expanded_path = expand_path(&path)?;
+    ensure_path_in_commands_dir(&expanded_path)?;
+    fs::remove_file(&expanded_path)
+        .map_err(|e| format!("Failed to delete command file: {}", e))
+}
+
+#[tauri::command]
+async fn list_slash_commands_from_directory(directory: String) -> Result<Vec<SlashCommandFile>, String> {
+    let mut commands_path = PathBuf::from(directory);
+    commands_path.push(".claude");
+    commands_path.push("commands");
+
+    if !commands_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut commands = Vec::new();
+
+    let entries = fs::read_dir(&commands_path)
+        .map_err(|e| format!("Failed to read commands directory: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+        let path = entry.path();
+
+        if path.extension().and_then(|s| s.to_str()) == Some("md") {
+            let content = fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read command file: {}", e))?;
+
+            let name = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+
+            commands.push(SlashCommandFile {
+                name,
+                path: path.to_string_lossy().to_string(),
+                content,
+                scope: "project".to_string(),
+            });
+        }
+    }
+
+    Ok(commands)
+}
+
+// Export slash commands to a zip archive
+#[tauri::command]
+async fn export_slash_commands_archive(paths: Vec<String>, destination: String) -> Result<(), String> {
+    if paths.is_empty() {
+        return Err("No command files provided".to_string());
+    }
+
+    let destination_path = PathBuf::from(&destination);
+    if let Some(parent) = destination_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to prepare destination: {}", e))?;
+        }
+    }
+
+    let file = fs::File::create(&destination_path)
+        .map_err(|e| format!("Failed to create archive: {}", e))?;
+    let mut zip = ZipWriter::new(file);
+    let options = FileOptions::default().compression_method(CompressionMethod::Deflated);
+
+    for path_str in paths {
+        let path = expand_path(&path_str)?;
+        if !path.exists() {
+            continue;
+        }
+        ensure_path_in_commands_dir(&path)?;
+
+        let file_name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| "Command file missing valid name".to_string())?;
+
+        zip.start_file(file_name, options)
+            .map_err(|e| format!("Failed to add file to archive: {}", e))?;
+        let content = fs::read(&path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+        zip.write_all(&content)
+            .map_err(|e| format!("Failed to write to archive: {}", e))?;
+    }
+
+    zip.finish()
+        .map_err(|e| format!("Failed to finalise archive: {}", e))?;
+    Ok(())
+}
+
+// Import slash commands from a zip archive
+#[tauri::command]
+async fn import_slash_commands_archive(
+    archive_path: String,
+    scope: String,
+    project_path: Option<String>,
+) -> Result<Vec<String>, String> {
+    let expanded_archive = expand_path(&archive_path)?;
+    if !expanded_archive.exists() {
+        return Err("Archive does not exist".to_string());
+    }
+
+    let commands_dir = get_commands_dir(&scope, project_path)?;
+    fs::create_dir_all(&commands_dir)
+        .map_err(|e| format!("Failed to prepare commands directory: {}", e))?;
+    ensure_path_in_commands_dir(&commands_dir)?;
+
+    let file = fs::File::open(&expanded_archive)
+        .map_err(|e| format!("Failed to open archive: {}", e))?;
+    let mut archive = ZipArchive::new(file)
+        .map_err(|e| format!("Failed to read archive: {}", e))?;
+
+    let mut imported_paths = Vec::new();
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read archive entry: {}", e))?;
+
+        let Some(enclosed) = entry.enclosed_name() else {
+            continue;
+        };
+
+        // Skip directories and non-.md files
+        if entry.is_dir() {
+            continue;
+        }
+
+        let file_name = enclosed
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+
+        if !file_name.ends_with(".md") || file_name.starts_with("__MACOSX") || file_name.starts_with('.') {
+            continue;
+        }
+
+        let output_path = commands_dir.join(file_name);
+
+        let mut content = Vec::new();
+        entry.read_to_end(&mut content)
+            .map_err(|e| format!("Failed to read archive entry: {}", e))?;
+
+        fs::write(&output_path, content)
+            .map_err(|e| format!("Failed to write command file: {}", e))?;
+
+        imported_paths.push(output_path.to_string_lossy().to_string());
+    }
+
+    if imported_paths.is_empty() {
+        return Err("Archive did not contain any .md command files".to_string());
+    }
+
+    Ok(imported_paths)
+}
+
+// Export CLAUDE.md memory files to a zip archive
+#[tauri::command]
+async fn export_memories_archive(paths: Vec<String>, destination: String) -> Result<(), String> {
+    if paths.is_empty() {
+        return Err("No memory files provided".to_string());
+    }
+
+    let destination_path = PathBuf::from(&destination);
+    if let Some(parent) = destination_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to prepare destination: {}", e))?;
+        }
+    }
+
+    let file = fs::File::create(&destination_path)
+        .map_err(|e| format!("Failed to create archive: {}", e))?;
+    let mut zip = ZipWriter::new(file);
+    let options = FileOptions::default().compression_method(CompressionMethod::Deflated);
+
+    for (index, path_str) in paths.iter().enumerate() {
+        let path = expand_path(path_str)?;
+        if !path.exists() {
+            continue;
+        }
+
+        // Extract a meaningful name for the archive entry
+        // For global: "global-CLAUDE.md"
+        // For project: "projectname-CLAUDE.md"
+        let archive_name = if path_str.contains("/.claude/CLAUDE.md") {
+            // Get the parent folder name (project name or home indicator)
+            let parent_of_claude = path.parent().and_then(|p| p.parent());
+            if let Some(parent) = parent_of_claude {
+                let folder_name = parent
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("unknown");
+                // Check if this is the home directory (global memory)
+                let home_dir = dirs::home_dir();
+                if home_dir.as_ref() == Some(&parent.to_path_buf()) {
+                    "global-CLAUDE.md".to_string()
+                } else {
+                    format!("{}-CLAUDE.md", folder_name)
+                }
+            } else {
+                format!("memory-{}-CLAUDE.md", index)
+            }
+        } else {
+            format!("memory-{}-CLAUDE.md", index)
+        };
+
+        zip.start_file(&archive_name, options)
+            .map_err(|e| format!("Failed to add file to archive: {}", e))?;
+        let content = fs::read(&path)
+            .map_err(|e| format!("Failed to read file: {}", e))?;
+        zip.write_all(&content)
+            .map_err(|e| format!("Failed to write to archive: {}", e))?;
+    }
+
+    zip.finish()
+        .map_err(|e| format!("Failed to finalise archive: {}", e))?;
+    Ok(())
+}
+
+// Import CLAUDE.md memory files from a zip archive
+// This imports to the global .claude/CLAUDE.md by default, or to a specific project
+#[tauri::command]
+async fn import_memories_archive(
+    archive_path: String,
+    scope: String,
+    project_path: Option<String>,
+) -> Result<Vec<String>, String> {
+    let expanded_archive = expand_path(&archive_path)?;
+    if !expanded_archive.exists() {
+        return Err("Archive does not exist".to_string());
+    }
+
+    let file = fs::File::open(&expanded_archive)
+        .map_err(|e| format!("Failed to open archive: {}", e))?;
+    let mut archive = ZipArchive::new(file)
+        .map_err(|e| format!("Failed to read archive: {}", e))?;
+
+    let mut imported_paths = Vec::new();
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("Failed to read archive entry: {}", e))?;
+
+        let Some(enclosed) = entry.enclosed_name() else {
+            continue;
+        };
+
+        // Skip directories
+        if entry.is_dir() {
+            continue;
+        }
+
+        let file_name = enclosed
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+
+        // Only process files that look like CLAUDE.md files
+        if !file_name.ends_with("CLAUDE.md") || file_name.starts_with("__MACOSX") || file_name.starts_with('.') {
+            continue;
+        }
+
+        let mut content = Vec::new();
+        entry.read_to_end(&mut content)
+            .map_err(|e| format!("Failed to read archive entry: {}", e))?;
+
+        // Determine the target path based on scope
+        let memory_path = get_claude_memory_path(&scope, project_path.clone())?;
+
+        // Create parent .claude directory if it doesn't exist
+        if let Some(parent) = memory_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create .claude directory: {}", e))?;
+        }
+
+        // If importing multiple memories, we can only import one per scope
+        // So we'll merge content if there are multiple CLAUDE.md files
+        if memory_path.exists() && !imported_paths.is_empty() {
+            // Append to existing content
+            let existing = fs::read_to_string(&memory_path)
+                .map_err(|e| format!("Failed to read existing memory: {}", e))?;
+            let new_content = String::from_utf8_lossy(&content);
+            let merged = format!("{}\n\n---\n\n{}", existing, new_content);
+            fs::write(&memory_path, merged)
+                .map_err(|e| format!("Failed to write memory file: {}", e))?;
+        } else {
+            fs::write(&memory_path, content)
+                .map_err(|e| format!("Failed to write memory file: {}", e))?;
+        }
+
+        if !imported_paths.contains(&memory_path.to_string_lossy().to_string()) {
+            imported_paths.push(memory_path.to_string_lossy().to_string());
+        }
+    }
+
+    if imported_paths.is_empty() {
+        return Err("Archive did not contain any CLAUDE.md memory files".to_string());
+    }
+
+    Ok(imported_paths)
+}
+
 #[tauri::command]
 fn open_full_disk_access_settings() -> Result<(), String> {
     #[cfg(target_os = "macos")]
@@ -1056,6 +1571,20 @@ pub fn run() {
             discover_project_directories,
             check_full_disk_access,
             open_full_disk_access_settings,
+            // CLAUDE.md (Memory) commands
+            read_claude_memory,
+            write_claude_memory,
+            check_claude_memory_exists,
+            export_memories_archive,
+            import_memories_archive,
+            // Slash commands
+            list_slash_commands,
+            read_slash_command,
+            write_slash_command,
+            delete_slash_command,
+            list_slash_commands_from_directory,
+            export_slash_commands_archive,
+            import_slash_commands_archive,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

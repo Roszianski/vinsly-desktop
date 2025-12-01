@@ -105,39 +105,6 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
         );
     };
 
-    const ActionButton: React.FC<{
-        onClick: () => void;
-        children: React.ReactNode;
-        ariaLabel: string;
-        disabled?: boolean;
-        variant?: 'default' | 'danger';
-        isActive?: boolean;
-    }> = ({ onClick, children, ariaLabel, disabled, variant = 'default', isActive = false }) => (
-        <motion.button
-            type="button"
-            onClick={onClick}
-            aria-label={ariaLabel}
-            disabled={disabled}
-            variants={iconButtonVariants}
-            initial="rest"
-            whileHover={!disabled ? "hover" : "rest"}
-            whileTap={!disabled ? "tap" : "rest"}
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v-accent/60 ${
-                disabled
-                    ? 'opacity-40 cursor-not-allowed border-transparent'
-                    : 'shadow-sm'
-            } ${
-                variant === 'danger'
-                    ? 'border-v-danger/40 text-v-danger bg-white/90 dark:bg-transparent hover:bg-v-danger/10 dark:hover:bg-v-danger/20'
-                    : isActive
-                        ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/15'
-                        : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-white/80 dark:bg-white/5 hover:bg-v-light-hover dark:hover:bg-v-light-dark'
-            }`}
-        >
-            {children}
-        </motion.button>
-    );
-    
     const handleDelete = () => {
         if (isPreview) return;
         setShowActionMenu(false);
@@ -255,11 +222,11 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
 
     return (
         <motion.div
-            data-tour="agent-list-item"
+           
             variants={listItem}
             initial="hidden"
             animate="visible"
-            className="grid gap-4 items-center px-4 py-3 bg-v-light-surface hover:bg-v-light-hover dark:bg-v-mid-dark dark:hover:bg-v-light-dark transition-colors duration-200"
+            className={`grid gap-4 items-center px-4 py-3 bg-v-light-surface hover:bg-v-light-hover dark:bg-v-mid-dark dark:hover:bg-v-light-dark transition-colors duration-200 ${isSelected ? 'bg-v-accent/10 border-l-4 border-l-v-accent' : 'border-l-4 border-l-transparent'}`}
             style={gridTemplateColumns ? { gridTemplateColumns } : undefined}
         >
             <div className="flex justify-center">
@@ -282,9 +249,6 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
                                 : <span className="italic text-v-text-secondary">agent-name</span>}
                         </p>
                     </div>
-                    {isFavorite && (
-                      <StarIcon className="h-3.5 w-3.5 text-v-accent" filled />
-                    )}
                 </div>
                 <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary truncate">
                     {agent.frontmatter.description
@@ -292,8 +256,13 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
                         : <span className="italic">Agent description...</span>}
                 </p>
             </div>
-            <div className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate" title={displayPath}>
-                {simplifiedPath}
+            <div className="relative group">
+                <span className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate block max-w-full">
+                    {simplifiedPath}
+                </span>
+                <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                    {displayPath}
+                </span>
             </div>
             <div>
                 <span className={`px-2 py-0.5 text-xs font-medium rounded ${agent.scope === AgentScope.Project ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300' : 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300'}`}>
@@ -307,14 +276,21 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
                 <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary truncate">{toolsSummary}</p>
             </div>
             <div className="flex justify-end items-center gap-3">
-                <ActionButton
+                <button
+                    type="button"
                     onClick={() => !isPreview && onToggleFavorite(agent)}
-                    ariaLabel={isFavorite ? 'Unpin agent' : 'Pin agent'}
+                    aria-label={isFavorite ? 'Unpin agent' : 'Pin agent'}
                     disabled={isPreview}
-                    isActive={isFavorite}
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v-accent/60 ${
+                        isPreview
+                            ? 'opacity-40 cursor-not-allowed border-transparent'
+                            : isFavorite
+                                ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/15'
+                                : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-white/80 dark:bg-white/5 hover:bg-v-light-hover dark:hover:bg-v-light-dark'
+                    }`}
                 >
                     <StarIcon className="h-4 w-4" filled={isFavorite} />
-                </ActionButton>
+                </button>
 
                 {isRevealing && (
                     <div className="flex items-center gap-1 text-[11px] text-v-light-text-secondary dark:text-v-text-secondary">

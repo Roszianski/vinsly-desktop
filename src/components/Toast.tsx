@@ -7,11 +7,17 @@ import { CloseIcon } from './icons/CloseIcon';
 
 export type ToastType = 'success' | 'error' | 'info';
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface Toast {
   id: string;
   type: ToastType;
   message: string;
   duration?: number;
+  action?: ToastAction;
 }
 
 interface ToastItemProps {
@@ -60,7 +66,20 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
       className={`flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg backdrop-blur-sm ${getBgColor()}`}
     >
       {getIcon()}
-      <p className="flex-1 text-sm text-gray-900 dark:text-gray-100">{toast.message}</p>
+      <div className="flex-1">
+        <p className="text-sm text-gray-900 dark:text-gray-100">{toast.message}</p>
+        {toast.action && (
+          <button
+            onClick={() => {
+              toast.action!.onClick();
+              onClose(toast.id);
+            }}
+            className="mt-2 text-sm font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+          >
+            {toast.action.label}
+          </button>
+        )}
+      </div>
       <button
         onClick={() => onClose(toast.id)}
         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"

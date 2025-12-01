@@ -16,6 +16,8 @@ import { GridIcon } from '../icons/GridIcon';
 import { GlobeIcon } from '../icons/GlobeIcon';
 import { ChartIcon } from '../icons/ChartIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
+import { DocumentIcon } from '../icons/DocumentIcon';
+import { TerminalIcon } from '../icons/TerminalIcon';
 import { listContainer } from '../../animations';
 import { fuzzyMatch } from '../../utils/fuzzyMatch';
 import { exportAgentsAsZip } from '../../utils/agentExport';
@@ -35,7 +37,9 @@ interface AgentListScreenProps {
   onShowSubagents: () => void;
   onShowSkills: () => void;
   onShowAnalytics: () => void;
-  activeView: 'subagents' | 'skills' | 'team' | 'analytics';
+  onShowMemory: () => void;
+  onShowCommands: () => void;
+  activeView: 'subagents' | 'skills' | 'team' | 'analytics' | 'memory' | 'commands';
   onToggleFavorite: (agent: Agent) => void;
   onImport?: (agents: Agent[], errors: string[]) => void;
   shortcutHint?: string;
@@ -65,6 +69,8 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
   onShowSubagents,
   onShowSkills,
   onShowAnalytics,
+  onShowMemory,
+  onShowCommands,
   activeView,
   onToggleFavorite,
   onImport,
@@ -352,7 +358,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
 
   const listContent = (
     <>
-      <div data-tour="agent-list" className="space-y-4 scroll-mt-24">
+      <div className="space-y-4 scroll-mt-24">
         <div className="grid gap-4 sm:grid-cols-3">
           {[
             { label: 'Total agents', value: totalAgents, icon: LayersIcon },
@@ -395,16 +401,16 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
               action: onShowSkills,
             },
             {
-              key: 'team',
-              label: 'Network',
-              icon: <NetworkIcon className="h-4 w-4" />,
-              action: onShowTeam,
+              key: 'memory',
+              label: 'Memory',
+              icon: <DocumentIcon className="h-4 w-4" />,
+              action: onShowMemory,
             },
             {
-              key: 'analytics',
-              label: 'Analytics',
-              icon: <ChartIcon className="h-4 w-4" />,
-              action: onShowAnalytics,
+              key: 'commands',
+              label: 'Commands',
+              icon: <TerminalIcon className="h-4 w-4" />,
+              action: onShowCommands,
             },
           ].map((item, index, array) => (
             <React.Fragment key={item.key}>
@@ -426,7 +432,26 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
           ))}
         </div>
 
-        <div className="flex items-center gap-1 border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark text-sm font-medium">
+        <div className="flex items-center gap-2">
+          {/* Network and Analytics buttons */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onShowTeam}
+              className="p-2 rounded-md border border-v-light-border dark:border-v-border hover:border-v-accent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent transition-colors"
+              title="Network View"
+            >
+              <NetworkIcon className="h-4 w-4" />
+            </button>
+            <button
+              onClick={onShowAnalytics}
+              className="p-2 rounded-md border border-v-light-border dark:border-v-border hover:border-v-accent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent transition-colors"
+              title="Analytics"
+            >
+              <ChartIcon className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1 border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark text-sm font-medium">
           <button
             type="button"
             onClick={() => handleLayoutChange('table')}
@@ -457,6 +482,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
             <span className="hidden sm:inline">Cards</span>
           </button>
         </div>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -482,7 +508,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
               </div>
           ) : (
               <>
-                  <div className="flex-grow flex items-center gap-4" data-tour="search-filter">
+                  <div className="flex-grow flex items-center gap-4">
                       <div className="relative flex-grow max-w-md">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                               <SearchIcon className="h-4 w-4 text-v-light-text-secondary dark:text-v-text-secondary" />
@@ -539,7 +565,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
                       )}
                     </button>
                     <button
-                      data-tour="create-agent"
+                     
                       onClick={onCreate}
                       className="inline-flex h-10 items-center gap-3 px-4 bg-v-accent text-white font-semibold text-sm transition-all duration-200 ease-out flex-shrink-0 rounded-md shadow-sm hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
                     >
@@ -570,7 +596,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
         {isGridLayout ? (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-v-light-border dark:border-v-border text-xs font-semibold uppercase tracking-wide text-v-light-text-secondary dark:text-v-text-secondary">
-              <div className="flex items-center gap-2" data-tour="bulk-select">
+              <div className="flex items-center gap-2">
                 <input
                   ref={selectAllCheckboxRef}
                   type="checkbox"
@@ -638,7 +664,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
               className="grid gap-4 px-4 py-2 border-b border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary text-xs uppercase font-bold tracking-wider items-center"
               style={{ gridTemplateColumns: LIST_GRID_TEMPLATE }}
             >
-              <div className="flex justify-center" data-tour="bulk-select">
+              <div className="flex justify-center">
                 <input
                     ref={selectAllCheckboxRef}
                     type="checkbox"

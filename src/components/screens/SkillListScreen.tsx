@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Skill, AgentScope } from '../../types';
 import { PlusIcon } from '../icons/PlusIcon';
 import { SearchIcon } from '../icons/SearchIcon';
@@ -7,9 +8,9 @@ import { DownloadIcon } from '../icons/DownloadIcon';
 import { ListIcon } from '../icons/ListIcon';
 import { GridIcon } from '../icons/GridIcon';
 import { LayersIcon } from '../icons/LayersIcon';
-import { NetworkIcon } from '../icons/NetworkIcon';
-import { ChartIcon } from '../icons/ChartIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
+import { DocumentIcon } from '../icons/DocumentIcon';
+import { TerminalIcon } from '../icons/TerminalIcon';
 import { DeleteIcon } from '../icons/DeleteIcon';
 import { FolderIcon } from '../icons/FolderIcon';
 import { GlobeIcon } from '../icons/GlobeIcon';
@@ -22,6 +23,7 @@ import { useToast } from '../../contexts/ToastContext';
 
 type LayoutMode = 'table' | 'grid';
 type Filter = 'All' | AgentScope;
+type SortCriteria = 'name-asc' | 'name-desc' | 'scope';
 
 const LAYOUT_STORAGE_KEY = 'vinsly-skill-list-layout';
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -58,9 +60,9 @@ interface SkillListScreenProps {
   onImportSkill: () => Promise<void>;
   onShowSubagents: () => void;
   onShowSkills: () => void;
-  onShowTeam: () => void;
-  onShowAnalytics: () => void;
-  activeView: 'subagents' | 'skills' | 'team' | 'analytics';
+  onShowMemory: () => void;
+  onShowCommands: () => void;
+  activeView: 'subagents' | 'skills' | 'memory' | 'commands';
   onToggleFavorite: (skill: Skill) => void;
 }
 
@@ -75,8 +77,8 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
   onImportSkill,
   onShowSubagents,
   onShowSkills,
-  onShowTeam,
-  onShowAnalytics,
+  onShowMemory,
+  onShowCommands,
   activeView,
   onToggleFavorite,
 }) => {
@@ -88,6 +90,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
   const [selectedSkillIds, setSelectedSkillIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [sortCriteria, setSortCriteria] = useState<SortCriteria>('name-asc');
   const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -122,7 +125,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
 
   const filteredSkills = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    return skills.filter(skill => {
+    const filtered = skills.filter(skill => {
       const scopeMatch = filter === 'All' || skill.scope === filter;
       if (!scopeMatch) return false;
 
@@ -134,7 +137,24 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
         description.toLowerCase().includes(normalizedQuery)
       );
     });
-  }, [skills, filter, searchQuery]);
+
+    return filtered.sort((a, b) => {
+      const favoriteDelta = Number(Boolean(b.isFavorite)) - Number(Boolean(a.isFavorite));
+      if (favoriteDelta !== 0) {
+        return favoriteDelta;
+      }
+      switch (sortCriteria) {
+        case 'name-asc':
+          return a.name.localeCompare(b.name);
+        case 'name-desc':
+          return b.name.localeCompare(a.name);
+        case 'scope':
+          return a.scope.localeCompare(b.scope);
+        default:
+          return 0;
+      }
+    });
+  }, [skills, filter, searchQuery, sortCriteria]);
 
   const areAllSelected = filteredSkills.length > 0 && selectedSkillIds.size === filteredSkills.length;
   const isIndeterminate = selectedSkillIds.size > 0 && !areAllSelected;
@@ -201,13 +221,13 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
   const renderViewSwitcher = () => (
     <div
       className="flex items-stretch border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark"
-      data-tour="skill-view-switcher"
+     
     >
       {[
         { key: 'subagents', label: 'Subagents', icon: <ListIcon className="h-4 w-4" />, action: onShowSubagents },
         { key: 'skills', label: 'Skills', icon: <LayersIcon className="h-4 w-4" />, action: onShowSkills },
-        { key: 'team', label: 'Network', icon: <NetworkIcon className="h-4 w-4" />, action: onShowTeam },
-        { key: 'analytics', label: 'Analytics', icon: <ChartIcon className="h-4 w-4" />, action: onShowAnalytics },
+        { key: 'memory', label: 'Memory', icon: <DocumentIcon className="h-4 w-4" />, action: onShowMemory },
+        { key: 'commands', label: 'Commands', icon: <TerminalIcon className="h-4 w-4" />, action: onShowCommands },
       ].map((item, index, array) => (
         <React.Fragment key={item.key}>
           <button
@@ -230,7 +250,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
   );
 
   const renderToolbar = () => (
-    <div className="flex flex-wrap items-center justify-between gap-3" data-tour="skill-toolbar">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       {selectedSkillIds.size > 0 ? (
         <div className="flex-grow flex items-center gap-4">
           <span className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
@@ -311,7 +331,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
             <button
               onClick={onCreateSkill}
               className="inline-flex h-10 items-center gap-3 px-4 bg-v-accent text-white font-semibold text-sm transition-all duration-200 ease-out flex-shrink-0 rounded-md shadow-sm hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
-              data-tour="create-skill"
+             
             >
               <PlusIcon className="h-4 w-4" />
               <span>New Skill</span>
@@ -368,7 +388,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
     <div className="divide-y divide-v-light-border dark:divide-v-border">
       <div
         className="grid gap-4 px-4 py-2 border-b border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary text-xs uppercase font-bold tracking-wider items-center"
-        style={{ gridTemplateColumns: '60px minmax(0,2.3fr) minmax(0,2.3fr) minmax(0,1.1fr) minmax(0,1.4fr) 140px' }}
+        style={{ gridTemplateColumns: '60px minmax(0,1.5fr) minmax(0,2fr) minmax(0,1.4fr) minmax(0,1.6fr) 140px' }}
       >
         <div className="flex justify-center">
           <input
@@ -385,7 +405,30 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
         <span>Path</span>
         <span>Scope</span>
         <span>Tools</span>
-        <span className="text-right pr-2">Actions</span>
+        <div className="text-right">
+          <label htmlFor="skill-sort" className="sr-only">Sort skills by</label>
+          <div className="relative inline-flex items-center">
+            <select
+              id="skill-sort"
+              value={sortCriteria}
+              onChange={(e) => setSortCriteria(e.target.value as SortCriteria)}
+              className="appearance-none bg-transparent border-none text-v-light-text-secondary dark:text-v-text-secondary text-xs focus:ring-1 focus:ring-v-accent focus:outline-none pr-5 pl-1 py-1 cursor-pointer [&::-ms-expand]:hidden"
+              style={{
+                appearance: 'none',
+                WebkitAppearance: 'none',
+                MozAppearance: 'none',
+                backgroundImage: 'none'
+              }}
+            >
+              <option value="name-asc">Name (A-Z)</option>
+              <option value="name-desc">Name (Z-A)</option>
+              <option value="scope">Scope</option>
+            </select>
+            <svg className="h-3 w-3 text-v-light-text-secondary dark:text-v-text-secondary absolute right-0 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
       </div>
       {filteredSkills.length > 0 ? (
         <div>
@@ -446,7 +489,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
         {renderViewSwitcher()}
         <div
           className="flex items-center gap-1 border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark text-sm font-medium"
-          data-tour="skill-layout"
+         
         >
           <button
             type="button"
@@ -483,7 +526,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
 
       <div
         className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg overflow-hidden"
-        data-tour="skill-list"
+       
       >
         {layoutMode === 'grid' ? renderGrid() : renderTable()}
       </div>
@@ -653,6 +696,7 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const fullPath = skill.path || skill.directoryPath || 'Path pending save';
@@ -662,6 +706,7 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
       const target = event.target as Node;
       if (menuRef.current?.contains(target) || menuButtonRef.current?.contains(target)) return;
       setShowMenu(false);
+      setMenuCoords(null);
     };
     if (showMenu && typeof document !== 'undefined') {
       document.addEventListener('mousedown', handleClickOutside);
@@ -671,6 +716,31 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
         document.removeEventListener('mousedown', handleClickOutside);
       }
     };
+  }, [showMenu]);
+
+  useEffect(() => {
+    if (!showMenu || !menuButtonRef.current || typeof window === 'undefined') {
+      return;
+    }
+
+    const buttonRect = menuButtonRef.current.getBoundingClientRect();
+    const menuWidth = 192; // w-48
+    const menuHeight = 200; // approximate
+
+    let top = buttonRect.bottom + 8;
+    let left = buttonRect.right - menuWidth;
+
+    const padding = 8;
+    if (left < padding) left = padding;
+    if (left + menuWidth > window.innerWidth - padding) {
+      left = window.innerWidth - padding - menuWidth;
+    }
+    if (top + menuHeight > window.innerHeight - padding) {
+      top = buttonRect.top - menuHeight - 8;
+    }
+    if (top < padding) top = padding;
+
+    setMenuCoords({ top, left });
   }, [showMenu]);
 
   const allowedSummary = Array.isArray(skill.frontmatter.allowedTools)
@@ -696,8 +766,8 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
 
   return (
     <div
-      className="grid gap-4 px-4 py-3 items-center text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover/50 dark:hover:bg-v-light-dark/40 transition-colors"
-      style={{ gridTemplateColumns: '60px minmax(0,2.2fr) minmax(0,2fr) minmax(0,1.2fr) minmax(0,1.6fr) 140px' }}
+      className={`grid gap-4 px-4 py-3 items-center text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover/50 dark:hover:bg-v-light-dark/40 transition-colors ${isSelected ? 'bg-v-accent/5' : ''}`}
+      style={{ gridTemplateColumns: '60px minmax(0,1.5fr) minmax(0,2fr) minmax(0,1.4fr) minmax(0,1.6fr) 140px' }}
     >
       <div className="flex justify-center">
         <input
@@ -718,22 +788,15 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
               {highlightText(skill.frontmatter.description || '—', highlightTerm)}
             </p>
           </div>
-          <button
-            onClick={() => onToggleFavorite(skill)}
-            className={`inline-flex items-center justify-center h-6 w-6 rounded-md border transition-colors ${
-              skill.isFavorite
-                ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
-                : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent'
-            }`}
-            title={skill.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-            aria-label={skill.isFavorite ? 'Unpin skill' : 'Pin skill'}
-          >
-            <StarIcon className="h-3.5 w-3.5" filled={Boolean(skill.isFavorite)} />
-          </button>
         </div>
       </div>
-      <div className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate" title={fullPath}>
-        {fullPath}
+      <div className="relative group">
+        <span className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate block max-w-full">
+          {fullPath}
+        </span>
+        <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+          {fullPath}
+        </span>
       </div>
       <div>
         <span className={`px-2 py-0.5 text-xs font-medium rounded ${scopePillClasses}`}>
@@ -745,11 +808,16 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
       </div>
       <div className="flex justify-end items-center gap-2 relative">
         <button
-          onClick={() => onReveal(skill)}
-          className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent"
-          title="Reveal in Finder"
+          onClick={() => onToggleFavorite(skill)}
+          className={`inline-flex items-center justify-center h-9 w-9 rounded-md border transition-colors ${
+            skill.isFavorite
+              ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
+            : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-accent'
+          }`}
+          title={skill.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          aria-label={skill.isFavorite ? 'Unpin skill' : 'Pin skill'}
         >
-          <FolderIcon className="h-4 w-4" />
+          <StarIcon className="h-4 w-4" filled={Boolean(skill.isFavorite)} />
         </button>
         <button
           ref={menuButtonRef}
@@ -763,50 +831,61 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
             <circle cx="12" cy="19" r="2" />
           </svg>
         </button>
-        {showMenu && (
-          <div
-            ref={menuRef}
-            className="absolute right-0 top-10 z-20 w-48 bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg shadow-lg overflow-hidden"
-          >
-            <button
-              onClick={() => {
-                setShowMenu(false);
-                onEdit(skill);
+        {showMenu && menuCoords && typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              ref={menuRef}
+              style={{
+                position: 'fixed',
+                top: menuCoords.top,
+                left: menuCoords.left,
+                zIndex: 1000
               }}
-              className="w-full px-4 py-2.5 text-left text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark transition-colors flex items-center gap-3"
+              className="w-48 bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg shadow-lg overflow-hidden"
             >
-              <EditIcon className="h-4 w-4" />
-              <span>Edit</span>
-            </button>
-            <button
-              onClick={() => {
-                setShowMenu(false);
-                onExport(skill);
-              }}
-              className="w-full px-4 py-2.5 text-left text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark transition-colors flex items-center gap-3"
-            >
-              <DownloadIcon className="h-4 w-4" />
-              <span>Export</span>
-            </button>
-            <button
-              onClick={() => {
-                setShowMenu(false);
-                onReveal(skill);
-              }}
-              className="w-full px-4 py-2.5 text-left text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark transition-colors flex items-center gap-3"
-            >
-              <FolderIcon className="h-4 w-4" />
-              <span>Reveal</span>
-            </button>
-            <button
-              onClick={handleDelete}
-              className="w-full px-4 py-2.5 text-left text-sm text-v-danger hover:bg-v-danger/10 transition-colors flex items-center gap-3"
-            >
-              <DeleteIcon className="h-4 w-4" />
-              <span>Delete</span>
-            </button>
-          </div>
-        )}
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  setMenuCoords(null);
+                  onEdit(skill);
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark transition-colors flex items-center gap-3"
+              >
+                <EditIcon className="h-4 w-4" />
+                <span>Edit</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  setMenuCoords(null);
+                  onExport(skill);
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark transition-colors flex items-center gap-3"
+              >
+                <DownloadIcon className="h-4 w-4" />
+                <span>Export</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  setMenuCoords(null);
+                  onReveal(skill);
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark transition-colors flex items-center gap-3"
+              >
+                <FolderIcon className="h-4 w-4" />
+                <span>Reveal</span>
+              </button>
+              <button
+                onClick={handleDelete}
+                className="w-full px-4 py-2.5 text-left text-sm text-v-danger hover:bg-v-danger/10 transition-colors flex items-center gap-3"
+              >
+                <DeleteIcon className="h-4 w-4" />
+                <span>Delete</span>
+              </button>
+            </div>,
+            document.body
+          )}
         <ConfirmDialog
           isOpen={showDeleteConfirm}
           title="Delete Skill"

@@ -48,6 +48,28 @@ const getSkillDirectoryFromFilePath = (filePath?: string | null): string => {
     : normalized;
 };
 
+const normalizeScanRootPath = (input?: string | null): string | null => {
+  if (!input) return null;
+
+  const normalized = input.replace(/\\/g, '/').trim().replace(/\/+$/, '');
+  if (!normalized) {
+    return null;
+  }
+
+  const lower = normalized.toLowerCase();
+  const markers = ['/.claude/agents', '/.claude/skills', '/.claude'];
+
+  for (const marker of markers) {
+    const markerIndex = lower.lastIndexOf(marker);
+    if (markerIndex !== -1) {
+      const root = normalized.slice(0, markerIndex).replace(/\/+$/, '');
+      return root || normalized;
+    }
+  }
+
+  return normalized;
+};
+
 const resolveProjectPath = (preferredPath?: string, existingPath?: string): string | undefined => {
   if (preferredPath && preferredPath.trim().length > 0) {
     return preferredPath.trim();
@@ -91,10 +113,13 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [isScanBusy, setIsScanBusy] = useState(false);
+  const [isCacheReady, setIsCacheReady] = useState(false);
+  const [cacheVersion, setCacheVersion] = useState(0);
   const agentsRef = useRef<Agent[]>([]);
   const skillsRef = useRef<Skill[]>([]);
   const workspaceCacheHydrated = useRef(false);
   const inFlightScanCount = useRef(0);
+  const scanAbortController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     agentsRef.current = agents;
@@ -105,37 +130,52 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   }, [skills]);
 
   useEffect(() => {
-    if (!options.isOnboardingComplete || workspaceCacheHydrated.current) {
+    if (workspaceCacheHydrated.current) {
       return;
     }
 
     const hydrateWorkspaceFromCache = async () => {
-      const [cachedAgents, cachedSkills] = await Promise.all([
-        getStorageItem<Agent[]>(AGENT_CACHE_KEY),
-        getStorageItem<Skill[]>(SKILL_CACHE_KEY),
-      ]);
+      try {
+        const [cachedAgents, cachedSkills] = await Promise.all([
+          getStorageItem<Agent[]>(AGENT_CACHE_KEY),
+          getStorageItem<Skill[]>(SKILL_CACHE_KEY),
+        ]);
 
-      if (cachedAgents && cachedAgents.length > 0 && agentsRef.current.length === 0) {
-        setAgents(cachedAgents);
+        if (cachedAgents && cachedAgents.length > 0 && agentsRef.current.length === 0) {
+          setAgents(cachedAgents);
+        }
+        if (cachedSkills && cachedSkills.length > 0 && skillsRef.current.length === 0) {
+          setSkills(cachedSkills);
+        }
+      } catch (error) {
+        console.error('Failed to hydrate workspace cache', error);
+      } finally {
+        workspaceCacheHydrated.current = true;
+        setIsCacheReady(true);
       }
-      if (cachedSkills && cachedSkills.length > 0 && skillsRef.current.length === 0) {
-        setSkills(cachedSkills);
-      }
-      workspaceCacheHydrated.current = true;
     };
 
     void hydrateWorkspaceFromCache();
-  }, [options.isOnboardingComplete]);
+  }, [cacheVersion]);
 
   useEffect(() => {
-    if (!workspaceCacheHydrated.current) return;
+    if (!isCacheReady) return;
     setStorageItem(AGENT_CACHE_KEY, agents);
-  }, [agents]);
+  }, [agents, isCacheReady]);
 
   useEffect(() => {
-    if (!workspaceCacheHydrated.current) return;
+    if (!isCacheReady) return;
     setStorageItem(SKILL_CACHE_KEY, skills);
-  }, [skills]);
+  }, [skills, isCacheReady]);
+
+  // Cleanup: cancel any in-flight scans on unmount
+  useEffect(() => {
+    return () => {
+      if (scanAbortController.current) {
+        scanAbortController.current.abort();
+      }
+    };
+  }, []);
 
   const makeAgentKey = useCallback((agent: Agent) => {
     const scopePrefix = agent.scope === AgentScope.Project ? 'project' : 'global';
@@ -180,6 +220,21 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
     async (
       loadOptions: LoadAgentsOptions = {}
     ): Promise<{ total: number; newCount: number }> => {
+      // Coalesce scan triggers - reject if scan already in progress
+      if (inFlightScanCount.current > 0) {
+        console.log('Scan already in progress, skipping duplicate scan request');
+        return { total: 0, newCount: 0 };
+      }
+
+      // Cancel any existing scan (shouldn't happen due to above check, but safety)
+      if (scanAbortController.current) {
+        scanAbortController.current.abort();
+      }
+
+      // Create new abort controller for this scan
+      scanAbortController.current = new AbortController();
+      const signal = scanAbortController.current.signal;
+
       beginScan();
       const currentScanSettings = options.scanSettingsRef.current || DEFAULT_SCAN_SETTINGS;
       const {
@@ -190,23 +245,35 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
       } = loadOptions;
 
       try {
+        // Check if scan was cancelled
+        if (signal.aborted) {
+          console.log('Scan cancelled before execution');
+          return { total: 0, newCount: 0 };
+        }
+
         const previousAgents = agentsRef.current;
         const previousSkills = skillsRef.current;
         const seenAgents = new Set<string>();
         const seenSkills = new Set<string>();
         const projectPathList = projectPaths
-          ? (Array.isArray(projectPaths) ? projectPaths : [projectPaths]).filter(
-              path => typeof path === 'string' && path.trim().length > 0
+          ? Array.from(
+              new Set(
+                (Array.isArray(projectPaths) ? projectPaths : [projectPaths])
+                  .map(normalizeScanRootPath)
+                  .filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
+              )
             )
           : [];
 
         const directoriesToScan = new Set<string>();
         additionalDirectories
+          .map(normalizeScanRootPath)
           .filter((dir): dir is string => typeof dir === 'string' && dir.trim().length > 0)
           .forEach(dir => directoriesToScan.add(dir));
         if (scanWatchedDirectories) {
           currentScanSettings.watchedDirectories
-            .filter(dir => dir && dir.trim().length > 0)
+            .map(normalizeScanRootPath)
+            .filter((dir): dir is string => !!dir && dir.trim().length > 0)
             .forEach(directory => directoriesToScan.add(directory));
         }
 
@@ -370,13 +437,25 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
           skill => !previousSkillKeys.has(makeSkillKey(skill))
         ).length;
 
+        // Check if scan was cancelled before updating state
+        if (signal.aborted) {
+          console.log('Scan was cancelled, skipping state update');
+          return { total: 0, newCount: 0 };
+        }
+
         setAgents(allAgents);
         setSkills(allSkills);
         return {
           total: allAgents.length + allSkills.length,
           newCount: newAgentCount + newSkillCount,
         };
-      } catch (error) {
+      } catch (error: any) {
+        // Don't show error if scan was cancelled
+        if (error.name === 'AbortError' || signal.aborted) {
+          console.log('Scan cancelled');
+          return { total: 0, newCount: 0 };
+        }
+
         console.error('Error loading workspace:', error);
         options.showToast('error', 'Failed to load assets from filesystem');
         throw error;
@@ -670,8 +749,10 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
     agentsRef.current = [];
     skillsRef.current = [];
     workspaceCacheHydrated.current = false;
+    setIsCacheReady(false);
     await removeStorageItem(AGENT_CACHE_KEY);
     await removeStorageItem(SKILL_CACHE_KEY);
+    setCacheVersion(prev => prev + 1);
   }, []);
 
   return {
