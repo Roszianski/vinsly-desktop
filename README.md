@@ -265,6 +265,15 @@ Integration example: activation completion calls `useLicense.setLicense`, applie
 - Clear node_modules and reinstall: `rm -rf node_modules && npm install`
 - Clear Rust build cache: `cd src-tauri && cargo clean`
 
+### Keeping Repository Size Small
+The `src-tauri/target/` directory accumulates build artifacts (typically 2-3GB). To free up disk space during development:
+
+```bash
+cd src-tauri && cargo clean
+```
+
+This removes all compiled artifacts. They'll rebuild automatically on your next build. Consider running this periodically if disk space is limited.
+
 ### Runtime Issues
 - Check that Claude CLI is in your PATH for Test Console features
 - Verify permissions in capabilities configuration
