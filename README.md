@@ -208,10 +208,16 @@ Vinsly Desktop includes a fully automated update system:
 
 **Creating a Release**:
 ```bash
-# Bump version in src-tauri/tauri.conf.json
-# Then push a version tag to trigger automated workflow:
-git tag v1.0.0
-git push origin v1.0.0
+# 1. Bump version in src-tauri/tauri.conf.json (e.g., "0.1.0" -> "0.1.1")
+
+# 2. Commit the version change
+git add src-tauri/tauri.conf.json
+git commit -m "Bump version to 0.1.1"
+
+# 3. Create and push version tag to trigger automated workflow
+git tag v0.1.1
+git push origin main  # or your branch name
+git push origin v0.1.1
 ```
 
 The GitHub Actions workflow will automatically:
