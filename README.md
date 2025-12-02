@@ -193,15 +193,36 @@ npm run tauri build
 
 This creates platform-specific installers in `src-tauri/target/release/bundle/`
 
-### Releasing Updates (Short Version)
+### Auto-Updates System
 
-- **Release endpoint** – A release endpoint is just a public URL where the app can fetch the small `latest.json` “what’s the newest version?” file. The simplest option is to upload that file as a Release asset in GitHub and point the updater config at `https://github.com/<your‑user>/<your‑repo>/releases/latest/download/latest.json`.
-- **Manual release workflow**:
-  1. Bump the version in `src-tauri/tauri.conf.json` (and `package.json` if you want them in sync).
-  2. Run `npm run tauri build` – this produces new `.dmg` / `.exe` files and, following the Tauri updater docs, a `latest.json` manifest.
-  3. On GitHub, go to **Releases → Draft new release**, give it a tag like `v0.2.0`, and attach the new `.dmg` / `.exe` files **plus** the `latest.json` file (named exactly `latest.json`).
-  4. Publish the release. The updater in Vinsly will now see this as the newest version.
-- **Automated release workflow (later)** – When you’re ready, you can add a GitHub Actions workflow that runs on tags like `v*` and does the same steps (install deps → `npm run tauri build` → upload installers + `latest.json` to the GitHub Release). This repo does not include that workflow yet; it’s optional and can be added when you want fully automatic releases.
+Vinsly Desktop includes a fully automated update system:
+
+**Update Endpoint**: `https://raw.githubusercontent.com/Roszianski/Vinsly-Updates/main/latest.json`
+
+**How It Works**:
+1. Private repo builds and cryptographically signs installers
+2. GitHub Actions creates a release with signed binaries
+3. Workflow generates `latest.json` with download URLs
+4. Manifest is automatically pushed to [public updates repo](https://github.com/Roszianski/Vinsly-Updates)
+5. Vinsly Desktop periodically checks for updates
+
+**Creating a Release**:
+```bash
+# Bump version in src-tauri/tauri.conf.json
+# Then push a version tag to trigger automated workflow:
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The GitHub Actions workflow will automatically:
+- Build for macOS (Intel & Apple Silicon) and Windows
+- Sign all installers with Tauri signing keys
+- Create GitHub Release with binaries
+- Generate and publish update manifest
+
+**Setup Requirements**:
+1. GitHub token `VINSLY_UPDATES_TOKEN` configured in repo secrets (see [Vinsly-Updates README](https://github.com/Roszianski/Vinsly-Updates))
+2. Tauri signing keys in `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets
 
 ### Permissions
 All permissions are configured in `src-tauri/capabilities/default.json`. The application has access to:

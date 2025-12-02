@@ -176,3 +176,35 @@ jobs:
         with:
           name: update-manifest
           path: latest.json
+
+  publish-manifest:
+    needs: generate-manifest
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download manifest artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: update-manifest
+
+      - name: Clone public updates repo
+        run: |
+          git clone https://github.com/Roszianski/Vinsly-Updates.git updates-repo
+          cd updates-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update manifest
+        run: |
+          cp latest.json updates-repo/latest.json
+          cd updates-repo
+          git add latest.json
+          git commit -m "Update to version ${GITHUB_REF#refs/tags/v}" || echo "No changes to commit"
+
+      - name: Push to public repo
+        env:
+          GITHUB_TOKEN: ${{ secrets.VINSLY_UPDATES_TOKEN }}
+        run: |
+          cd updates-repo
+          git push https://x-access-token:$GITHUB_TOKEN@github.com/Roszianski/Vinsly-Updates.git main
