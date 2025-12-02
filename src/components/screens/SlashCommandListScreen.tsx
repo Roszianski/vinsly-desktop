@@ -14,6 +14,8 @@ import { ListIcon } from '../icons/ListIcon';
 import { GridIcon } from '../icons/GridIcon';
 import { LayersIcon } from '../icons/LayersIcon';
 import { DocumentIcon } from '../icons/DocumentIcon';
+import { ServerIcon } from '../icons/ServerIcon';
+import { LightningIcon } from '../icons/LightningIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
 import { DuplicateIcon } from '../icons/DuplicateIcon';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -25,7 +27,7 @@ type LayoutMode = 'table' | 'grid';
 type Filter = 'All' | AgentScope;
 type SortCriteria = 'name-asc' | 'name-desc' | 'scope';
 
-const LAYOUT_STORAGE_KEY = 'vinsly-command-list-layout';
+const LAYOUT_STORAGE_KEY = 'vinsly-list-layout';
 
 // Action menu component for each row
 interface ActionMenuProps {
@@ -191,7 +193,9 @@ interface SlashCommandListScreenProps {
   onShowSkills: () => void;
   onShowMemory: () => void;
   onShowCommands: () => void;
-  activeView: 'subagents' | 'skills' | 'memory' | 'commands';
+  onShowMCP: () => void;
+  onShowHooks: () => void;
+  activeView: 'subagents' | 'skills' | 'memory' | 'commands' | 'mcp' | 'hooks';
 }
 
 export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
@@ -208,6 +212,8 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
   onShowSkills,
   onShowMemory,
   onShowCommands,
+  onShowMCP,
+  onShowHooks,
   activeView,
 }) => {
   const [filter, setFilter] = useState<Filter>('All');
@@ -351,6 +357,8 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
     { key: 'skills', label: 'Skills', icon: <LayersIcon className="h-4 w-4" />, action: onShowSkills },
     { key: 'memory', label: 'Memory', icon: <DocumentIcon className="h-4 w-4" />, action: onShowMemory },
     { key: 'commands', label: 'Commands', icon: <TerminalIcon className="h-4 w-4" />, action: onShowCommands },
+    { key: 'mcp', label: 'MCP', icon: <ServerIcon className="h-4 w-4" />, action: onShowMCP },
+    { key: 'hooks', label: 'Hooks', icon: <LightningIcon className="h-4 w-4" />, action: onShowHooks },
   ];
 
   return (
@@ -406,36 +414,36 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
             </React.Fragment>
           ))}
         </div>
-        <div className="flex items-center gap-1 border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark text-sm font-medium">
-          <button
-            type="button"
-            onClick={() => setLayoutMode('table')}
-            className={`px-3 py-1.5 flex items-center gap-1 transition-colors ${
-              layoutMode === 'table'
-                ? 'bg-v-accent/10 text-v-accent'
-                : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
-            }`}
-            aria-pressed={layoutMode === 'table'}
-            title="Row layout"
-          >
-            <ListIcon className="h-4 w-4" />
-            <span>Rows</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setLayoutMode('grid')}
-            className={`px-3 py-1.5 flex items-center gap-1 transition-colors ${
-              layoutMode === 'grid'
-                ? 'bg-v-accent/10 text-v-accent'
-                : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
-            }`}
-            aria-pressed={layoutMode === 'grid'}
-            title="Card layout"
-          >
-            <GridIcon className="h-4 w-4" />
-            <span>Cards</span>
-          </button>
-        </div>
+        {layoutLoaded && (
+          <div className="flex items-center border border-v-light-border dark:border-v-border rounded-md overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setLayoutMode('table')}
+              className={`p-2 transition-colors ${
+                layoutMode === 'table'
+                  ? 'bg-v-accent text-white'
+                  : 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
+              }`}
+              aria-pressed={layoutMode === 'table'}
+              title="Row layout"
+            >
+              <ListIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setLayoutMode('grid')}
+              className={`p-2 transition-colors ${
+                layoutMode === 'grid'
+                  ? 'bg-v-accent text-white'
+                  : 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
+              }`}
+              aria-pressed={layoutMode === 'grid'}
+              title="Card layout"
+            >
+              <GridIcon className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Toolbar */}
@@ -494,7 +502,7 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
               {onBulkDelete && (
                 <button
                   onClick={handleBulkDeleteClick}
-                  className="inline-flex h-10 items-center gap-2 px-3 text-sm font-semibold bg-v-danger hover:opacity-90 text-white rounded-md shadow-sm hover:shadow-md active:scale-95 transition-transform"
+                  className="inline-flex h-10 items-center gap-2 px-3 text-sm font-semibold border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-red-400 hover:text-red-500 rounded-md transition-colors"
                 >
                   <DeleteIcon className="h-4 w-4" />
                   <span>Delete Selected</span>
@@ -541,90 +549,100 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
 
       {/* Table/Grid */}
       <div className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg overflow-hidden">
-        {filteredCommands.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
-            <TerminalIcon className="w-12 h-12 mb-4 opacity-50" />
-            <p className="text-lg font-medium mb-2">No commands found</p>
-            <p className="text-sm mb-4">
-              {searchQuery
-                ? 'Try adjusting your search'
-                : 'Create your first slash command'}
-            </p>
-            {!searchQuery && (
-              <button
-                onClick={onCreate}
-                className="flex items-center gap-2 px-4 py-2 bg-v-accent text-white rounded-lg hover:bg-v-accent-dark transition-colors"
-              >
-                <PlusIcon className="w-4 h-4" />
-                New Command
-              </button>
-            )}
-          </div>
-        ) : layoutMode === 'grid' ? (
+        {layoutMode === 'grid' ? (
           /* Grid view */
-          <div className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredCommands.map(command => {
-                const isSelected = selectedCommandIds.has(command.id);
-                const ScopeIcon = command.scope === AgentScope.Project ? FolderIcon : GlobeIcon;
+          filteredCommands.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
+              <TerminalIcon className="w-12 h-12 mb-4 opacity-50" />
+              <p className="text-lg font-medium mb-2">No commands found</p>
+              <p className="text-sm mb-4">
+                {searchQuery
+                  ? 'Try adjusting your search'
+                  : 'Create your first slash command'}
+              </p>
+              {!searchQuery && (
+                <button
+                  onClick={onCreate}
+                  className="flex items-center gap-2 px-4 py-2 bg-v-accent text-white rounded-lg hover:bg-v-accent-dark transition-colors"
+                >
+                  <PlusIcon className="w-4 h-4" />
+                  New Command
+                </button>
+              )}
+            </div>
+          ) : (
+          /* Grid view */
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-v-light-border dark:border-v-border text-xs font-semibold uppercase tracking-wide text-v-light-text-secondary dark:text-v-text-secondary">
+              <div className="flex items-center gap-2">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  onChange={handleSelectAll}
+                  disabled={filteredCommands.length === 0}
+                  aria-label="Select all commands"
+                  className="h-4 w-4 bg-v-light-surface dark:bg-v-mid-dark border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent rounded"
+                />
+                <span>Select all</span>
+              </div>
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredCommands.map(command => {
+                  const isSelected = selectedCommandIds.has(command.id);
+                  const ScopeIcon = command.scope === AgentScope.Project ? FolderIcon : GlobeIcon;
 
-                return (
-                  <div
-                    key={command.id}
-                    className={`rounded-2xl border border-v-light-border/80 dark:border-v-border/70 bg-v-light-surface dark:bg-v-mid-dark/90 p-4 shadow-[0_6px_20px_rgba(15,23,42,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:border-v-accent/60 transition-all duration-200 flex flex-col gap-3 ${
-                      isSelected ? 'ring-2 ring-v-accent/30 bg-v-accent/5' : ''
-                    }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleSelectOne(command.id)}
-                        aria-label={`Select ${command.name}`}
-                        className="h-4 w-4 bg-v-light-surface dark:bg-v-mid-dark border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent rounded mt-1"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-lg font-semibold font-mono text-v-light-text-primary dark:text-v-text-primary truncate" title={`/${command.name}`}>
-                              /{highlightText(command.name, searchQuery)}
-                            </p>
+                  return (
+                    <div
+                      key={command.id}
+                      className={`rounded-2xl border border-v-light-border/80 dark:border-v-border/70 bg-v-light-surface dark:bg-v-mid-dark/90 p-4 shadow-[0_6px_20px_rgba(15,23,42,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:border-v-accent/60 transition-all duration-200 flex flex-col gap-3 ${
+                        isSelected ? 'ring-2 ring-v-accent/30 bg-v-accent/5' : ''
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <label className="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleSelectOne(command.id)}
+                            aria-label={`Select ${command.name}`}
+                            className="h-4 w-4 mt-1 bg-v-light-surface dark:bg-v-mid-dark border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent rounded"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold font-mono text-v-light-text-primary dark:text-v-text-primary truncate" title={`/${command.name}`}>
+                                /{highlightText(command.name, searchQuery)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                              <ScopeIcon className="h-3.5 w-3.5" />
+                              <span>{command.scope === AgentScope.Project ? 'Project' : 'Global'}</span>
+                            </div>
                           </div>
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold flex-shrink-0 ${
-                              command.scope === AgentScope.Project
-                                ? 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-primary dark:text-v-text-primary'
-                                : 'bg-v-accent/10 text-v-accent'
-                            }`}
-                          >
-                            <ScopeIcon className="h-3.5 w-3.5" />
-                            {command.scope === AgentScope.Project ? 'Project' : 'Global'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-sm text-v-light-text-secondary dark:text-v-text-secondary line-clamp-2">
-                      {highlightText(command.description || 'No description', searchQuery)}
-                    </div>
-                    <div className="flex items-center justify-between gap-3 pt-2 border-t border-dashed border-v-light-border/70 dark:border-v-border/70">
-                      <button
-                        onClick={() => onEdit(command)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent whitespace-nowrap"
-                      >
-                        <EditIcon className="h-3.5 w-3.5" />
-                        Edit
-                      </button>
-                      <div className="flex items-center gap-2">
+                        </label>
                         <button
                           onClick={() => onToggleFavorite(command)}
-                          className={`inline-flex items-center justify-center h-8 w-8 rounded-md border transition-colors ${
+                          className={`flex items-center justify-center h-8 w-8 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-v-accent/50 focus:ring-offset-0 ${
                             command.isFavorite
-                              ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
-                              : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-accent'
+                              ? 'border-v-accent bg-v-accent/10 text-v-accent'
+                              : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent hover:border-v-accent/40'
                           }`}
                           title={command.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                         >
                           <StarIcon className="h-4 w-4" filled={command.isFavorite} />
+                        </button>
+                      </div>
+                      <div className="text-sm text-v-light-text-secondary dark:text-v-text-secondary line-clamp-2">
+                        {highlightText(command.description || 'No description', searchQuery)}
+                      </div>
+                      <div className="flex items-center justify-between gap-3 pt-2 border-t border-dashed border-v-light-border/70 dark:border-v-border/70">
+                        <button
+                          onClick={() => onEdit(command)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent whitespace-nowrap"
+                        >
+                          <EditIcon className="h-3.5 w-3.5" />
+                          Edit
                         </button>
                         <ActionMenu
                           command={command}
@@ -634,11 +652,12 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
                         />
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </>
+          )
         ) : (
           /* Table view */
           <div className="divide-y divide-v-light-border dark:divide-v-border">
@@ -687,75 +706,96 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
               </div>
             </div>
 
-            {/* Table rows */}
-            {filteredCommands.map(command => {
-              const simplifiedPath = command.path
-                .replace(/^\/Users\/([^/]+)/, '~')
-                .replace(/^C:\\Users\\([^\\]+)/, '~');
-              const isSelected = selectedCommandIds.has(command.id);
+            {/* Empty state or Table rows */}
+            {filteredCommands.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
+                <TerminalIcon className="w-12 h-12 mb-4 opacity-50" />
+                <p className="text-lg font-medium mb-2">No commands found</p>
+                <p className="text-sm mb-4">
+                  {searchQuery
+                    ? 'Try adjusting your search'
+                    : 'Create your first slash command'}
+                </p>
+                {!searchQuery && (
+                  <button
+                    onClick={onCreate}
+                    className="flex items-center gap-2 px-4 py-2 bg-v-accent text-white rounded-lg hover:bg-v-accent-dark transition-colors"
+                  >
+                    <PlusIcon className="w-4 h-4" />
+                    New Command
+                  </button>
+                )}
+              </div>
+            ) : (
+              filteredCommands.map(command => {
+                const simplifiedPath = command.path
+                  .replace(/^\/Users\/([^/]+)/, '~')
+                  .replace(/^C:\\Users\\([^\\]+)/, '~');
+                const isSelected = selectedCommandIds.has(command.id);
 
-              return (
-                <div
-                  key={command.id}
-                  className={`grid gap-4 px-4 py-3 items-center text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover/50 dark:hover:bg-v-light-dark/40 transition-colors group ${
-                    isSelected ? 'bg-v-accent/5' : ''
-                  }`}
-                  style={{ gridTemplateColumns: '40px minmax(0,1.5fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,2fr) 92px' }}
-                >
-                  <div className="flex items-center justify-center">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => handleSelectOne(command.id)}
-                      className="h-4 w-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0 cursor-pointer"
-                      aria-label={`Select ${command.name}`}
-                    />
+                return (
+                  <div
+                    key={command.id}
+                    className={`grid gap-4 px-4 py-3 items-center text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover/50 dark:hover:bg-v-light-dark/40 transition-colors group ${
+                      isSelected ? 'bg-v-accent/10' : ''
+                    }`}
+                    style={{ gridTemplateColumns: '40px minmax(0,1.5fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,2fr) 92px' }}
+                  >
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleSelectOne(command.id)}
+                        className="h-4 w-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0 cursor-pointer"
+                        aria-label={`Select ${command.name}`}
+                      />
+                    </div>
+                    <div className="font-semibold font-mono truncate">
+                      /{highlightText(command.name, searchQuery)}
+                    </div>
+                    <div className="relative group/path">
+                      <span className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate block">
+                        {simplifiedPath}
+                      </span>
+                      <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/path:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                        {command.path}
+                      </span>
+                    </div>
+                    <div>
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                        command.scope === AgentScope.Project
+                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300'
+                          : 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300'
+                      }`}>
+                        {command.scope}
+                      </span>
+                    </div>
+                    <div className="text-v-light-text-secondary dark:text-v-text-secondary truncate">
+                      {highlightText(command.description || 'No description', searchQuery)}
+                    </div>
+                    <div className="flex justify-end items-center gap-2">
+                      <button
+                        onClick={() => onToggleFavorite(command)}
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors ${
+                          command.isFavorite
+                            ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
+                            : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-accent'
+                        }`}
+                        title={command.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                      >
+                        <StarIcon className="h-4 w-4" filled={command.isFavorite} />
+                      </button>
+                      <ActionMenu
+                        command={command}
+                        onEdit={onEdit}
+                        onDuplicate={onDuplicate}
+                        onDelete={handleDeleteClick}
+                      />
+                    </div>
                   </div>
-                  <div className="font-semibold font-mono truncate">
-                    /{highlightText(command.name, searchQuery)}
-                  </div>
-                  <div className="relative group/path">
-                    <span className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate block">
-                      {simplifiedPath}
-                    </span>
-                    <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/path:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
-                      {command.path}
-                    </span>
-                  </div>
-                  <div>
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                      command.scope === AgentScope.Project
-                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300'
-                        : 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300'
-                    }`}>
-                      {command.scope}
-                    </span>
-                  </div>
-                  <div className="text-v-light-text-secondary dark:text-v-text-secondary truncate">
-                    {highlightText(command.description || 'No description', searchQuery)}
-                  </div>
-                  <div className="flex justify-end items-center gap-2">
-                    <button
-                      onClick={() => onToggleFavorite(command)}
-                      className={`inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors ${
-                        command.isFavorite
-                          ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
-                          : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-accent'
-                      }`}
-                      title={command.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                    >
-                      <StarIcon className="h-4 w-4" filled={command.isFavorite} />
-                    </button>
-                    <ActionMenu
-                      command={command}
-                      onEdit={onEdit}
-                      onDuplicate={onDuplicate}
-                      onDelete={handleDeleteClick}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         )}
       </div>

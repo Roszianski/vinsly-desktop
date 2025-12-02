@@ -13,6 +13,8 @@ import { ListIcon } from '../icons/ListIcon';
 import { GridIcon } from '../icons/GridIcon';
 import { LayersIcon } from '../icons/LayersIcon';
 import { TerminalIcon } from '../icons/TerminalIcon';
+import { ServerIcon } from '../icons/ServerIcon';
+import { LightningIcon } from '../icons/LightningIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
 import { DeleteIcon } from '../icons/DeleteIcon';
 import { DuplicateIcon } from '../icons/DuplicateIcon';
@@ -25,7 +27,30 @@ type LayoutMode = 'table' | 'grid';
 type Filter = 'All' | AgentScope;
 type SortCriteria = 'name-asc' | 'name-desc' | 'scope';
 
-const LAYOUT_STORAGE_KEY = 'vinsly-memory-list-layout';
+const LAYOUT_STORAGE_KEY = 'vinsly-list-layout';
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const highlightText = (text: string, term?: string) => {
+  if (!term?.trim()) return text;
+  const escaped = escapeRegExp(term.trim());
+  if (!escaped) return text;
+  const regex = new RegExp(`(${escaped})`, 'gi');
+  const parts = text.split(regex);
+  if (parts.length <= 1) return text;
+  return parts.map((part, index) =>
+    index % 2 === 1 ? (
+      <mark
+        key={`${part}-${index}`}
+        className="bg-yellow-200 dark:bg-yellow-700 text-v-dark dark:text-white rounded px-0.5"
+      >
+        {part}
+      </mark>
+    ) : (
+      part
+    )
+  );
+};
 
 // Action menu component for each row
 interface ActionMenuProps {
@@ -184,7 +209,9 @@ interface MemoryListScreenProps {
   onShowSkills: () => void;
   onShowMemory: () => void;
   onShowCommands: () => void;
-  activeView: 'subagents' | 'skills' | 'memory' | 'commands';
+  onShowMCP: () => void;
+  onShowHooks: () => void;
+  activeView: 'subagents' | 'skills' | 'memory' | 'commands' | 'mcp' | 'hooks';
 }
 
 export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
@@ -202,6 +229,8 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
   onShowSkills,
   onShowMemory,
   onShowCommands,
+  onShowMCP,
+  onShowHooks,
   activeView,
 }) => {
   const [filter, setFilter] = useState<Filter>('All');
@@ -345,6 +374,8 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
     { key: 'skills', label: 'Skills', icon: <LayersIcon className="h-4 w-4" />, action: onShowSkills },
     { key: 'memory', label: 'Memory', icon: <DocumentIcon className="h-4 w-4" />, action: onShowMemory },
     { key: 'commands', label: 'Commands', icon: <TerminalIcon className="h-4 w-4" />, action: onShowCommands },
+    { key: 'mcp', label: 'MCP', icon: <ServerIcon className="h-4 w-4" />, action: onShowMCP },
+    { key: 'hooks', label: 'Hooks', icon: <LightningIcon className="h-4 w-4" />, action: onShowHooks },
   ];
 
   // Get content preview (first non-empty line that's not a heading)
@@ -417,36 +448,36 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
             </React.Fragment>
           ))}
         </div>
-        <div className="flex items-center gap-1 border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark text-sm font-medium">
-          <button
-            type="button"
-            onClick={() => setLayoutMode('table')}
-            className={`px-3 py-1.5 flex items-center gap-1 transition-colors ${
-              layoutMode === 'table'
-                ? 'bg-v-accent/10 text-v-accent'
-                : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
-            }`}
-            aria-pressed={layoutMode === 'table'}
-            title="Row layout"
-          >
-            <ListIcon className="h-4 w-4" />
-            <span>Rows</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setLayoutMode('grid')}
-            className={`px-3 py-1.5 flex items-center gap-1 transition-colors ${
-              layoutMode === 'grid'
-                ? 'bg-v-accent/10 text-v-accent'
-                : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
-            }`}
-            aria-pressed={layoutMode === 'grid'}
-            title="Card layout"
-          >
-            <GridIcon className="h-4 w-4" />
-            <span>Cards</span>
-          </button>
-        </div>
+        {layoutLoaded && (
+          <div className="flex items-center border border-v-light-border dark:border-v-border rounded-md overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setLayoutMode('table')}
+              className={`p-2 transition-colors ${
+                layoutMode === 'table'
+                  ? 'bg-v-accent text-white'
+                  : 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
+              }`}
+              aria-pressed={layoutMode === 'table'}
+              title="Row layout"
+            >
+              <ListIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setLayoutMode('grid')}
+              className={`p-2 transition-colors ${
+                layoutMode === 'grid'
+                  ? 'bg-v-accent text-white'
+                  : 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
+              }`}
+              aria-pressed={layoutMode === 'grid'}
+              title="Card layout"
+            >
+              <GridIcon className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Toolbar */}
@@ -509,7 +540,7 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
               {onBulkDelete && (
                 <button
                   onClick={handleBulkDeleteClick}
-                  className="inline-flex h-10 items-center gap-2 px-3 text-sm font-semibold bg-v-danger hover:opacity-90 text-white rounded-md shadow-sm hover:shadow-md active:scale-95 transition-transform"
+                  className="inline-flex h-10 items-center gap-2 px-3 text-sm font-semibold border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-red-400 hover:text-red-500 rounded-md transition-colors"
                   title="Delete selected"
                 >
                   <DeleteIcon className="h-4 w-4" />
@@ -587,75 +618,82 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
           </div>
         ) : layoutMode === 'grid' ? (
           /* Grid view */
-          <div className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredMemories.map(memory => {
-                const displayName = getDisplayName(memory);
-                const wordCount = getWordCount(memory.content);
-                const preview = getContentPreview(memory.content);
-                const isSelected = selectedMemoryPaths.has(memory.path);
-                const ScopeIcon = memory.scope === AgentScope.Project ? FolderIcon : GlobeIcon;
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-v-light-border dark:border-v-border text-xs font-semibold uppercase tracking-wide text-v-light-text-secondary dark:text-v-text-secondary">
+              <div className="flex items-center gap-2">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  onChange={handleSelectAll}
+                  disabled={filteredMemories.length === 0}
+                  aria-label="Select all memories"
+                  className="h-4 w-4 bg-v-light-surface dark:bg-v-mid-dark border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent rounded"
+                />
+                <span>Select all</span>
+              </div>
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredMemories.map(memory => {
+                  const displayName = getDisplayName(memory);
+                  const wordCount = getWordCount(memory.content);
+                  const preview = getContentPreview(memory.content);
+                  const isSelected = selectedMemoryPaths.has(memory.path);
+                  const ScopeIcon = memory.scope === AgentScope.Project ? FolderIcon : GlobeIcon;
 
-                return (
-                  <div
-                    key={memory.path}
-                    className={`rounded-2xl border border-v-light-border/80 dark:border-v-border/70 bg-v-light-surface dark:bg-v-mid-dark/90 p-4 shadow-[0_6px_20px_rgba(15,23,42,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:border-v-accent/60 transition-all duration-200 flex flex-col gap-3 ${
-                      isSelected ? 'ring-2 ring-v-accent/30 bg-v-accent/5' : ''
-                    }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleSelectOne(memory.path)}
-                        aria-label={`Select ${displayName}`}
-                        className="h-4 w-4 bg-v-light-surface dark:bg-v-mid-dark border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent rounded mt-1"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary truncate" title={displayName}>
-                              {displayName}
-                            </p>
-                            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                              {wordCount} words
-                            </p>
+                  return (
+                    <div
+                      key={memory.path}
+                      className={`rounded-2xl border border-v-light-border/80 dark:border-v-border/70 bg-v-light-surface dark:bg-v-mid-dark/90 p-4 shadow-[0_6px_20px_rgba(15,23,42,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:border-v-accent/60 transition-all duration-200 flex flex-col gap-3 ${
+                        isSelected ? 'ring-2 ring-v-accent/30 bg-v-accent/5' : ''
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <label className="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleSelectOne(memory.path)}
+                            aria-label={`Select ${displayName}`}
+                            className="h-4 w-4 mt-1 bg-v-light-surface dark:bg-v-mid-dark border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent rounded"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary truncate" title={displayName}>
+                                {highlightText(displayName, searchQuery)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                              <ScopeIcon className="h-3.5 w-3.5" />
+                              <span>{memory.scope === AgentScope.Project ? 'Project' : 'Global'}</span>
+                              <span className="h-1 w-1 rounded-full bg-v-light-border dark:bg-v-border"></span>
+                              <span>{wordCount} words</span>
+                            </div>
                           </div>
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold flex-shrink-0 ${
-                              memory.scope === AgentScope.Project
-                                ? 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-primary dark:text-v-text-primary'
-                                : 'bg-v-accent/10 text-v-accent'
-                            }`}
-                          >
-                            <ScopeIcon className="h-3.5 w-3.5" />
-                            {memory.scope === AgentScope.Project ? 'Project' : 'Global'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-sm text-v-light-text-secondary dark:text-v-text-secondary line-clamp-2">
-                      {preview}
-                    </div>
-                    <div className="flex items-center justify-between gap-3 pt-2 border-t border-dashed border-v-light-border/70 dark:border-v-border/70">
-                      <button
-                        onClick={() => onEdit(memory)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent whitespace-nowrap"
-                      >
-                        <EditIcon className="h-3.5 w-3.5" />
-                        Edit
-                      </button>
-                      <div className="flex items-center gap-2">
+                        </label>
                         <button
                           onClick={() => onToggleFavorite(memory)}
-                          className={`inline-flex items-center justify-center h-8 w-8 rounded-md border transition-colors ${
+                          className={`flex items-center justify-center h-8 w-8 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-v-accent/50 focus:ring-offset-0 ${
                             memory.isFavorite
-                              ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
-                              : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-accent'
+                              ? 'border-v-accent bg-v-accent/10 text-v-accent'
+                              : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent hover:border-v-accent/40'
                           }`}
                           title={memory.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                         >
                           <StarIcon className="h-4 w-4" filled={memory.isFavorite} />
+                        </button>
+                      </div>
+                      <div className="text-sm text-v-light-text-secondary dark:text-v-text-secondary line-clamp-2">
+                        {preview}
+                      </div>
+                      <div className="flex items-center justify-between gap-3 pt-2 border-t border-dashed border-v-light-border/70 dark:border-v-border/70">
+                        <button
+                          onClick={() => onEdit(memory)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent whitespace-nowrap"
+                        >
+                          <EditIcon className="h-3.5 w-3.5" />
+                          Edit
                         </button>
                         <ActionMenu
                           memory={memory}
@@ -665,11 +703,11 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
                         />
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </>
         ) : (
           /* Table view */
           <div className="divide-y divide-v-light-border dark:divide-v-border">
@@ -732,7 +770,7 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
                 <div
                   key={memory.path}
                   className={`grid gap-4 px-4 py-3 items-center text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover/50 dark:hover:bg-v-light-dark/40 transition-colors group ${
-                    isSelected ? 'bg-v-accent/5' : ''
+                    isSelected ? 'bg-v-accent/10' : ''
                   }`}
                   style={{ gridTemplateColumns: '40px minmax(0,1.5fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,2fr) 92px' }}
                 >
@@ -746,7 +784,7 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
                     />
                   </div>
                   <div>
-                    <div className="font-semibold truncate">{displayName}</div>
+                    <div className="font-semibold truncate">{highlightText(displayName, searchQuery)}</div>
                     <div className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
                       {wordCount} words
                     </div>

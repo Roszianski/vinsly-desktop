@@ -8,6 +8,8 @@ import { DocumentIcon } from '../icons/DocumentIcon';
 import { ListIcon } from '../icons/ListIcon';
 import { LayersIcon } from '../icons/LayersIcon';
 import { TerminalIcon } from '../icons/TerminalIcon';
+import { ServerIcon } from '../icons/ServerIcon';
+import { LightningIcon } from '../icons/LightningIcon';
 
 interface MemoryScreenProps {
   globalMemory: ClaudeMemory | null;
@@ -20,6 +22,8 @@ interface MemoryScreenProps {
   onShowSkills: () => void;
   onShowMemory: () => void;
   onShowCommands: () => void;
+  onShowMCP: () => void;
+  onShowHooks: () => void;
 }
 
 // Simple markdown renderer for preview
@@ -107,6 +111,8 @@ export const MemoryScreen: React.FC<MemoryScreenProps> = ({
   onShowSkills,
   onShowMemory,
   onShowCommands,
+  onShowMCP,
+  onShowHooks,
 }) => {
   const currentMemory = activeScope === AgentScope.Global ? globalMemory : projectMemory;
   const [editContent, setEditContent] = useState('');
@@ -218,6 +224,8 @@ export const MemoryScreen: React.FC<MemoryScreenProps> = ({
     { key: 'skills', label: 'Skills', icon: <LayersIcon className="h-4 w-4" />, action: onShowSkills },
     { key: 'memory', label: 'Memory', icon: <DocumentIcon className="h-4 w-4" />, action: onShowMemory },
     { key: 'commands', label: 'Commands', icon: <TerminalIcon className="h-4 w-4" />, action: onShowCommands },
+    { key: 'mcp', label: 'MCP', icon: <ServerIcon className="h-4 w-4" />, action: onShowMCP },
+    { key: 'hooks', label: 'Hooks', icon: <LightningIcon className="h-4 w-4" />, action: onShowHooks },
   ];
 
   return (

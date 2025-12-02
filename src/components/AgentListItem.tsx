@@ -226,7 +226,7 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
             variants={listItem}
             initial="hidden"
             animate="visible"
-            className={`grid gap-4 items-center px-4 py-3 bg-v-light-surface hover:bg-v-light-hover dark:bg-v-mid-dark dark:hover:bg-v-light-dark transition-colors duration-200 ${isSelected ? 'bg-v-accent/10 border-l-4 border-l-v-accent' : 'border-l-4 border-l-transparent'}`}
+            className={`grid gap-4 items-center px-4 py-3 hover:bg-v-light-hover dark:hover:bg-v-light-dark transition-colors duration-200 ${isSelected ? 'bg-v-accent/10' : 'bg-v-light-surface dark:bg-v-mid-dark'}`}
             style={gridTemplateColumns ? { gridTemplateColumns } : undefined}
         >
             <div className="flex justify-center">

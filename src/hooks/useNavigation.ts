@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Agent, AgentScope, ClaudeMemory, Skill, SlashCommand } from '../types';
+import { MCPServer } from '../types/mcp';
+import { Hook, HookScope } from '../types/hooks';
 
 export type View =
   | 'subagents'
@@ -8,6 +10,8 @@ export type View =
   | 'analytics'
   | 'memory'
   | 'commands'
+  | 'mcp'
+  | 'hooks'
   | 'edit'
   | 'create'
   | 'duplicate'
@@ -16,9 +20,13 @@ export type View =
   | 'create-command'
   | 'edit-command'
   | 'create-memory'
-  | 'edit-memory';
+  | 'edit-memory'
+  | 'create-mcp'
+  | 'edit-mcp'
+  | 'create-hook'
+  | 'edit-hook';
 
-export type ListViewDestination = 'subagents' | 'team' | 'skills' | 'commands' | 'memory';
+export type ListViewDestination = 'subagents' | 'team' | 'skills' | 'commands' | 'memory' | 'mcp' | 'hooks';
 
 export interface UseNavigationResult {
   currentView: View;
@@ -26,6 +34,8 @@ export interface UseNavigationResult {
   selectedSkill: Skill | null;
   selectedCommand: SlashCommand | null;
   selectedMemory: ClaudeMemory | null;
+  selectedMCPServer: MCPServer | null;
+  selectedHook: Hook | null;
   returnDestination: ListViewDestination;
   navigateHome: () => void;
   navigateToEdit: (agent: Agent, from: 'subagents' | 'team') => void;
@@ -37,12 +47,17 @@ export interface UseNavigationResult {
   navigateToCommandCreate: () => void;
   navigateToMemoryEdit: (memory: ClaudeMemory) => void;
   navigateToMemoryCreate: () => void;
-  navigateToView: (view: 'subagents' | 'skills' | 'team' | 'analytics' | 'memory' | 'commands') => void;
+  navigateToMCPEdit: (server: MCPServer) => void;
+  navigateToMCPCreate: () => void;
+  navigateToHookEdit: (hook: Hook) => void;
+  navigateToHookCreate: () => void;
+  navigateToView: (view: 'subagents' | 'skills' | 'team' | 'analytics' | 'memory' | 'commands' | 'mcp' | 'hooks') => void;
   cancelEditing: () => void;
   createAgentTemplate: () => Agent;
   createSkillTemplate: () => Skill;
   createCommandTemplate: () => SlashCommand;
   createMemoryTemplate: () => ClaudeMemory;
+  createHookTemplate: () => Hook;
 }
 
 export function useNavigation(options?: { agents?: Agent[]; initialView?: View }): UseNavigationResult {
@@ -52,6 +67,8 @@ export function useNavigation(options?: { agents?: Agent[]; initialView?: View }
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
   const [selectedCommand, setSelectedCommand] = useState<SlashCommand | null>(null);
   const [selectedMemory, setSelectedMemory] = useState<ClaudeMemory | null>(null);
+  const [selectedMCPServer, setSelectedMCPServer] = useState<MCPServer | null>(null);
+  const [selectedHook, setSelectedHook] = useState<Hook | null>(null);
   const [returnDestination, setReturnDestination] = useState<ListViewDestination>('subagents');
 
   const createAgentTemplate = useCallback(
@@ -109,6 +126,19 @@ export function useNavigation(options?: { agents?: Agent[]; initialView?: View }
     []
   );
 
+  const createHookTemplate = useCallback(
+    (): Hook => ({
+      id: '',
+      name: '',
+      type: 'PreToolUse',
+      command: '',
+      scope: 'user',
+      sourcePath: '',
+      enabled: true,
+    }),
+    []
+  );
+
   const navigateHome = useCallback(() => {
     setCurrentView('subagents');
     setReturnDestination('subagents');
@@ -116,6 +146,8 @@ export function useNavigation(options?: { agents?: Agent[]; initialView?: View }
     setSelectedSkill(null);
     setSelectedCommand(null);
     setSelectedMemory(null);
+    setSelectedMCPServer(null);
+    setSelectedHook(null);
   }, []);
 
   const navigateToEdit = useCallback((agent: Agent, from: 'subagents' | 'team') => {
@@ -191,10 +223,34 @@ export function useNavigation(options?: { agents?: Agent[]; initialView?: View }
     setCurrentView('create-memory');
   }, [createMemoryTemplate]);
 
+  const navigateToMCPEdit = useCallback((server: MCPServer) => {
+    setSelectedMCPServer(server);
+    setReturnDestination('mcp');
+    setCurrentView('edit-mcp');
+  }, []);
+
+  const navigateToMCPCreate = useCallback(() => {
+    setSelectedMCPServer(null);
+    setReturnDestination('mcp');
+    setCurrentView('create-mcp');
+  }, []);
+
+  const navigateToHookEdit = useCallback((hook: Hook) => {
+    setSelectedHook(hook);
+    setReturnDestination('hooks');
+    setCurrentView('edit-hook');
+  }, []);
+
+  const navigateToHookCreate = useCallback(() => {
+    setSelectedHook(createHookTemplate());
+    setReturnDestination('hooks');
+    setCurrentView('create-hook');
+  }, [createHookTemplate]);
+
   const navigateToView = useCallback(
-    (view: 'subagents' | 'skills' | 'team' | 'analytics' | 'memory' | 'commands') => {
+    (view: 'subagents' | 'skills' | 'team' | 'analytics' | 'memory' | 'commands' | 'mcp' | 'hooks') => {
       setCurrentView(view);
-      if (view === 'subagents' || view === 'team' || view === 'skills' || view === 'commands' || view === 'memory') {
+      if (view === 'subagents' || view === 'team' || view === 'skills' || view === 'commands' || view === 'memory' || view === 'mcp' || view === 'hooks') {
         setReturnDestination(view);
       }
     },
@@ -207,6 +263,8 @@ export function useNavigation(options?: { agents?: Agent[]; initialView?: View }
     setSelectedSkill(null);
     setSelectedCommand(null);
     setSelectedMemory(null);
+    setSelectedMCPServer(null);
+    setSelectedHook(null);
   }, [returnDestination]);
 
   return {
@@ -215,6 +273,8 @@ export function useNavigation(options?: { agents?: Agent[]; initialView?: View }
     selectedSkill,
     selectedCommand,
     selectedMemory,
+    selectedMCPServer,
+    selectedHook,
     returnDestination,
     navigateHome,
     navigateToEdit,
@@ -226,11 +286,16 @@ export function useNavigation(options?: { agents?: Agent[]; initialView?: View }
     navigateToCommandCreate,
     navigateToMemoryEdit,
     navigateToMemoryCreate,
+    navigateToMCPEdit,
+    navigateToMCPCreate,
+    navigateToHookEdit,
+    navigateToHookCreate,
     navigateToView,
     cancelEditing,
     createAgentTemplate,
     createSkillTemplate,
     createCommandTemplate,
     createMemoryTemplate,
+    createHookTemplate,
   };
 }

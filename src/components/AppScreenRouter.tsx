@@ -23,7 +23,7 @@ interface AppScreenRouterProps {
 
   // Data
   agents: Agent[];
-  skills: Agent[];
+  skills: Skill[];
 
   // Agent handlers
   onCreateAgent: () => void;
@@ -54,6 +54,8 @@ interface AppScreenRouterProps {
   onShowAnalytics: () => void;
   onShowMemory: () => void;
   onShowCommands: () => void;
+  onShowMCP: () => void;
+  onShowHooks: () => void;
 
   // User info
   userDisplayName: string | null;
@@ -93,6 +95,8 @@ export function AppScreenRouter({
   onShowAnalytics,
   onShowMemory,
   onShowCommands,
+  onShowMCP,
+  onShowHooks,
   userDisplayName,
   isMacLike,
 }: AppScreenRouterProps) {
@@ -155,6 +159,8 @@ export function AppScreenRouter({
             onShowSkills={onShowSkills}
             onShowMemory={onShowMemory}
             onShowCommands={onShowCommands}
+            onShowMCP={onShowMCP}
+            onShowHooks={onShowHooks}
           />
         </motion.div>
       );
@@ -175,6 +181,8 @@ export function AppScreenRouter({
             onShowSkills={onShowSkills}
             onShowMemory={onShowMemory}
             onShowCommands={onShowCommands}
+            onShowMCP={onShowMCP}
+            onShowHooks={onShowHooks}
             onEdit={onEditAgent}
             onToggleFavorite={onToggleAgentFavorite}
             userName={userDisplayName || 'Your'}
@@ -204,6 +212,8 @@ export function AppScreenRouter({
             onShowSkills={onShowSkills}
             onShowMemory={onShowMemory}
             onShowCommands={onShowCommands}
+            onShowMCP={onShowMCP}
+            onShowHooks={onShowHooks}
             activeView="skills"
             onToggleFavorite={onToggleSkillFavorite}
           />
@@ -233,6 +243,8 @@ export function AppScreenRouter({
             onShowAnalytics={onShowAnalytics}
             onShowMemory={onShowMemory}
             onShowCommands={onShowCommands}
+            onShowMCP={onShowMCP}
+            onShowHooks={onShowHooks}
             activeView="subagents"
             onToggleFavorite={onToggleAgentFavorite}
             onImport={onImportAgents}

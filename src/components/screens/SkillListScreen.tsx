@@ -11,6 +11,8 @@ import { LayersIcon } from '../icons/LayersIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
 import { DocumentIcon } from '../icons/DocumentIcon';
 import { TerminalIcon } from '../icons/TerminalIcon';
+import { ServerIcon } from '../icons/ServerIcon';
+import { LightningIcon } from '../icons/LightningIcon';
 import { DeleteIcon } from '../icons/DeleteIcon';
 import { FolderIcon } from '../icons/FolderIcon';
 import { GlobeIcon } from '../icons/GlobeIcon';
@@ -25,7 +27,7 @@ type LayoutMode = 'table' | 'grid';
 type Filter = 'All' | AgentScope;
 type SortCriteria = 'name-asc' | 'name-desc' | 'scope';
 
-const LAYOUT_STORAGE_KEY = 'vinsly-skill-list-layout';
+const LAYOUT_STORAGE_KEY = 'vinsly-list-layout';
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const highlightText = (text: string, term?: string) => {
@@ -62,7 +64,9 @@ interface SkillListScreenProps {
   onShowSkills: () => void;
   onShowMemory: () => void;
   onShowCommands: () => void;
-  activeView: 'subagents' | 'skills' | 'memory' | 'commands';
+  onShowMCP: () => void;
+  onShowHooks: () => void;
+  activeView: 'subagents' | 'skills' | 'memory' | 'commands' | 'mcp' | 'hooks';
   onToggleFavorite: (skill: Skill) => void;
 }
 
@@ -79,6 +83,8 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
   onShowSkills,
   onShowMemory,
   onShowCommands,
+  onShowMCP,
+  onShowHooks,
   activeView,
   onToggleFavorite,
 }) => {
@@ -228,6 +234,8 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
         { key: 'skills', label: 'Skills', icon: <LayersIcon className="h-4 w-4" />, action: onShowSkills },
         { key: 'memory', label: 'Memory', icon: <DocumentIcon className="h-4 w-4" />, action: onShowMemory },
         { key: 'commands', label: 'Commands', icon: <TerminalIcon className="h-4 w-4" />, action: onShowCommands },
+        { key: 'mcp', label: 'MCP', icon: <ServerIcon className="h-4 w-4" />, action: onShowMCP },
+        { key: 'hooks', label: 'Hooks', icon: <LightningIcon className="h-4 w-4" />, action: onShowHooks },
       ].map((item, index, array) => (
         <React.Fragment key={item.key}>
           <button
@@ -265,7 +273,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
           </button>
           <button
             onClick={handleBulkDelete}
-            className="flex items-center gap-2 px-3 py-1.5 bg-v-danger hover:opacity-90 text-white font-semibold text-sm transition-transform duration-150 rounded-md shadow-sm hover:shadow-md active:scale-95"
+            className="flex items-center gap-2 px-3 py-1.5 border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-red-400 hover:text-red-500 font-semibold text-sm transition-colors duration-150 rounded-md"
           >
             <DeleteIcon className="h-4 w-4" />
             Delete Selected
@@ -344,18 +352,21 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
 
   const renderGrid = () => (
     <div className="space-y-2">
-      <div
-        className="hidden md:grid gap-4 px-4 py-2 border-b border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary text-[11px] uppercase font-bold tracking-[0.2em] items-center"
-        style={{ gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr)' }}
-      >
-        <span>Name</span>
-        <span>Description</span>
-        <span>Scope</span>
-        <span>Tools</span>
-        <span className="text-right pr-1.5">Actions</span>
-      </div>
-      <div className="md:hidden px-4 py-2 border-b border-v-light-border dark:border-v-border text-[11px] uppercase tracking-[0.25em] text-v-light-text-secondary dark:text-v-text-secondary">
-        Name • Description • Scope • Tools • Actions
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-v-light-border dark:border-v-border">
+        <div className="flex items-center gap-2">
+          <input
+            ref={selectAllCheckboxRef}
+            type="checkbox"
+            checked={areAllSelected}
+            onChange={handleSelectAll}
+            disabled={filteredSkills.length === 0}
+            aria-label="Select all skills"
+            className="h-4 w-4 bg-v-light-surface dark:bg-v-mid-dark border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent rounded"
+          />
+          <span className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
+            Select all
+          </span>
+        </div>
       </div>
       <div className="p-4">
         {filteredSkills.length === 0 ? (
@@ -487,39 +498,36 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         {renderViewSwitcher()}
-        <div
-          className="flex items-center gap-1 border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark text-sm font-medium"
-         
-        >
-          <button
-            type="button"
-            onClick={() => setLayoutMode('table')}
-            className={`px-3 py-1.5 flex items-center gap-1 transition-colors ${
-              layoutMode === 'table'
-                ? 'bg-v-accent/10 text-v-accent'
-                : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
-            }`}
-            aria-pressed={layoutMode === 'table'}
-            title="Row layout"
-          >
-            <ListIcon className="h-4 w-4" />
-            <span>Rows</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setLayoutMode('grid')}
-            className={`px-3 py-1.5 flex items-center gap-1 transition-colors ${
-              layoutMode === 'grid'
-                ? 'bg-v-accent/10 text-v-accent'
-                : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
-            }`}
-            aria-pressed={layoutMode === 'grid'}
-            title="Card layout"
-          >
-            <GridIcon className="h-4 w-4" />
-            <span>Cards</span>
-          </button>
-        </div>
+        {layoutLoaded && (
+          <div className="flex items-center border border-v-light-border dark:border-v-border rounded-md overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setLayoutMode('table')}
+              className={`p-2 transition-colors ${
+                layoutMode === 'table'
+                  ? 'bg-v-accent text-white'
+                  : 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
+              }`}
+              aria-pressed={layoutMode === 'table'}
+              title="Row layout"
+            >
+              <ListIcon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setLayoutMode('grid')}
+              className={`p-2 transition-colors ${
+                layoutMode === 'grid'
+                  ? 'bg-v-accent text-white'
+                  : 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
+              }`}
+              aria-pressed={layoutMode === 'grid'}
+              title="Card layout"
+            >
+              <GridIcon className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {renderToolbar()}
@@ -593,7 +601,7 @@ const SkillGridCard: React.FC<SkillGridCardProps> = ({
   );
 
   return (
-    <div className="rounded-2xl border border-v-light-border/80 dark:border-v-border/70 bg-v-light-surface dark:bg-v-mid-dark/90 p-4 shadow-[0_6px_20px_rgba(15,23,42,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:border-v-accent/60 transition-all duration-200 flex flex-col gap-3">
+    <div className={`rounded-2xl border border-v-light-border/80 dark:border-v-border/70 bg-v-light-surface dark:bg-v-mid-dark/90 p-4 shadow-[0_6px_20px_rgba(15,23,42,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:border-v-accent/60 transition-all duration-200 flex flex-col gap-3 ${isSelected ? 'ring-2 ring-v-accent/30 bg-v-accent/5' : ''}`}>
       <div className="flex items-start gap-2">
         <input
           type="checkbox"
@@ -624,10 +632,10 @@ const SkillGridCard: React.FC<SkillGridCardProps> = ({
             </span>
             <button
               onClick={onToggleFavorite}
-              className={`inline-flex items-center justify-center h-7 w-7 rounded-md border transition-colors ${
+              className={`flex-shrink-0 flex items-center justify-center h-8 w-8 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-v-accent/50 focus:ring-offset-0 ${
                 skill.isFavorite
-                  ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/20'
-                  : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent'
+                  ? 'border-v-accent bg-v-accent/10 text-v-accent'
+                  : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent hover:border-v-accent/40'
               }`}
               title={skill.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
               aria-label={skill.isFavorite ? 'Unpin skill' : 'Pin skill'}
@@ -766,7 +774,7 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
 
   return (
     <div
-      className={`grid gap-4 px-4 py-3 items-center text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover/50 dark:hover:bg-v-light-dark/40 transition-colors ${isSelected ? 'bg-v-accent/5' : ''}`}
+      className={`grid gap-4 px-4 py-3 items-center text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover/50 dark:hover:bg-v-light-dark/40 transition-colors ${isSelected ? 'bg-v-accent/10' : ''}`}
       style={{ gridTemplateColumns: '60px minmax(0,1.5fr) minmax(0,2fr) minmax(0,1.4fr) minmax(0,1.6fr) 140px' }}
     >
       <div className="flex justify-center">

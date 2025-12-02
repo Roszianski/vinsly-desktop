@@ -125,7 +125,7 @@ export const AgentGridCard: React.FC<AgentGridCardProps> = ({
   return (
     <div
       className={`relative rounded-2xl border border-v-light-border/80 dark:border-v-border/70 bg-v-light-surface dark:bg-v-mid-dark/90 p-4 shadow-[0_6px_20px_rgba(15,23,42,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:border-v-accent/60 transition-all duration-200 ${
-        isSelected ? 'ring-2 ring-v-accent' : ''
+        isSelected ? 'ring-2 ring-v-accent/30 bg-v-accent/5' : ''
       }`}
      
     >
@@ -157,7 +157,7 @@ export const AgentGridCard: React.FC<AgentGridCardProps> = ({
         <button
           type="button"
           onClick={() => onToggleFavorite(agent)}
-          className={`p-2 rounded-full border transition-colors ${
+          className={`flex items-center justify-center h-8 w-8 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-v-accent/50 focus:ring-offset-0 ${
             isFavorite
               ? 'border-v-accent bg-v-accent/10 text-v-accent'
               : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent hover:border-v-accent/40'

@@ -258,3 +258,229 @@ export async function importMemoriesArchive(
     project_path: projectPath,
   });
 }
+
+// ============================================================================
+// MCP Server Commands
+// ============================================================================
+
+export interface MCPServerConfigRaw {
+  type?: string;
+  url?: string;
+  command?: string;
+  args?: string[];
+  headers?: Record<string, string>;
+  env?: Record<string, string>;
+}
+
+export interface MCPConfigFileRaw {
+  mcpServers: Record<string, MCPServerConfigRaw>;
+}
+
+export interface MCPServerInfoRaw {
+  name: string;
+  server_type: string;
+  url?: string;
+  command?: string;
+  args?: string[];
+  headers?: Record<string, string>;
+  env?: Record<string, string>;
+  scope: string;
+  source_path: string;
+  enabled: boolean;
+}
+
+// List all MCP servers from user and project scopes
+export async function listMCPServers(projectPath?: string): Promise<MCPServerInfoRaw[]> {
+  return await invoke<MCPServerInfoRaw[]>('list_mcp_servers', {
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+// Read MCP config from a specific scope
+export async function readMCPConfig(
+  scope: 'user' | 'project' | 'local',
+  projectPath?: string
+): Promise<MCPConfigFileRaw> {
+  return await invoke<MCPConfigFileRaw>('read_mcp_config', {
+    scope,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+// Write MCP config to a specific scope
+export async function writeMCPConfig(
+  scope: 'user' | 'project' | 'local',
+  config: MCPConfigFileRaw,
+  projectPath?: string
+): Promise<string> {
+  return await invoke<string>('write_mcp_config', {
+    scope,
+    config,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+// Add a single MCP server to a config
+export async function addMCPServer(
+  scope: 'user' | 'project' | 'local',
+  name: string,
+  serverConfig: MCPServerConfigRaw,
+  projectPath?: string
+): Promise<string> {
+  return await invoke<string>('add_mcp_server', {
+    scope,
+    name,
+    serverConfig,
+    server_config: serverConfig,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+// Remove an MCP server from a config
+export async function removeMCPServer(
+  scope: 'user' | 'project' | 'local',
+  name: string,
+  projectPath?: string
+): Promise<string> {
+  return await invoke<string>('remove_mcp_server', {
+    scope,
+    name,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+// ============================================================================
+// Hooks Commands
+// ============================================================================
+
+export interface HookConfigRaw {
+  type: string;
+  matcher?: string;
+  command: string;
+  timeout?: number;
+}
+
+export interface HooksConfigFileRaw {
+  hooks: Record<string, HookConfigRaw[]>;
+}
+
+export interface HookInfoRaw {
+  id: string;
+  name: string;
+  event_type: string;
+  matcher?: string;
+  command: string;
+  timeout?: number;
+  scope: string;
+  source_path: string;
+  enabled: boolean;
+}
+
+// List all hooks from user and project scopes
+export async function listHooks(projectPath?: string): Promise<HookInfoRaw[]> {
+  return await invoke<HookInfoRaw[]>('list_hooks', {
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+// Read hooks config from a specific scope
+export async function readHooksConfig(
+  scope: 'user' | 'project' | 'local',
+  projectPath?: string
+): Promise<HooksConfigFileRaw> {
+  return await invoke<HooksConfigFileRaw>('read_hooks_config', {
+    scope,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+// Write hooks config to a specific scope
+export async function writeHooksConfig(
+  scope: 'user' | 'project' | 'local',
+  config: HooksConfigFileRaw,
+  projectPath?: string
+): Promise<string> {
+  return await invoke<string>('write_hooks_config', {
+    scope,
+    config,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+// Add a hook to a specific event type
+export async function addHook(
+  scope: 'user' | 'project' | 'local',
+  eventType: string,
+  hookConfig: HookConfigRaw,
+  projectPath?: string
+): Promise<string> {
+  return await invoke<string>('add_hook', {
+    scope,
+    eventType,
+    event_type: eventType,
+    hookConfig,
+    hook_config: hookConfig,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+// Remove a hook by event type and index
+export async function removeHook(
+  scope: 'user' | 'project' | 'local',
+  eventType: string,
+  hookIndex: number,
+  projectPath?: string
+): Promise<string> {
+  return await invoke<string>('remove_hook', {
+    scope,
+    eventType,
+    event_type: eventType,
+    hookIndex,
+    hook_index: hookIndex,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
+// ============================================================================
+// Claude Code Session Detection
+// ============================================================================
+
+export interface ClaudeSessionRaw {
+  pid: number;
+  working_directory: string;
+  start_time: number;
+  status: string;
+  cpu_usage?: number;
+  memory_usage?: number;
+  command_line?: string;
+}
+
+// Detect running Claude Code sessions
+export async function detectClaudeSessions(): Promise<ClaudeSessionRaw[]> {
+  return await invoke<ClaudeSessionRaw[]>('detect_claude_sessions');
+}
+
+// Open a directory in Terminal
+export async function openDirectoryInTerminal(path: string): Promise<void> {
+  return await invoke('open_directory_in_terminal', { path });
+}
+
+// Kill a Claude Code session by PID
+export async function killClaudeSession(pid: number): Promise<void> {
+  return await invoke('kill_claude_session', { pid });
+}
+
+// Open a file in the default text editor
+export async function openFileInDefaultEditor(path: string): Promise<void> {
+  return await invoke('open_file_in_default_editor', { path });
+}

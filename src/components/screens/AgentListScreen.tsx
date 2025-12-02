@@ -18,6 +18,8 @@ import { ChartIcon } from '../icons/ChartIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
 import { DocumentIcon } from '../icons/DocumentIcon';
 import { TerminalIcon } from '../icons/TerminalIcon';
+import { ServerIcon } from '../icons/ServerIcon';
+import { LightningIcon } from '../icons/LightningIcon';
 import { listContainer } from '../../animations';
 import { fuzzyMatch } from '../../utils/fuzzyMatch';
 import { exportAgentsAsZip } from '../../utils/agentExport';
@@ -39,7 +41,9 @@ interface AgentListScreenProps {
   onShowAnalytics: () => void;
   onShowMemory: () => void;
   onShowCommands: () => void;
-  activeView: 'subagents' | 'skills' | 'team' | 'analytics' | 'memory' | 'commands';
+  onShowMCP: () => void;
+  onShowHooks: () => void;
+  activeView: 'subagents' | 'skills' | 'team' | 'analytics' | 'memory' | 'commands' | 'mcp' | 'hooks';
   onToggleFavorite: (agent: Agent) => void;
   onImport?: (agents: Agent[], errors: string[]) => void;
   shortcutHint?: string;
@@ -49,7 +53,7 @@ type Filter = 'All' | AgentScope;
 type SortCriteria = 'name-asc' | 'name-desc' | 'scope' | 'model';
 type LayoutMode = 'table' | 'grid';
 
-const LAYOUT_STORAGE_KEY = 'vinsly-agent-list-layout';
+const LAYOUT_STORAGE_KEY = 'vinsly-list-layout';
 const DEFAULT_VIEW_KEY = 'vinsly-default-view';
 const VIRTUALIZATION_THRESHOLD = 100;
 const VIRTUALIZATION_BUFFER = 6;
@@ -71,6 +75,8 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
   onShowAnalytics,
   onShowMemory,
   onShowCommands,
+  onShowMCP,
+  onShowHooks,
   activeView,
   onToggleFavorite,
   onImport,
@@ -412,6 +418,18 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
               icon: <TerminalIcon className="h-4 w-4" />,
               action: onShowCommands,
             },
+            {
+              key: 'mcp',
+              label: 'MCP',
+              icon: <ServerIcon className="h-4 w-4" />,
+              action: onShowMCP,
+            },
+            {
+              key: 'hooks',
+              label: 'Hooks',
+              icon: <LightningIcon className="h-4 w-4" />,
+              action: onShowHooks,
+            },
           ].map((item, index, array) => (
             <React.Fragment key={item.key}>
               <button
@@ -451,37 +469,36 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center gap-1 border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark text-sm font-medium">
-          <button
-            type="button"
-            onClick={() => handleLayoutChange('table')}
-            className={`px-3 py-1.5 flex items-center gap-1 transition-colors ${
-              layoutMode === 'table'
-                ? 'bg-v-accent/10 text-v-accent'
-                : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
-            }`}
-            aria-pressed={layoutMode === 'table'}
-            title="Row layout"
-          >
-            <ListIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Rows</span>
-          </button>
-          <div className="w-px bg-v-light-border dark:bg-v-border opacity-50"></div>
-          <button
-            type="button"
-            onClick={() => handleLayoutChange('grid')}
-            className={`px-3 py-1.5 flex items-center gap-1 transition-colors ${
-              layoutMode === 'grid'
-                ? 'bg-v-accent/10 text-v-accent'
-                : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
-            }`}
-            aria-pressed={layoutMode === 'grid'}
-            title="Card layout"
-          >
-            <GridIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Cards</span>
-          </button>
-        </div>
+          {layoutLoaded && (
+            <div className="flex items-center border border-v-light-border dark:border-v-border rounded-md overflow-hidden">
+              <button
+                type="button"
+                onClick={() => handleLayoutChange('table')}
+                className={`p-2 transition-colors ${
+                  layoutMode === 'table'
+                    ? 'bg-v-accent text-white'
+                    : 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
+                }`}
+                aria-pressed={layoutMode === 'table'}
+                title="Row layout"
+              >
+                <ListIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLayoutChange('grid')}
+                className={`p-2 transition-colors ${
+                  layoutMode === 'grid'
+                    ? 'bg-v-accent text-white'
+                    : 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
+                }`}
+                aria-pressed={layoutMode === 'grid'}
+                title="Card layout"
+              >
+                <GridIcon className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -500,7 +517,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
                   </button>
                   <button
                       onClick={handleBulkDeleteClick}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-v-danger hover:opacity-90 text-white font-semibold text-sm transition-transform duration-150 rounded-md shadow-sm hover:shadow-md active:scale-95"
+                      className="flex items-center gap-2 px-3 py-1.5 border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-red-400 hover:text-red-500 font-semibold text-sm transition-colors duration-150 rounded-md"
                   >
                       <DeleteIcon className="h-4 w-4" />
                       Delete Selected

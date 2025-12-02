@@ -365,7 +365,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           : 'text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark'
                       }`}
                     >
-                      Agents & Scanning
+                      Scanning
                     </button>
                     <button
                       onClick={() => setActiveSection('permissions')}
@@ -633,10 +633,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {activeSection === 'scanning' && (
                     <div className="max-w-2xl">
                       <h3 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary mb-1">
-                        Agents & Scanning
+                        Scanning
                       </h3>
                       <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary mb-6">
-                        Configure how Vinsly discovers and monitors agent files
+                        Configure how Vinsly discovers and monitors Claude Code resources
                       </p>
 
                       {/* Auto-scan on Startup */}
@@ -644,10 +644,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div className="flex items-center justify-between p-4 bg-v-light-bg dark:bg-v-dark rounded-lg border border-v-light-border dark:border-v-border">
                           <div className="flex-1 mr-4">
                             <label className="block text-sm font-medium text-v-light-text-primary dark:text-v-text-primary mb-1">
-                              Auto-scan global agents
+                              Auto-scan on startup
                             </label>
                             <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                              Keep ~/.claude/agents in sync every time Vinsly launches
+                              Automatically scan for Claude Code resources when Vinsly launches
                             </p>
                           </div>
                           <button
@@ -661,31 +661,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             <span
                               className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
                                 localScanSettings.autoScanGlobalOnStartup ? 'translate-x-5' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                        </div>
-
-                        <div className="flex items-center justify-between p-4 bg-v-light-bg dark:bg-v-dark rounded-lg border border-v-light-border dark:border-v-border">
-                          <div className="flex-1 mr-4">
-                            <label className="block text-sm font-medium text-v-light-text-primary dark:text-v-text-primary mb-1">
-                              Auto-scan home directory
-                            </label>
-                            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                              Search your home directory for project folders containing `.claude/agents`
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => handleAutoScanHomeToggle(!localScanSettings.autoScanHomeDirectoryOnStartup)}
-                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-v-accent focus:ring-offset-2 ${
-                              localScanSettings.autoScanHomeDirectoryOnStartup ? 'bg-v-accent' : 'bg-v-light-border dark:bg-v-border'
-                            }`}
-                            role="switch"
-                            aria-checked={localScanSettings.autoScanHomeDirectoryOnStartup}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                localScanSettings.autoScanHomeDirectoryOnStartup ? 'translate-x-5' : 'translate-x-0'
                               }`}
                             />
                           </button>
@@ -706,7 +681,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           </button>
                         </div>
                         <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                          Vinsly will scan these directories for project-specific agents
+                          Vinsly will scan these directories for Claude Code resources (agents, skills, commands, etc.)
                         </p>
 
                         {/* Directory List */}
@@ -843,13 +818,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           <div className="border border-dashed border-v-light-border dark:border-v-border rounded-lg p-4 bg-v-light-bg/60 dark:bg-v-dark/60 space-y-2">
                             <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">Prefer selective access?</p>
                             <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                              Leave Full Disk Access off and add Desktop, Documents, or any other folder manually under Settings → Agents &amp; Scanning → Watched Directories.
+                              Leave Full Disk Access off and add Desktop, Documents, or any other folder manually under Settings → Scanning → Watched Directories.
                             </p>
                             <button
                               onClick={() => setActiveSection('scanning')}
                               className="inline-flex items-center text-xs font-semibold text-v-accent hover:text-v-accent-hover transition-colors"
                             >
-                              Go to Agents &amp; Scanning →
+                              Go to Scanning →
                             </button>
                           </div>
 

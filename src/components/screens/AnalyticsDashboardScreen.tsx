@@ -18,6 +18,8 @@ import { ChartIcon } from '../icons/ChartIcon';
 import { ListIcon } from '../icons/ListIcon';
 import { DocumentIcon } from '../icons/DocumentIcon';
 import { TerminalIcon } from '../icons/TerminalIcon';
+import { ServerIcon } from '../icons/ServerIcon';
+import { LightningIcon } from '../icons/LightningIcon';
 
 interface AnalyticsDashboardScreenProps {
   agents: Agent[];
@@ -25,6 +27,8 @@ interface AnalyticsDashboardScreenProps {
   onShowSkills: () => void;
   onShowMemory: () => void;
   onShowCommands: () => void;
+  onShowMCP: () => void;
+  onShowHooks: () => void;
 }
 
 export const AnalyticsDashboardScreen: React.FC<AnalyticsDashboardScreenProps> = ({
@@ -32,7 +36,9 @@ export const AnalyticsDashboardScreen: React.FC<AnalyticsDashboardScreenProps> =
   onShowList,
   onShowSkills,
   onShowMemory,
-  onShowCommands
+  onShowCommands,
+  onShowMCP,
+  onShowHooks
 }) => {
   const [complexityHeight, setComplexityHeight] = useState<number | null>(null);
   const [isLargeScreen, setIsLargeScreen] = useState(false);
@@ -112,6 +118,8 @@ export const AnalyticsDashboardScreen: React.FC<AnalyticsDashboardScreenProps> =
               { key: 'skills', label: 'Skills', icon: <LayersIcon className="h-4 w-4" />, action: onShowSkills },
               { key: 'memory', label: 'Memory', icon: <DocumentIcon className="h-4 w-4" />, action: onShowMemory },
               { key: 'commands', label: 'Commands', icon: <TerminalIcon className="h-4 w-4" />, action: onShowCommands },
+              { key: 'mcp', label: 'MCP', icon: <ServerIcon className="h-4 w-4" />, action: onShowMCP },
+              { key: 'hooks', label: 'Hooks', icon: <LightningIcon className="h-4 w-4" />, action: onShowHooks },
             ].map((item, index, array) => (
               <React.Fragment key={item.key}>
                 <button

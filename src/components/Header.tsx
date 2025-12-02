@@ -3,10 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Theme } from '../hooks/useTheme';
 import { LicenseInfo } from '../types/licensing';
 import { LoadAgentsOptions, ScanSettings } from '../types';
+import { ClaudeSession } from '../types/session';
 import { SunIcon } from './icons/SunIcon';
 import { MoonIcon } from './icons/MoonIcon';
+import { HelpIcon } from './icons/HelpIcon';
 import { SettingsModal } from './SettingsModal';
 import { ScanModal } from './ScanModal';
+import { SessionIndicator } from './SessionIndicator';
+import { SessionPanel } from './SessionPanel';
 import { iconButtonVariants, themeToggleVariants } from '../animations';
 import { getStorageItem, setStorageItem } from '../utils/storage';
 import { useToast } from '../contexts/ToastContext';
@@ -59,6 +63,12 @@ interface HeaderProps {
     isMacPlatform: boolean;
     macOSVersionMajor?: number | null;
     onShowKeyboardShortcuts?: () => void;
+    onOpenDocs?: () => void;
+    // Session detection props
+    sessions?: ClaudeSession[];
+    isLoadingSessions?: boolean;
+    sessionError?: string | null;
+    onRefreshSessions?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -85,10 +95,17 @@ export const Header: React.FC<HeaderProps> = ({
   isMacPlatform,
   macOSVersionMajor = null,
   onShowKeyboardShortcuts,
+  onOpenDocs,
+  // Session detection props
+  sessions = [],
+  isLoadingSessions = false,
+  sessionError = null,
+  onRefreshSessions,
 }) => {
   const { showToast } = useToast();
   const [showScanModal, setShowScanModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showSessionPanel, setShowSessionPanel] = useState(false);
   const [defaultTheme, setDefaultTheme] = useState<'system' | 'light' | 'dark'>('system');
   const [defaultView, setDefaultView] = useState<'table' | 'grid'>('table');
 
@@ -193,6 +210,13 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </button>
 
+            {/* Session Indicator */}
+            <SessionIndicator
+              sessions={sessions}
+              isLoading={isLoadingSessions}
+              onClick={() => setShowSessionPanel(true)}
+            />
+
             {/* Keyboard Shortcuts Button */}
             {onShowKeyboardShortcuts && (
               <button
@@ -204,6 +228,18 @@ export const Header: React.FC<HeaderProps> = ({
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
+              </button>
+            )}
+
+            {/* Help/Documentation Button */}
+            {onOpenDocs && (
+              <button
+                onClick={onOpenDocs}
+                className="p-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer"
+                aria-label="Open documentation"
+                title="Help & Documentation"
+              >
+                <HelpIcon className="h-5 w-5" />
               </button>
             )}
 
@@ -290,6 +326,16 @@ export const Header: React.FC<HeaderProps> = ({
         onScan={onScan}
         scanSettings={scanSettings}
         isMacPlatform={isMacPlatform}
+      />
+
+      {/* Session Panel */}
+      <SessionPanel
+        isOpen={showSessionPanel}
+        sessions={sessions}
+        isLoading={isLoadingSessions}
+        error={sessionError}
+        onClose={() => setShowSessionPanel(false)}
+        onRefresh={onRefreshSessions || (() => {})}
       />
     </header>
   );

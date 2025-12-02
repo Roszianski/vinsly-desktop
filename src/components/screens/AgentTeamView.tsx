@@ -11,6 +11,8 @@ import { LayersIcon } from '../icons/LayersIcon';
 import { GlobeIcon } from '../icons/GlobeIcon';
 import { DocumentIcon } from '../icons/DocumentIcon';
 import { TerminalIcon } from '../icons/TerminalIcon';
+import { ServerIcon } from '../icons/ServerIcon';
+import { LightningIcon } from '../icons/LightningIcon';
 import { FolderIcon } from '../icons/FolderIcon';
 import { InfoIcon } from '../icons/InfoIcon';
 import { useToast } from '../../contexts/ToastContext';
@@ -23,6 +25,8 @@ interface AgentTeamViewProps {
   onShowSkills: () => void;
   onShowMemory: () => void;
   onShowCommands: () => void;
+  onShowMCP: () => void;
+  onShowHooks: () => void;
   onEdit: (agent: Agent) => void;
   onToggleFavorite: (agent: Agent) => void;
   userName?: string;
@@ -129,6 +133,8 @@ export const AgentTeamView: React.FC<AgentTeamViewProps> = ({
   onShowSkills,
   onShowMemory,
   onShowCommands,
+  onShowMCP,
+  onShowHooks,
   onEdit,
   onToggleFavorite,
   userName = '',
@@ -960,6 +966,8 @@ useEffect(() => {
               { key: 'skills', label: 'Skills', icon: <LayersIcon className="h-4 w-4" />, action: onShowSkills },
               { key: 'memory', label: 'Memory', icon: <DocumentIcon className="h-4 w-4" />, action: onShowMemory },
               { key: 'commands', label: 'Commands', icon: <TerminalIcon className="h-4 w-4" />, action: onShowCommands },
+              { key: 'mcp', label: 'MCP', icon: <ServerIcon className="h-4 w-4" />, action: onShowMCP },
+              { key: 'hooks', label: 'Hooks', icon: <LightningIcon className="h-4 w-4" />, action: onShowHooks },
             ].map((item, index, array) => (
               <React.Fragment key={item.key}>
                 <button

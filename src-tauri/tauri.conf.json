@@ -39,7 +39,7 @@
             "store:allow-load",
             "store:allow-delete",
             "store:allow-clear",
-            "opener:allow-reveal-item-in-dir"
+            "opener:default"
           ]
         }
       ]

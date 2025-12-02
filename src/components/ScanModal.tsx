@@ -255,8 +255,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       showToast(
         'success',
         result.newCount === 0
-          ? 'Scan complete — no new agents found.'
-          : `Scan complete — ${result.newCount} new agent${result.newCount === 1 ? '' : 's'} found.`
+          ? 'Scan complete — no new resources found.'
+          : `Scan complete — ${result.newCount} new resource${result.newCount === 1 ? '' : 's'} found.`
       );
     } catch (error) {
       console.error('Scan failed:', error);
@@ -272,7 +272,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
   const sourcesSummary = [
     selectedSources.has('home') ? 'Home directory' : null,
     selectedSources.has('watched') ? `Watched folders (${watchedDirectoryCount || 0})` : null,
-    selectedSources.has('global') ? 'Global agents (~/.claude/agents)' : null,
+    selectedSources.has('global') ? 'Global resources (~/.claude/)' : null,
     customPaths.length > 0 ? `${customPaths.length} custom folder${customPaths.length === 1 ? '' : 's'}` : null,
   ]
     .filter(Boolean)
@@ -303,7 +303,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                   Scan
                 </p>
                 <h2 className="text-xl font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                  Find subagents and skills
+                  Find Claude Code resources
                 </h2>
               </div>
               <button
@@ -341,7 +341,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                     description={
                       watchedDirectoryCount > 0
                         ? `${watchedDirectoryCount} folder${watchedDirectoryCount === 1 ? '' : 's'}`
-                        : 'Add folders in Settings → Agents & Scanning'
+                        : 'Add folders in Settings → Scanning'
                     }
                     active={selectedSources.has('watched')}
                     disabled={watchedDirectoryCount === 0 || isScanning || isDiscoveringHome}
@@ -349,8 +349,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                   />
 
                   <SourceChip
-                    label="Global agents"
-                    description="~/.claude/agents"
+                    label="Global resources"
+                    description="~/.claude/"
                     active={selectedSources.has('global')}
                     disabled={isScanning || isDiscoveringHome}
                     onClick={() => toggleSource('global')}
@@ -427,14 +427,14 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                     Last scan
                   </p>
                   <p className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary mt-1">
-                    {lastResult.newCount} new agent{lastResult.newCount === 1 ? '' : 's'} • {lastResult.total} total files scanned
+                    {lastResult.newCount} new resource{lastResult.newCount === 1 ? '' : 's'} • {lastResult.total} total files scanned
                   </p>
                 </div>
               )}
 
               {(!isMacPlatform || !scanSettings.fullDiskAccessEnabled) && (
                 <div className="text-xs text-v-light-text-secondary dark:text-v-text-secondary border border-dashed border-v-light-border dark:border-v-border rounded-lg px-3 py-2">
-                  Prefer selective access? Leave Full Disk Access off and add Desktop, Documents, or any other folder manually under Settings → Agents & Scanning → Watched Directories.
+                  Prefer selective access? Leave Full Disk Access off and add Desktop, Documents, or any other folder manually under Settings → Scanning → Watched Directories.
                 </div>
               )}
             </div>

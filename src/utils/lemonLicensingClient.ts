@@ -45,11 +45,11 @@ export async function validateLicenseWithLemon(licenseKey: string): Promise<Lemo
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
+    // Log error details without exposing sensitive data
     console.error('[Lemon] licence validation failed', {
       status: response.status,
       statusText: response.statusText,
-      body: payload,
-      requestedLicenseKey: trimmedKey
+      errorCode: payload?.error ?? 'unknown'
     });
     const code = payload?.error ?? 'request_failed';
     return { valid: false, error: code ?? 'request_failed' };

@@ -13,6 +13,10 @@ import { MemoryScreen } from './components/screens/MemoryScreen';
 import { MemoryListScreen } from './components/screens/MemoryListScreen';
 import { SlashCommandListScreen } from './components/screens/SlashCommandListScreen';
 import { SlashCommandEditorScreen } from './components/screens/SlashCommandEditorScreen';
+import { MCPListScreen } from './components/screens/MCPListScreen';
+import { MCPEditorScreen } from './components/screens/MCPEditorScreen';
+import { HooksListScreen } from './components/screens/HooksListScreen';
+import { HooksEditorScreen } from './components/screens/HooksEditorScreen';
 import { Header } from './components/Header';
 import { pageTransition } from './animations';
 import { getStorageItem, setStorageItem, removeStorageItem } from './utils/storage';
@@ -40,9 +44,15 @@ import { useHistory } from './hooks/useHistory';
 import { useClaudeMemory } from './hooks/useClaudeMemory';
 import { useClaudeMemoryList } from './hooks/useClaudeMemoryList';
 import { useSlashCommands } from './hooks/useSlashCommands';
+import { useMCPServers } from './hooks/useMCPServers';
+import { useHooks } from './hooks/useHooks';
+import { useClaudeSessions } from './hooks/useClaudeSessions';
+import { MCPScope } from './types/mcp';
+import { Hook, HookScope } from './types/hooks';
 import { AgentCommands, SkillCommands } from './utils/workspaceCommands';
 import { useKeyboardShortcuts, CommonShortcuts } from './hooks/useKeyboardShortcuts';
 import { KeyboardShortcutsPanel } from './components/KeyboardShortcutsPanel';
+import { DocsPanel } from './components/DocsPanel';
 
 const AUTO_UPDATE_KEY = 'vinsly-auto-update-enabled';
 const UPDATE_SNOOZE_KEY = 'vinsly-update-snooze';
@@ -119,6 +129,8 @@ const App: React.FC = () => {
     selectedSkill,
     selectedCommand,
     selectedMemory,
+    selectedMCPServer,
+    selectedHook,
     navigateHome,
     navigateToEdit,
     navigateToCreate,
@@ -129,6 +141,10 @@ const App: React.FC = () => {
     navigateToCommandCreate,
     navigateToMemoryEdit,
     navigateToMemoryCreate,
+    navigateToMCPEdit,
+    navigateToMCPCreate,
+    navigateToHookEdit,
+    navigateToHookCreate,
     navigateToView,
     cancelEditing,
   } = navigation;
@@ -138,6 +154,7 @@ const App: React.FC = () => {
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
   const [updateSnooze, setUpdateSnooze] = useState<{ version: string; until: string } | null>(null);
   const [showShortcutsPanel, setShowShortcutsPanel] = useState(false);
+  const [showDocsPanel, setShowDocsPanel] = useState(false);
   const autoUpdateTimerRef = useRef<number | null>(null);
   const {
     isChecking: isCheckingUpdate,
@@ -183,6 +200,39 @@ const App: React.FC = () => {
     toggleFavorite: toggleCommandFavorite,
   } = slashCommands;
 
+  // MCP Servers support
+  const mcpServers = useMCPServers({ showToast });
+  const {
+    servers: mcpServersList,
+    isLoading: isMCPLoading,
+    loadServers: loadMCPServers,
+    addServer: addMCPServer,
+    updateServer: updateMCPServer,
+    removeServer: removeMCPServer,
+    toggleFavorite: toggleMCPFavorite,
+  } = mcpServers;
+
+  // Hooks support
+  const hooksHook = useHooks({ showToast });
+  const {
+    hooks: hooksList,
+    isLoading: isHooksLoading,
+    loadHooks,
+    addHook,
+    updateHook,
+    removeHook: removeHookCmd,
+    toggleFavorite: toggleHookFavorite,
+  } = hooksHook;
+
+  // Claude Code session detection
+  const claudeSessions = useClaudeSessions({ autoStart: true, pollInterval: 5000 });
+  const {
+    sessions,
+    isLoading: isSessionsLoading,
+    error: sessionsError,
+    refresh: refreshSessions,
+  } = claudeSessions;
+
   // Keyboard shortcuts for undo/redo and ESC to close panels
   useKeyboardShortcuts([
     CommonShortcuts.undo(
@@ -209,9 +259,11 @@ const App: React.FC = () => {
       () => {
         if (showShortcutsPanel) {
           setShowShortcutsPanel(false);
+        } else if (showDocsPanel) {
+          setShowDocsPanel(false);
         }
       },
-      showShortcutsPanel
+      showShortcutsPanel || showDocsPanel
     ),
   ]);
 
@@ -442,10 +494,16 @@ const App: React.FC = () => {
         includeGlobal: storedSettings.autoScanGlobalOnStartup,
         watchedDirectories: storedSettings.watchedDirectories,
       });
+
+      // Load MCP servers
+      await loadMCPServers();
+
+      // Load Hooks
+      await loadHooks();
     };
 
     initializeAgents();
-  }, [isActivationOpen, isOnboardingComplete, loadAgents, loadCommands, loadInitialSettings]);
+  }, [isActivationOpen, isOnboardingComplete, loadAgents, loadCommands, loadMCPServers, loadHooks, loadInitialSettings]);
 
   const handleNavigateHome = () => {
     navigateHome();
@@ -709,6 +767,61 @@ const App: React.FC = () => {
     navigateToView('commands');
   };
 
+  const handleShowMCP = () => {
+    navigateToView('mcp');
+  };
+
+  const handleCreateMCP = useCallback(() => {
+    navigateToMCPCreate();
+  }, [navigateToMCPCreate]);
+
+  const handleEditMCP = useCallback((server: typeof mcpServersList[0]) => {
+    navigateToMCPEdit(server);
+  }, [navigateToMCPEdit]);
+
+  const handleSaveMCP = async (server: typeof mcpServersList[0], projectPath?: string) => {
+    // Check if server exists to determine if adding or updating
+    const existingServer = mcpServersList.find(s => s.id === server.id);
+    if (existingServer) {
+      await updateMCPServer(server, projectPath);
+    } else {
+      await addMCPServer(server, projectPath);
+    }
+    cancelEditing();
+  };
+
+  const handleDeleteMCP = async (server: typeof mcpServersList[0]) => {
+    await removeMCPServer(server.name, server.scope);
+  };
+
+  // Hooks handlers
+  const handleShowHooks = () => {
+    navigateToView('hooks');
+  };
+
+  const handleCreateHook = useCallback(() => {
+    navigateToHookCreate();
+  }, [navigateToHookCreate]);
+
+  const handleEditHook = useCallback((hook: Hook) => {
+    navigateToHookEdit(hook);
+  }, [navigateToHookEdit]);
+
+  const handleSaveHook = async (hook: Hook, projectPath?: string) => {
+    // Check if hook exists to determine if adding or updating
+    const existingHook = hooksList.find(h => h.id === hook.id);
+    if (existingHook) {
+      await updateHook(hook, existingHook, projectPath);
+    } else {
+      await addHook(hook, projectPath);
+    }
+    cancelEditing();
+  };
+
+  const handleDeleteHook = async (hook: Hook) => {
+    await removeHookCmd(hook);
+  };
+
   const handleCreateCommand = useCallback(() => {
     navigateToCommandCreate();
   }, [navigateToCommandCreate]);
@@ -797,6 +910,25 @@ const App: React.FC = () => {
       showToast('error', 'Failed to import commands archive.');
     }
   }, [loadCommands, showToast]);
+
+  // Unified scan for all Claude Code resources
+  const handleFullScan = useCallback(async (options?: LoadAgentsOptions) => {
+    // Load agents/skills (returns { total, newCount })
+    const agentResult = await loadAgents(options);
+
+    // Also load other resources in parallel
+    await Promise.all([
+      loadCommands({
+        includeGlobal: options?.includeGlobal,
+        watchedDirectories: scanSettings.watchedDirectories,
+      }),
+      loadMCPServers(),
+      loadHooks(),
+      loadMemories(),
+    ]);
+
+    return agentResult;
+  }, [loadAgents, loadCommands, loadMCPServers, loadHooks, loadMemories, scanSettings.watchedDirectories]);
 
   const handleExportMemories = useCallback(async (memoriesToExport: typeof memories) => {
     if (memoriesToExport.length === 0) {
@@ -936,6 +1068,8 @@ const App: React.FC = () => {
               onShowSkills={handleShowSkills}
               onShowMemory={handleShowMemory}
               onShowCommands={handleShowCommands}
+              onShowMCP={handleShowMCP}
+              onShowHooks={handleShowHooks}
             />
           </motion.div>
         );
@@ -955,6 +1089,8 @@ const App: React.FC = () => {
               onShowSkills={handleShowSkills}
               onShowMemory={handleShowMemory}
               onShowCommands={handleShowCommands}
+              onShowMCP={handleShowMCP}
+              onShowHooks={handleShowHooks}
               onEdit={handleEditAgent}
               onToggleFavorite={handleToggleFavorite}
               userName={userDisplayName || 'Your'}
@@ -983,6 +1119,8 @@ const App: React.FC = () => {
               onShowSkills={handleShowSkills}
               onShowMemory={handleShowMemory}
               onShowCommands={handleShowCommands}
+              onShowMCP={handleShowMCP}
+              onShowHooks={handleShowHooks}
               activeView="skills"
               onToggleFavorite={handleToggleSkillFavorite}
             />
@@ -1010,6 +1148,8 @@ const App: React.FC = () => {
               onShowSkills={handleShowSkills}
               onShowMemory={handleShowMemory}
               onShowCommands={handleShowCommands}
+              onShowMCP={handleShowMCP}
+              onShowHooks={handleShowHooks}
               activeView="memory"
             />
           </motion.div>
@@ -1038,6 +1178,8 @@ const App: React.FC = () => {
               onShowSkills={handleShowSkills}
               onShowMemory={handleShowMemory}
               onShowCommands={handleShowCommands}
+              onShowMCP={handleShowMCP}
+              onShowHooks={handleShowHooks}
             />
           </motion.div>
         );
@@ -1063,6 +1205,8 @@ const App: React.FC = () => {
               onShowSkills={handleShowSkills}
               onShowMemory={handleShowMemory}
               onShowCommands={handleShowCommands}
+              onShowMCP={handleShowMCP}
+              onShowHooks={handleShowHooks}
               activeView="commands"
             />
           </motion.div>
@@ -1084,6 +1228,94 @@ const App: React.FC = () => {
               onCancel={cancelEditing}
               mode={currentView === 'create-command' ? 'create' : 'edit'}
               existingNames={commands.map(c => c.name).filter(name => name !== selectedCommand.name)}
+            />
+          </motion.div>
+        );
+      case 'mcp':
+        return (
+          <motion.div
+            key="mcp"
+            variants={pageTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <MCPListScreen
+              servers={mcpServersList}
+              onCreateServer={handleCreateMCP}
+              onEditServer={handleEditMCP}
+              onDeleteServer={handleDeleteMCP}
+              onToggleFavorite={toggleMCPFavorite}
+              onShowSubagents={handleShowSubagents}
+              onShowSkills={handleShowSkills}
+              onShowMemory={handleShowMemory}
+              onShowCommands={handleShowCommands}
+              onShowMCP={handleShowMCP}
+              onShowHooks={handleShowHooks}
+              activeView="mcp"
+            />
+          </motion.div>
+        );
+      case 'create-mcp':
+      case 'edit-mcp':
+        return (
+          <motion.div
+            key={`mcp-editor-${currentView}`}
+            variants={pageTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <MCPEditorScreen
+              server={selectedMCPServer}
+              onSave={handleSaveMCP}
+              onCancel={cancelEditing}
+              mode={currentView === 'create-mcp' ? 'create' : 'edit'}
+              existingNames={mcpServersList.map(s => s.name).filter(name => selectedMCPServer ? name !== selectedMCPServer.name : true)}
+            />
+          </motion.div>
+        );
+      case 'hooks':
+        return (
+          <motion.div
+            key="hooks"
+            variants={pageTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <HooksListScreen
+              hooks={hooksList}
+              onCreateHook={handleCreateHook}
+              onEditHook={handleEditHook}
+              onDeleteHook={handleDeleteHook}
+              onToggleFavorite={toggleHookFavorite}
+              onShowSubagents={handleShowSubagents}
+              onShowSkills={handleShowSkills}
+              onShowMemory={handleShowMemory}
+              onShowCommands={handleShowCommands}
+              onShowMCP={handleShowMCP}
+              onShowHooks={handleShowHooks}
+              activeView="hooks"
+            />
+          </motion.div>
+        );
+      case 'create-hook':
+      case 'edit-hook':
+        return (
+          <motion.div
+            key={`hook-editor-${currentView}`}
+            variants={pageTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <HooksEditorScreen
+              hook={selectedHook}
+              onSave={handleSaveHook}
+              onCancel={cancelEditing}
+              mode={currentView === 'create-hook' ? 'create' : 'edit'}
+              existingNames={hooksList.map(h => h.name).filter(name => selectedHook ? name !== selectedHook.name : true)}
             />
           </motion.div>
         );
@@ -1110,6 +1342,8 @@ const App: React.FC = () => {
               onShowAnalytics={handleShowAnalytics}
               onShowMemory={handleShowMemory}
               onShowCommands={handleShowCommands}
+              onShowMCP={handleShowMCP}
+              onShowHooks={handleShowHooks}
               activeView="subagents"
               onToggleFavorite={handleToggleFavorite}
               onImport={handleImportAgents}
@@ -1134,7 +1368,7 @@ const App: React.FC = () => {
         theme={theme}
         onToggleTheme={toggleThemeHook}
         onNavigateHome={handleNavigateHome}
-        onScan={loadAgents}
+        onScan={handleFullScan}
         isScanning={isScanBusy}
         licenseInfo={licenseInfo}
         onResetLicense={handleResetLicense}
@@ -1154,6 +1388,11 @@ const App: React.FC = () => {
         isMacPlatform={isMacLike}
         macOSVersionMajor={macOSMajorVersion}
         onShowKeyboardShortcuts={() => setShowShortcutsPanel(true)}
+        onOpenDocs={() => setShowDocsPanel(true)}
+        sessions={sessions}
+        isLoadingSessions={isSessionsLoading}
+        sessionError={sessionsError}
+        onRefreshSessions={refreshSessions}
       />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <AnimatePresence mode="wait">
@@ -1281,6 +1520,10 @@ const App: React.FC = () => {
         isOpen={showShortcutsPanel}
         onClose={() => setShowShortcutsPanel(false)}
         isMacLike={isMacLike}
+      />
+      <DocsPanel
+        isOpen={showDocsPanel}
+        onClose={() => setShowDocsPanel(false)}
       />
       <SplashScreen isVisible={showSplash} theme={theme} />
     </div>

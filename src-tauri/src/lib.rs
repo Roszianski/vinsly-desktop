@@ -134,17 +134,25 @@ fn validate_entry_name(name: &str) -> Result<(), String> {
 
 fn ensure_path_in_claude_subdir(path: &Path, subdir: &str) -> Result<(), String> {
     let canonical = fs::canonicalize(path).map_err(|e| format!("Failed to resolve path: {}", e))?;
+    let canonical_str = canonical.to_string_lossy();
 
-    let mut saw_claude = false;
-    for component in canonical.components() {
-        match component {
-            Component::Normal(part) => {
-                if saw_claude && part == subdir {
-                    return Ok(());
-                }
-                saw_claude = part == ".claude";
+    // Build the expected pattern
+    let pattern = format!(".claude/{}", subdir);
+
+    // Find the pattern in the path
+    if let Some(idx) = canonical_str.find(&pattern) {
+        // Verify this is a proper path component boundary (not partial match)
+        let before_ok = idx == 0 || canonical_str.as_bytes().get(idx - 1) == Some(&b'/');
+        let after_idx = idx + pattern.len();
+        let after_ok = after_idx >= canonical_str.len()
+            || canonical_str.as_bytes().get(after_idx) == Some(&b'/');
+
+        if before_ok && after_ok {
+            // Ensure no path traversal after the subdir (should already be resolved by canonicalize)
+            let remaining = &canonical_str[after_idx..];
+            if !remaining.contains("..") {
+                return Ok(());
             }
-            _ => saw_claude = false,
         }
     }
 
@@ -160,6 +168,71 @@ fn ensure_path_in_agents_dir(path: &Path) -> Result<(), String> {
 
 fn ensure_path_in_skills_dir(path: &Path) -> Result<(), String> {
     ensure_path_in_claude_subdir(path, "skills")
+}
+
+// Security constants for file operations
+const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024; // 10 MB
+const MAX_ARCHIVE_SIZE: u64 = 50 * 1024 * 1024; // 50 MB
+const MAX_ARCHIVE_FILES: usize = 1000;
+
+/// Validates and canonicalizes an input directory path.
+/// Rejects relative paths, symlinks, and paths that don't exist.
+fn validate_and_canonicalize_directory(dir: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(dir);
+
+    // Reject relative paths
+    if !path.is_absolute() {
+        return Err("Path must be absolute".to_string());
+    }
+
+    // Check path exists before canonicalization
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", dir));
+    }
+
+    // Check if the path itself is a symlink (before canonicalization)
+    let metadata = fs::symlink_metadata(&path)
+        .map_err(|e| format!("Cannot read path metadata: {}", e))?;
+    if metadata.file_type().is_symlink() {
+        return Err("Symlinks are not allowed".to_string());
+    }
+
+    // Canonicalize to resolve any ../ components
+    let canonical = fs::canonicalize(&path)
+        .map_err(|e| format!("Cannot resolve path: {}", e))?;
+
+    // Verify it's a directory
+    if !canonical.is_dir() {
+        return Err("Path is not a directory".to_string());
+    }
+
+    Ok(canonical)
+}
+
+/// Validates export destination paths.
+/// Rejects system directories and other sensitive locations.
+fn validate_export_destination(dest: &Path) -> Result<(), String> {
+    // Must be absolute
+    if !dest.is_absolute() {
+        return Err("Destination must be absolute path".to_string());
+    }
+
+    let dest_str = dest.to_string_lossy();
+
+    // Block system directories
+    let forbidden_prefixes = [
+        "/etc", "/usr", "/bin", "/sbin", "/var", "/lib",
+        "/System", "/Library", "/Applications",
+        "/private/etc", "/private/var",
+    ];
+
+    for prefix in forbidden_prefixes {
+        if dest_str.starts_with(prefix) {
+            return Err(format!("Cannot export to system directory: {}", prefix));
+        }
+    }
+
+    Ok(())
 }
 
 // Get the .claude/agents directory path based on scope
@@ -409,7 +482,10 @@ async fn delete_agent(path: String) -> Result<(), String> {
 // List agents from an arbitrary directory path
 #[tauri::command]
 async fn list_agents_from_directory(directory: String) -> Result<Vec<AgentFile>, String> {
-    let mut agents_path = PathBuf::from(directory);
+    // Validate and canonicalize the input directory
+    let canonical_dir = validate_and_canonicalize_directory(&directory)?;
+
+    let mut agents_path = canonical_dir;
     agents_path.push(".claude");
     agents_path.push("agents");
 
@@ -518,7 +594,10 @@ async fn delete_skill(path: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn list_skills_from_directory(directory: String) -> Result<Vec<SkillFile>, String> {
-    let mut skills_path = PathBuf::from(directory);
+    // Validate and canonicalize the input directory
+    let canonical_dir = validate_and_canonicalize_directory(&directory)?;
+
+    let mut skills_path = canonical_dir;
     skills_path.push(".claude");
     skills_path.push("skills");
 
@@ -597,10 +676,30 @@ fn next_available_skill_directory(base: &Path, desired: &str) -> PathBuf {
 }
 
 fn extract_skill_archive(archive_path: &Path, base: &Path) -> Result<PathBuf, String> {
+    // Check archive file size
+    let archive_metadata = fs::metadata(archive_path)
+        .map_err(|e| format!("Failed to read archive metadata: {}", e))?;
+    if archive_metadata.len() > MAX_ARCHIVE_SIZE {
+        return Err(format!(
+            "Archive too large: {} bytes (max {} bytes)",
+            archive_metadata.len(),
+            MAX_ARCHIVE_SIZE
+        ));
+    }
+
     let file =
         fs::File::open(archive_path).map_err(|e| format!("Failed to open archive: {}", e))?;
     let mut archive =
         ZipArchive::new(file).map_err(|e| format!("Failed to read archive: {}", e))?;
+
+    // Check file count limit
+    if archive.len() > MAX_ARCHIVE_FILES {
+        return Err(format!(
+            "Archive contains too many files: {} (max {})",
+            archive.len(),
+            MAX_ARCHIVE_FILES
+        ));
+    }
 
     let mut root_name: Option<String> = None;
     for i in 0..archive.len() {
@@ -657,8 +756,19 @@ fn extract_skill_archive(archive_path: &Path, base: &Path) -> Result<PathBuf, St
         let output_path = if relative_path.as_os_str().is_empty() {
             target_dir.clone()
         } else {
-            target_dir.join(relative_path)
+            target_dir.join(&relative_path)
         };
+
+        // Security check: ensure extracted path stays within target directory
+        // Use lexical check first (before creating the file)
+        let output_str = output_path.to_string_lossy();
+        let target_str = target_dir.to_string_lossy();
+        if !output_str.starts_with(target_str.as_ref()) {
+            return Err(format!(
+                "Archive contains path that escapes target directory: {:?}",
+                relative_path
+            ));
+        }
 
         if entry.is_dir() {
             fs::create_dir_all(&output_path)
@@ -692,7 +802,11 @@ async fn export_skill_directory(directory: String, destination: String) -> Resul
         return Err("Skill directory does not exist".to_string());
     }
 
-    let destination_path = PathBuf::from(destination);
+    let destination_path = PathBuf::from(&destination);
+
+    // Validate export destination
+    validate_export_destination(&destination_path)?;
+
     if let Some(parent) = destination_path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)
@@ -731,6 +845,10 @@ async fn export_skills_archive(directories: Vec<String>, destination: String) ->
     }
 
     let destination_path = PathBuf::from(&destination);
+
+    // Validate export destination
+    validate_export_destination(&destination_path)?;
+
     if let Some(parent) = destination_path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)
@@ -1195,7 +1313,10 @@ async fn delete_slash_command(path: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn list_slash_commands_from_directory(directory: String) -> Result<Vec<SlashCommandFile>, String> {
-    let mut commands_path = PathBuf::from(directory);
+    // Validate and canonicalize the input directory
+    let canonical_dir = validate_and_canonicalize_directory(&directory)?;
+
+    let mut commands_path = canonical_dir;
     commands_path.push(".claude");
     commands_path.push("commands");
 
@@ -1242,6 +1363,10 @@ async fn export_slash_commands_archive(paths: Vec<String>, destination: String) 
     }
 
     let destination_path = PathBuf::from(&destination);
+
+    // Validate export destination
+    validate_export_destination(&destination_path)?;
+
     if let Some(parent) = destination_path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)
@@ -1353,6 +1478,10 @@ async fn export_memories_archive(paths: Vec<String>, destination: String) -> Res
     }
 
     let destination_path = PathBuf::from(&destination);
+
+    // Validate export destination
+    validate_export_destination(&destination_path)?;
+
     if let Some(parent) = destination_path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent)
@@ -1493,6 +1622,672 @@ async fn import_memories_archive(
     Ok(imported_paths)
 }
 
+// ============================================================================
+// MCP Server Configuration Commands
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MCPServerConfig {
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    server_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    args: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    headers: Option<std::collections::HashMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    env: Option<std::collections::HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct MCPConfigFile {
+    #[serde(rename = "mcpServers", default)]
+    mcp_servers: std::collections::HashMap<String, MCPServerConfig>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct MCPServerInfo {
+    name: String,
+    server_type: String,
+    url: Option<String>,
+    command: Option<String>,
+    args: Option<Vec<String>>,
+    headers: Option<std::collections::HashMap<String, String>>,
+    env: Option<std::collections::HashMap<String, String>>,
+    scope: String,
+    source_path: String,
+    enabled: bool,
+}
+
+fn get_mcp_config_path(scope: &str, project_path: Option<String>) -> Result<PathBuf, String> {
+    match scope {
+        "user" => {
+            let home_dir =
+                dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+            Ok(home_dir.join(".claude").join("mcp.json"))
+        }
+        "project" => {
+            if let Some(proj_path) = project_path {
+                Ok(PathBuf::from(proj_path).join(".mcp.json"))
+            } else {
+                Err("Project scope requires a project_path parameter".to_string())
+            }
+        }
+        "local" => {
+            if let Some(proj_path) = project_path {
+                Ok(PathBuf::from(proj_path)
+                    .join(".claude")
+                    .join("settings.local.json"))
+            } else {
+                let home_dir =
+                    dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+                Ok(home_dir.join(".claude").join("settings.local.json"))
+            }
+        }
+        _ => Err(format!("Invalid MCP scope: {}", scope)),
+    }
+}
+
+fn read_mcp_config_from_file(path: &Path) -> Result<MCPConfigFile, String> {
+    if !path.exists() {
+        return Ok(MCPConfigFile::default());
+    }
+
+    let content = fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read MCP config file: {}", e))?;
+
+    if content.trim().is_empty() {
+        return Ok(MCPConfigFile::default());
+    }
+
+    serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse MCP config: {}", e))
+}
+
+fn write_mcp_config_to_file(path: &Path, config: &MCPConfigFile) -> Result<(), String> {
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|e| format!("Failed to serialize MCP config: {}", e))?;
+
+    fs::write(path, content)
+        .map_err(|e| format!("Failed to write MCP config file: {}", e))?;
+
+    Ok(())
+}
+
+fn infer_server_type(config: &MCPServerConfig) -> String {
+    if let Some(ref t) = config.server_type {
+        return t.clone();
+    }
+    if config.command.is_some() {
+        return "stdio".to_string();
+    }
+    "http".to_string()
+}
+
+#[tauri::command]
+async fn list_mcp_servers(project_path: Option<String>) -> Result<Vec<MCPServerInfo>, String> {
+    let mut servers = Vec::new();
+
+    // Read user-level config (~/.claude/mcp.json)
+    let user_path = get_mcp_config_path("user", None)?;
+    if let Ok(config) = read_mcp_config_from_file(&user_path) {
+        for (name, server_config) in config.mcp_servers {
+            servers.push(MCPServerInfo {
+                name: name.clone(),
+                server_type: infer_server_type(&server_config),
+                url: server_config.url,
+                command: server_config.command,
+                args: server_config.args,
+                headers: server_config.headers,
+                env: server_config.env,
+                scope: "user".to_string(),
+                source_path: user_path.to_string_lossy().to_string(),
+                enabled: true,
+            });
+        }
+    }
+
+    // Read project-level config (.mcp.json) if project_path provided
+    if let Some(ref proj_path) = project_path {
+        let project_config_path = get_mcp_config_path("project", Some(proj_path.clone()))?;
+        if let Ok(config) = read_mcp_config_from_file(&project_config_path) {
+            for (name, server_config) in config.mcp_servers {
+                servers.push(MCPServerInfo {
+                    name: name.clone(),
+                    server_type: infer_server_type(&server_config),
+                    url: server_config.url,
+                    command: server_config.command,
+                    args: server_config.args,
+                    headers: server_config.headers,
+                    env: server_config.env,
+                    scope: "project".to_string(),
+                    source_path: project_config_path.to_string_lossy().to_string(),
+                    enabled: true,
+                });
+            }
+        }
+    }
+
+    Ok(servers)
+}
+
+#[tauri::command]
+async fn read_mcp_config(
+    scope: String,
+    project_path: Option<String>,
+) -> Result<MCPConfigFile, String> {
+    let config_path = get_mcp_config_path(&scope, project_path)?;
+    read_mcp_config_from_file(&config_path)
+}
+
+#[tauri::command]
+async fn write_mcp_config(
+    scope: String,
+    config: MCPConfigFile,
+    project_path: Option<String>,
+) -> Result<String, String> {
+    let config_path = get_mcp_config_path(&scope, project_path)?;
+    write_mcp_config_to_file(&config_path, &config)?;
+    Ok(config_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn add_mcp_server(
+    scope: String,
+    name: String,
+    server_config: MCPServerConfig,
+    project_path: Option<String>,
+) -> Result<String, String> {
+    // Validate server name
+    if name.trim().is_empty() {
+        return Err("Server name cannot be empty".to_string());
+    }
+
+    let config_path = get_mcp_config_path(&scope, project_path)?;
+    let mut config = read_mcp_config_from_file(&config_path)?;
+
+    // Add the new server
+    config.mcp_servers.insert(name, server_config);
+
+    write_mcp_config_to_file(&config_path, &config)?;
+    Ok(config_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn remove_mcp_server(
+    scope: String,
+    name: String,
+    project_path: Option<String>,
+) -> Result<String, String> {
+    let config_path = get_mcp_config_path(&scope, project_path)?;
+    let mut config = read_mcp_config_from_file(&config_path)?;
+
+    if config.mcp_servers.remove(&name).is_none() {
+        return Err(format!("Server '{}' not found in {} scope", name, scope));
+    }
+
+    write_mcp_config_to_file(&config_path, &config)?;
+    Ok(config_path.to_string_lossy().to_string())
+}
+
+// ============================================================================
+// Hooks Configuration Commands
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct HookConfig {
+    #[serde(rename = "type")]
+    event_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    matcher: Option<String>,
+    command: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timeout: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct HooksConfigFile {
+    #[serde(default)]
+    hooks: std::collections::HashMap<String, Vec<HookConfig>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct HookInfo {
+    id: String,
+    name: String,
+    event_type: String,
+    matcher: Option<String>,
+    command: String,
+    timeout: Option<u64>,
+    scope: String,
+    source_path: String,
+    enabled: bool,
+}
+
+fn get_hooks_config_path(scope: &str, project_path: Option<String>) -> Result<PathBuf, String> {
+    match scope {
+        "user" => {
+            let home_dir =
+                dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+            Ok(home_dir.join(".claude").join("settings.json"))
+        }
+        "project" => {
+            if let Some(proj_path) = project_path {
+                Ok(PathBuf::from(proj_path).join(".claude").join("settings.json"))
+            } else {
+                Err("Project scope requires a project_path parameter".to_string())
+            }
+        }
+        "local" => {
+            if let Some(proj_path) = project_path {
+                Ok(PathBuf::from(proj_path)
+                    .join(".claude")
+                    .join("settings.local.json"))
+            } else {
+                let home_dir =
+                    dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+                Ok(home_dir.join(".claude").join("settings.local.json"))
+            }
+        }
+        _ => Err(format!("Invalid hooks scope: {}", scope)),
+    }
+}
+
+fn read_hooks_from_settings_file(path: &Path) -> Result<HooksConfigFile, String> {
+    if !path.exists() {
+        return Ok(HooksConfigFile::default());
+    }
+
+    let content = fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read hooks config file: {}", e))?;
+
+    if content.trim().is_empty() {
+        return Ok(HooksConfigFile::default());
+    }
+
+    // Parse the full settings file and extract hooks
+    let full_settings: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse settings file: {}", e))?;
+
+    let hooks_value = full_settings.get("hooks").cloned().unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    let hooks: std::collections::HashMap<String, Vec<HookConfig>> = serde_json::from_value(hooks_value)
+        .unwrap_or_default();
+
+    Ok(HooksConfigFile { hooks })
+}
+
+fn write_hooks_to_settings_file(path: &Path, hooks_config: &HooksConfigFile) -> Result<(), String> {
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+
+    // Read existing settings to preserve other fields
+    let mut full_settings: serde_json::Value = if path.exists() {
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read existing settings: {}", e))?;
+        if content.trim().is_empty() {
+            serde_json::Value::Object(serde_json::Map::new())
+        } else {
+            serde_json::from_str(&content)
+                .map_err(|e| format!("Failed to parse existing settings: {}", e))?
+        }
+    } else {
+        serde_json::Value::Object(serde_json::Map::new())
+    };
+
+    // Update hooks field
+    let hooks_value = serde_json::to_value(&hooks_config.hooks)
+        .map_err(|e| format!("Failed to serialize hooks: {}", e))?;
+
+    if let serde_json::Value::Object(ref mut map) = full_settings {
+        map.insert("hooks".to_string(), hooks_value);
+    }
+
+    let content = serde_json::to_string_pretty(&full_settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+
+    fs::write(path, content)
+        .map_err(|e| format!("Failed to write settings file: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn list_hooks(project_path: Option<String>) -> Result<Vec<HookInfo>, String> {
+    let mut hooks = Vec::new();
+    let mut hook_index = 0;
+
+    // Read user-level config (~/.claude/settings.json)
+    let user_path = get_hooks_config_path("user", None)?;
+    if let Ok(config) = read_hooks_from_settings_file(&user_path) {
+        for (event_type, event_hooks) in config.hooks {
+            for hook_config in event_hooks {
+                let name = format!("{}-hook-{}", event_type.to_lowercase(), hook_index);
+                hooks.push(HookInfo {
+                    id: format!("user:{}:{}", name, hook_index),
+                    name: name.clone(),
+                    event_type: event_type.clone(),
+                    matcher: hook_config.matcher,
+                    command: hook_config.command,
+                    timeout: hook_config.timeout,
+                    scope: "user".to_string(),
+                    source_path: user_path.to_string_lossy().to_string(),
+                    enabled: true,
+                });
+                hook_index += 1;
+            }
+        }
+    }
+
+    // Read project-level config (.claude/settings.json) if project_path provided
+    if let Some(ref proj_path) = project_path {
+        let project_config_path = get_hooks_config_path("project", Some(proj_path.clone()))?;
+        if let Ok(config) = read_hooks_from_settings_file(&project_config_path) {
+            for (event_type, event_hooks) in config.hooks {
+                for hook_config in event_hooks {
+                    let name = format!("{}-hook-{}", event_type.to_lowercase(), hook_index);
+                    hooks.push(HookInfo {
+                        id: format!("project:{}:{}", name, hook_index),
+                        name: name.clone(),
+                        event_type: event_type.clone(),
+                        matcher: hook_config.matcher,
+                        command: hook_config.command,
+                        timeout: hook_config.timeout,
+                        scope: "project".to_string(),
+                        source_path: project_config_path.to_string_lossy().to_string(),
+                        enabled: true,
+                    });
+                    hook_index += 1;
+                }
+            }
+        }
+
+        // Also check local settings
+        let local_config_path = get_hooks_config_path("local", Some(proj_path.clone()))?;
+        if let Ok(config) = read_hooks_from_settings_file(&local_config_path) {
+            for (event_type, event_hooks) in config.hooks {
+                for hook_config in event_hooks {
+                    let name = format!("{}-hook-{}", event_type.to_lowercase(), hook_index);
+                    hooks.push(HookInfo {
+                        id: format!("local:{}:{}", name, hook_index),
+                        name: name.clone(),
+                        event_type: event_type.clone(),
+                        matcher: hook_config.matcher,
+                        command: hook_config.command,
+                        timeout: hook_config.timeout,
+                        scope: "local".to_string(),
+                        source_path: local_config_path.to_string_lossy().to_string(),
+                        enabled: true,
+                    });
+                    hook_index += 1;
+                }
+            }
+        }
+    }
+
+    Ok(hooks)
+}
+
+#[tauri::command]
+async fn read_hooks_config(
+    scope: String,
+    project_path: Option<String>,
+) -> Result<HooksConfigFile, String> {
+    let config_path = get_hooks_config_path(&scope, project_path)?;
+    read_hooks_from_settings_file(&config_path)
+}
+
+#[tauri::command]
+async fn write_hooks_config(
+    scope: String,
+    config: HooksConfigFile,
+    project_path: Option<String>,
+) -> Result<String, String> {
+    let config_path = get_hooks_config_path(&scope, project_path)?;
+    write_hooks_to_settings_file(&config_path, &config)?;
+    Ok(config_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn add_hook(
+    scope: String,
+    event_type: String,
+    hook_config: HookConfig,
+    project_path: Option<String>,
+) -> Result<String, String> {
+    // Validate hook
+    if hook_config.command.trim().is_empty() {
+        return Err("Hook command cannot be empty".to_string());
+    }
+
+    let config_path = get_hooks_config_path(&scope, project_path)?;
+    let mut config = read_hooks_from_settings_file(&config_path)?;
+
+    // Add the hook to the appropriate event type array
+    config.hooks
+        .entry(event_type)
+        .or_insert_with(Vec::new)
+        .push(hook_config);
+
+    write_hooks_to_settings_file(&config_path, &config)?;
+    Ok(config_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn remove_hook(
+    scope: String,
+    event_type: String,
+    hook_index: usize,
+    project_path: Option<String>,
+) -> Result<String, String> {
+    let config_path = get_hooks_config_path(&scope, project_path)?;
+    let mut config = read_hooks_from_settings_file(&config_path)?;
+
+    if let Some(hooks) = config.hooks.get_mut(&event_type) {
+        if hook_index < hooks.len() {
+            hooks.remove(hook_index);
+            // Remove the event type key if no hooks remain
+            if hooks.is_empty() {
+                config.hooks.remove(&event_type);
+            }
+        } else {
+            return Err(format!("Hook index {} out of range", hook_index));
+        }
+    } else {
+        return Err(format!("No hooks found for event type '{}'", event_type));
+    }
+
+    write_hooks_to_settings_file(&config_path, &config)?;
+    Ok(config_path.to_string_lossy().to_string())
+}
+
+// ============================================================================
+// Claude Code Session Detection Commands
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ClaudeSessionInfo {
+    pid: u32,
+    working_directory: String,
+    start_time: u64,
+    status: String,
+    cpu_usage: Option<f32>,
+    memory_usage: Option<u64>,
+    command_line: Option<String>,
+}
+
+#[tauri::command]
+async fn detect_claude_sessions() -> Result<Vec<ClaudeSessionInfo>, String> {
+    use sysinfo::{ProcessRefreshKind, RefreshKind, System};
+
+    let mut sys = System::new_with_specifics(
+        RefreshKind::new().with_processes(ProcessRefreshKind::everything())
+    );
+    sys.refresh_processes();
+
+    let mut sessions = Vec::new();
+
+    for (pid, process) in sys.processes() {
+        let name = process.name().to_lowercase();
+        let cmd_str = process.cmd().iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase();
+
+        // Look for claude code processes
+        // Claude Code runs as node with specific command patterns
+        let is_claude_code = name.contains("claude") ||
+            cmd_str.contains("claude-code") ||
+            cmd_str.contains("@anthropic/claude") ||
+            (name.contains("node") && cmd_str.contains("claude"));
+
+        if is_claude_code {
+            let cwd = process.cwd()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+
+            let start_time = process.start_time();
+            let cpu = process.cpu_usage();
+            let memory = process.memory();
+
+            // Determine status based on CPU usage
+            let status = if cpu > 5.0 {
+                "active"
+            } else {
+                "idle"
+            };
+
+            sessions.push(ClaudeSessionInfo {
+                pid: pid.as_u32(),
+                working_directory: cwd,
+                start_time,
+                status: status.to_string(),
+                cpu_usage: Some(cpu),
+                memory_usage: Some(memory),
+                command_line: Some(cmd_str),
+            });
+        }
+    }
+
+    Ok(sessions)
+}
+
+// Session action commands
+#[tauri::command]
+async fn open_directory_in_terminal(path: String) -> Result<(), String> {
+    use std::process::Command;
+
+    let expanded = expand_path(&path)?;
+    if !expanded.exists() {
+        return Err(format!("Directory does not exist: {}", path));
+    }
+    if !expanded.is_dir() {
+        return Err("Path is not a directory".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // Use AppleScript to open Terminal at the specified directory
+        let script = format!(
+            r#"tell application "Terminal"
+                activate
+                do script "cd '{}'"
+            end tell"#,
+            expanded.display()
+        );
+
+        Command::new("osascript")
+            .args(["-e", &script])
+            .status()
+            .map_err(|e| format!("Failed to open terminal: {}", e))?;
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        return Err("open_directory_in_terminal is only supported on macOS".to_string());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn kill_claude_session(pid: u32) -> Result<(), String> {
+    use std::process::Command;
+
+    // Use the system kill command for reliability
+    #[cfg(target_os = "macos")]
+    {
+        // First try SIGTERM for graceful shutdown
+        let result = Command::new("kill")
+            .arg("-15") // SIGTERM
+            .arg(pid.to_string())
+            .output();
+
+        match result {
+            Ok(output) => {
+                if output.status.success() {
+                    Ok(())
+                } else {
+                    // If SIGTERM fails, try SIGKILL
+                    let kill_result = Command::new("kill")
+                        .arg("-9") // SIGKILL
+                        .arg(pid.to_string())
+                        .output();
+
+                    match kill_result {
+                        Ok(ko) if ko.status.success() => Ok(()),
+                        _ => Err(format!("Failed to terminate process {}", pid))
+                    }
+                }
+            }
+            Err(e) => Err(format!("Failed to execute kill command: {}", e))
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("kill_claude_session is only supported on macOS".to_string())
+    }
+}
+
+#[tauri::command]
+async fn open_file_in_default_editor(path: String) -> Result<(), String> {
+    use std::process::Command;
+
+    let expanded = expand_path(&path)?;
+    if !expanded.exists() {
+        return Err(format!("File does not exist: {}", path));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg("-t") // Open in default text editor
+            .arg(&expanded)
+            .status()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        return Err("open_file_in_default_editor is only supported on macOS".to_string());
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 fn open_full_disk_access_settings() -> Result<(), String> {
     #[cfg(target_os = "macos")]
@@ -1585,6 +2380,23 @@ pub fn run() {
             list_slash_commands_from_directory,
             export_slash_commands_archive,
             import_slash_commands_archive,
+            // MCP Server commands
+            list_mcp_servers,
+            read_mcp_config,
+            write_mcp_config,
+            add_mcp_server,
+            remove_mcp_server,
+            // Hooks commands
+            list_hooks,
+            read_hooks_config,
+            write_hooks_config,
+            add_hook,
+            remove_hook,
+            // Session detection and actions
+            detect_claude_sessions,
+            open_directory_in_terminal,
+            kill_claude_session,
+            open_file_in_default_editor,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

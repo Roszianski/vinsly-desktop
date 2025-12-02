@@ -5,7 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:allow-reveal-item-in-dir",
+    "opener:default",
     "store:allow-get",
     "store:allow-set",
     "store:allow-save",
