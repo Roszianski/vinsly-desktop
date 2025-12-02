@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { LicenseInfo } from '../types/licensing';
 import { getStorageItem, removeStorageItem, setStorageItem } from '../utils/storage';
-import { getOrCreateDeviceFingerprint } from '../utils/deviceFingerprint';
-import { sendHeartbeat } from '../utils/licensingClient';
+import { validateLicenseWithLemon } from '../utils/lemonLicensingClient';
 import { ToastType } from '../components/Toast';
 
 // Grace period constants
@@ -18,43 +17,20 @@ export interface UseLicenseOptions {
 
 export interface UseLicenseResult {
   licenseInfo: LicenseInfo | null;
-  deviceFingerprint: string | null;
   licenseBootstrapComplete: boolean;
   isOnboardingComplete: boolean;
   setLicense: (info: LicenseInfo) => Promise<void>;
   resetLicense: () => Promise<void>;
-  ensureDeviceFingerprint: () => Promise<string | null>;
 }
 
 export function useLicense(options: UseLicenseOptions): UseLicenseResult {
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
-  const [deviceFingerprint, setDeviceFingerprint] = useState<string | null>(null);
   const [licenseBootstrapComplete, setLicenseBootstrapComplete] = useState(false);
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [graceExpiresAt, setGraceExpiresAt] = useState<string | null>(null);
 
-  const ensureDeviceFingerprint = useCallback(async () => {
-    if (deviceFingerprint) {
-      return deviceFingerprint;
-    }
-    try {
-      const fingerprint = await getOrCreateDeviceFingerprint();
-      setDeviceFingerprint(fingerprint);
-      return fingerprint;
-    } catch (error) {
-      console.error('Unable to initialize device fingerprint', error);
-      return null;
-    }
-  }, [deviceFingerprint]);
-
+  // Hydrate license on mount and validate with Lemon Squeezy
   useEffect(() => {
-    void ensureDeviceFingerprint();
-  }, [ensureDeviceFingerprint]);
-
-  useEffect(() => {
-    if (!deviceFingerprint) {
-      return;
-    }
     let cancelled = false;
 
     const hydrateLicense = async () => {
@@ -68,17 +44,9 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
         return;
       }
 
-      if (!storedLicense.token || !storedLicense.deviceFingerprint) {
-        await removeStorageItem('vinsly-license-info');
-        if (!cancelled) {
-          setLicenseInfo(null);
-          setIsOnboardingComplete(false);
-          setLicenseBootstrapComplete(true);
-        }
-        return;
-      }
-
-      if (storedLicense.deviceFingerprint !== deviceFingerprint) {
+      // Validate required fields
+      if (!storedLicense.licenseKey || !storedLicense.instanceId) {
+        console.warn('Invalid stored license - missing required fields');
         await removeStorageItem('vinsly-license-info');
         if (!cancelled) {
           setLicenseInfo(null);
@@ -89,18 +57,26 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
       }
 
       try {
-        await sendHeartbeat({
-          token: storedLicense.token,
-          deviceFingerprint,
-          appVersion: options.appVersion || undefined,
-        });
+        // Validate with Lemon Squeezy
+        const validation = await validateLicenseWithLemon(
+          storedLicense.licenseKey,
+          storedLicense.instanceId
+        );
 
-        // Heartbeat successful - clear any grace period and update license
+        if (!validation.valid || validation.status !== 'active') {
+          // License is invalid or not active
+          throw new Error(`License validation failed: ${validation.error || validation.status}`);
+        }
+
+        // Validation successful - clear any grace period and update license
         await removeStorageItem(GRACE_PERIOD_KEY);
         const refreshed: LicenseInfo = {
           ...storedLicense,
           status: 'active',
           lastChecked: new Date().toISOString(),
+          // Update with latest data from Lemon Squeezy
+          activationLimit: validation.licenseKey?.activation_limit ?? storedLicense.activationLimit,
+          activationUsage: validation.licenseKey?.activation_usage ?? storedLicense.activationUsage,
         };
         await setStorageItem('vinsly-license-info', refreshed);
 
@@ -110,7 +86,7 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
           setGraceExpiresAt(null);
         }
       } catch (error) {
-        console.error('Heartbeat validation failed:', error);
+        console.error('License validation failed:', error);
 
         // Check if we're within grace period
         const storedGraceExpiry = await getStorageItem<string>(GRACE_PERIOD_KEY);
@@ -122,14 +98,14 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
 
           if (now < expiryDate) {
             // Still within grace period - keep license active
-            console.log('License heartbeat failed but within grace period until:', expiryDate);
+            console.log('License validation failed but within grace period until:', expiryDate);
             if (!cancelled) {
               setLicenseInfo(storedLicense);
               setIsOnboardingComplete(true);
               setGraceExpiresAt(storedGraceExpiry);
 
               const daysRemaining = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              options.showToast?.('info', `License validation failed. You have ${daysRemaining} day(s) remaining in grace period.`);
+              options.showToast?.('warning', `License validation failed. ${daysRemaining} day(s) remaining in grace period.`);
             }
           } else {
             // Grace period expired - remove license
@@ -141,7 +117,7 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
               setLicenseInfo(null);
               setIsOnboardingComplete(false);
               setGraceExpiresAt(null);
-              options.showToast?.('error', 'License validation failed and grace period expired. Please reactivate.');
+              options.showToast?.('error', 'License grace period expired. Please reactivate.');
             }
           }
         } else {
@@ -170,13 +146,16 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
     return () => {
       cancelled = true;
     };
-  }, [deviceFingerprint, options.appVersion, options.showToast]);
+  }, [options]);
 
   const setLicense = useCallback(
     async (info: LicenseInfo) => {
       setLicenseInfo(info);
       setIsOnboardingComplete(true);
       await setStorageItem('vinsly-license-info', info);
+      // Clear grace period when setting new license
+      await removeStorageItem(GRACE_PERIOD_KEY);
+      setGraceExpiresAt(null);
     },
     []
   );
@@ -194,11 +173,9 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
 
   return {
     licenseInfo,
-    deviceFingerprint,
     licenseBootstrapComplete,
     isOnboardingComplete,
     setLicense,
     resetLicense,
-    ensureDeviceFingerprint,
   };
 }

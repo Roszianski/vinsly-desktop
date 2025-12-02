@@ -1416,6 +1416,17 @@ async fn import_slash_commands_archive(
         return Err("Archive does not exist".to_string());
     }
 
+    // Check archive file size to prevent zip bombs
+    let archive_metadata = fs::metadata(&expanded_archive)
+        .map_err(|e| format!("Failed to read archive metadata: {}", e))?;
+    if archive_metadata.len() > MAX_ARCHIVE_SIZE {
+        return Err(format!(
+            "Archive too large: {} bytes (max {} bytes)",
+            archive_metadata.len(),
+            MAX_ARCHIVE_SIZE
+        ));
+    }
+
     let commands_dir = get_commands_dir(&scope, project_path)?;
     fs::create_dir_all(&commands_dir)
         .map_err(|e| format!("Failed to prepare commands directory: {}", e))?;
@@ -1425,6 +1436,15 @@ async fn import_slash_commands_archive(
         .map_err(|e| format!("Failed to open archive: {}", e))?;
     let mut archive = ZipArchive::new(file)
         .map_err(|e| format!("Failed to read archive: {}", e))?;
+
+    // Check file count limit to prevent resource exhaustion
+    if archive.len() > MAX_ARCHIVE_FILES {
+        return Err(format!(
+            "Archive contains too many files: {} (max {})",
+            archive.len(),
+            MAX_ARCHIVE_FILES
+        ));
+    }
 
     let mut imported_paths = Vec::new();
 
@@ -1551,10 +1571,30 @@ async fn import_memories_archive(
         return Err("Archive does not exist".to_string());
     }
 
+    // Check archive file size to prevent zip bombs
+    let archive_metadata = fs::metadata(&expanded_archive)
+        .map_err(|e| format!("Failed to read archive metadata: {}", e))?;
+    if archive_metadata.len() > MAX_ARCHIVE_SIZE {
+        return Err(format!(
+            "Archive too large: {} bytes (max {} bytes)",
+            archive_metadata.len(),
+            MAX_ARCHIVE_SIZE
+        ));
+    }
+
     let file = fs::File::open(&expanded_archive)
         .map_err(|e| format!("Failed to open archive: {}", e))?;
     let mut archive = ZipArchive::new(file)
         .map_err(|e| format!("Failed to read archive: {}", e))?;
+
+    // Check file count limit to prevent resource exhaustion
+    if archive.len() > MAX_ARCHIVE_FILES {
+        return Err(format!(
+            "Archive contains too many files: {} (max {})",
+            archive.len(),
+            MAX_ARCHIVE_FILES
+        ));
+    }
 
     let mut imported_paths = Vec::new();
 

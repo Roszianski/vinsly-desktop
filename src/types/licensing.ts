@@ -1,9 +1,10 @@
 export interface LicenseInfo {
   licenseKey: string;
-  email: string;
+  email?: string;
   status: 'active' | 'expired' | 'revoked';
   lastChecked: string;
-  token: string;
-  deviceFingerprint: string;
-  maxDevices: number;
+  instanceId: string;        // From Lemon Squeezy activation
+  instanceName: string;       // Device name shown in LS dashboard
+  activationLimit: number;    // Max number of devices
+  activationUsage: number;    // Current number of active devices
 }

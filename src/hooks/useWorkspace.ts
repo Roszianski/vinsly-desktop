@@ -120,6 +120,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   const workspaceCacheHydrated = useRef(false);
   const inFlightScanCount = useRef(0);
   const scanAbortController = useRef<AbortController | null>(null);
+  const pendingScanOptions = useRef<LoadAgentsOptions | null>(null);
 
   useEffect(() => {
     agentsRef.current = agents;
@@ -217,251 +218,264 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   }, []);
 
   const loadAgents = useCallback(
-    async (
-      loadOptions: LoadAgentsOptions = {}
-    ): Promise<{ total: number; newCount: number }> => {
-      // Coalesce scan triggers - reject if scan already in progress
+    (loadOptions: LoadAgentsOptions = {}): Promise<{ total: number; newCount: number }> => {
+      // Queue scan if one is already in progress - carry latest intent forward
       if (inFlightScanCount.current > 0) {
-        console.log('Scan already in progress, skipping duplicate scan request');
-        return { total: 0, newCount: 0 };
+        console.log('Scan in progress, queuing request for after completion');
+        pendingScanOptions.current = loadOptions;
+        return Promise.resolve({ total: 0, newCount: 0 });
       }
 
-      // Cancel any existing scan (shouldn't happen due to above check, but safety)
-      if (scanAbortController.current) {
-        scanAbortController.current.abort();
-      }
-
-      // Create new abort controller for this scan
-      scanAbortController.current = new AbortController();
-      const signal = scanAbortController.current.signal;
-
-      beginScan();
-      const currentScanSettings = options.scanSettingsRef.current || DEFAULT_SCAN_SETTINGS;
-      const {
-        projectPaths,
-        includeGlobal = true,
-        scanWatchedDirectories = false,
-        additionalDirectories = [],
-      } = loadOptions;
-
-      try {
-        // Check if scan was cancelled
-        if (signal.aborted) {
-          console.log('Scan cancelled before execution');
-          return { total: 0, newCount: 0 };
+      const executeScan = async (): Promise<{ total: number; newCount: number }> => {
+        // Cancel any existing scan (shouldn't happen due to above check, but safety)
+        if (scanAbortController.current) {
+          scanAbortController.current.abort();
         }
 
-        const previousAgents = agentsRef.current;
-        const previousSkills = skillsRef.current;
-        const seenAgents = new Set<string>();
-        const seenSkills = new Set<string>();
-        const projectPathList = projectPaths
-          ? Array.from(
-              new Set(
-                (Array.isArray(projectPaths) ? projectPaths : [projectPaths])
-                  .map(normalizeScanRootPath)
-                  .filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
-              )
-            )
-          : [];
+        // Create new abort controller for this scan
+        scanAbortController.current = new AbortController();
+        const signal = scanAbortController.current.signal;
 
-        const directoriesToScan = new Set<string>();
-        additionalDirectories
-          .map(normalizeScanRootPath)
-          .filter((dir): dir is string => typeof dir === 'string' && dir.trim().length > 0)
-          .forEach(dir => directoriesToScan.add(dir));
-        if (scanWatchedDirectories) {
-          currentScanSettings.watchedDirectories
+        beginScan();
+        const currentScanSettings = options.scanSettingsRef.current || DEFAULT_SCAN_SETTINGS;
+        const {
+          projectPaths,
+          includeGlobal = true,
+          scanWatchedDirectories = false,
+          additionalDirectories = [],
+        } = loadOptions;
+
+        try {
+          // Check if scan was cancelled
+          if (signal.aborted) {
+            console.log('Scan cancelled before execution');
+            return { total: 0, newCount: 0 };
+          }
+
+          const previousAgents = agentsRef.current;
+          const previousSkills = skillsRef.current;
+          const seenAgents = new Set<string>();
+          const seenSkills = new Set<string>();
+          const projectPathList = projectPaths
+            ? Array.from(
+                new Set(
+                  (Array.isArray(projectPaths) ? projectPaths : [projectPaths])
+                    .map(normalizeScanRootPath)
+                    .filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
+                )
+              )
+            : [];
+
+          const directoriesToScan = new Set<string>();
+          additionalDirectories
             .map(normalizeScanRootPath)
-            .filter((dir): dir is string => !!dir && dir.trim().length > 0)
-            .forEach(directory => directoriesToScan.add(directory));
-        }
-
-        const normalizedScannedRoots = new Set<string>();
-        const addNormalizedRoot = (input?: string | null) => {
-          const normalized = normalizeProjectRootPath(input);
-          if (normalized) {
-            normalizedScannedRoots.add(normalized);
+            .filter((dir): dir is string => typeof dir === 'string' && dir.trim().length > 0)
+            .forEach(dir => directoriesToScan.add(dir));
+          if (scanWatchedDirectories) {
+            currentScanSettings.watchedDirectories
+              .map(normalizeScanRootPath)
+              .filter((dir): dir is string => !!dir && dir.trim().length > 0)
+              .forEach(directory => directoriesToScan.add(directory));
           }
-        };
-        projectPathList.forEach(addNormalizedRoot);
-        directoriesToScan.forEach(directory => addNormalizedRoot(directory));
 
-        const shouldReplaceProjectAgent = (agent: Agent) => {
-          if (normalizedScannedRoots.size === 0) {
-            return false;
-          }
-          const agentRoot = getAgentProjectRootPath(agent);
-          return !!agentRoot && normalizedScannedRoots.has(agentRoot);
-        };
-
-        const shouldReplaceProjectSkill = (skill: Skill) => {
-          if (normalizedScannedRoots.size === 0) {
-            return false;
-          }
-          const skillRoot = getSkillProjectRootPath(skill);
-          return !!skillRoot && normalizedScannedRoots.has(skillRoot);
-        };
-
-        const allAgents: Agent[] = [];
-        const allSkills: Skill[] = [];
-
-        const addAgent = (agent: Agent | null) => {
-          if (!agent) return;
-          const key = makeAgentKey(agent);
-          if (seenAgents.has(key)) {
-            return;
-          }
-          seenAgents.add(key);
-          allAgents.push(agent);
-        };
-
-        const addSkill = (skill: Skill | null) => {
-          if (!skill) return;
-          const key = makeSkillKey(skill);
-          if (seenSkills.has(key)) {
-            return;
-          }
-          seenSkills.add(key);
-          allSkills.push(skill);
-        };
-
-        for (const agent of previousAgents) {
-          if (agent.scope === AgentScope.Global) {
-            if (!includeGlobal) {
-              addAgent(agent);
+          const normalizedScannedRoots = new Set<string>();
+          const addNormalizedRoot = (input?: string | null) => {
+            const normalized = normalizeProjectRootPath(input);
+            if (normalized) {
+              normalizedScannedRoots.add(normalized);
             }
-            continue;
-          }
+          };
+          projectPathList.forEach(addNormalizedRoot);
+          directoriesToScan.forEach(directory => addNormalizedRoot(directory));
 
-          if (agent.scope === AgentScope.Project && shouldReplaceProjectAgent(agent)) {
-            continue;
-          }
-
-          addAgent(agent);
-        }
-
-        for (const skill of previousSkills) {
-          if (skill.scope === AgentScope.Global) {
-            if (!includeGlobal) {
-              addSkill(skill);
+          const shouldReplaceProjectAgent = (agent: Agent) => {
+            if (normalizedScannedRoots.size === 0) {
+              return false;
             }
-            continue;
+            const agentRoot = getAgentProjectRootPath(agent);
+            return !!agentRoot && normalizedScannedRoots.has(agentRoot);
+          };
+
+          const shouldReplaceProjectSkill = (skill: Skill) => {
+            if (normalizedScannedRoots.size === 0) {
+              return false;
+            }
+            const skillRoot = getSkillProjectRootPath(skill);
+            return !!skillRoot && normalizedScannedRoots.has(skillRoot);
+          };
+
+          const allAgents: Agent[] = [];
+          const allSkills: Skill[] = [];
+
+          const addAgent = (agent: Agent | null) => {
+            if (!agent) return;
+            const key = makeAgentKey(agent);
+            if (seenAgents.has(key)) {
+              return;
+            }
+            seenAgents.add(key);
+            allAgents.push(agent);
+          };
+
+          const addSkill = (skill: Skill | null) => {
+            if (!skill) return;
+            const key = makeSkillKey(skill);
+            if (seenSkills.has(key)) {
+              return;
+            }
+            seenSkills.add(key);
+            allSkills.push(skill);
+          };
+
+          for (const agent of previousAgents) {
+            if (agent.scope === AgentScope.Global) {
+              if (!includeGlobal) {
+                addAgent(agent);
+              }
+              continue;
+            }
+
+            if (agent.scope === AgentScope.Project && shouldReplaceProjectAgent(agent)) {
+              continue;
+            }
+
+            addAgent(agent);
           }
 
-          if (skill.scope === AgentScope.Project && shouldReplaceProjectSkill(skill)) {
-            continue;
+          for (const skill of previousSkills) {
+            if (skill.scope === AgentScope.Global) {
+              if (!includeGlobal) {
+                addSkill(skill);
+              }
+              continue;
+            }
+
+            if (skill.scope === AgentScope.Project && shouldReplaceProjectSkill(skill)) {
+              continue;
+            }
+
+            addSkill(skill);
           }
 
-          addSkill(skill);
-        }
-
-        if (includeGlobal) {
-          const globalAgents = await listAgents('global');
-          for (const agentFile of globalAgents) {
-            addAgent(
-              markdownToAgent(
-                agentFile.content,
-                agentFile.name,
-                AgentScope.Global,
-                agentFile.path
-              )
-            );
-          }
-
-          const globalSkills = await listSkills('global');
-          for (const skillFile of globalSkills) {
-            addSkill(skillFileToSkill(skillFile));
-          }
-        }
-
-        for (const projectPath of projectPathList) {
-          try {
-            const [projectAgents, projectSkills] = await Promise.all([
-              listAgents('project', projectPath),
-              listSkills('project', projectPath),
-            ]);
-
-            for (const agentFile of projectAgents) {
+          if (includeGlobal) {
+            const globalAgents = await listAgents('global');
+            for (const agentFile of globalAgents) {
               addAgent(
                 markdownToAgent(
                   agentFile.content,
                   agentFile.name,
-                  AgentScope.Project,
+                  AgentScope.Global,
                   agentFile.path
                 )
               );
             }
 
-            for (const skillFile of projectSkills) {
+            const globalSkills = await listSkills('global');
+            for (const skillFile of globalSkills) {
               addSkill(skillFileToSkill(skillFile));
             }
-          } catch (error) {
-            console.error(`Error scanning project directory ${projectPath}:`, error);
+          }
+
+          for (const projectPath of projectPathList) {
+            try {
+              const [projectAgents, projectSkills] = await Promise.all([
+                listAgents('project', projectPath),
+                listSkills('project', projectPath),
+              ]);
+
+              for (const agentFile of projectAgents) {
+                addAgent(
+                  markdownToAgent(
+                    agentFile.content,
+                    agentFile.name,
+                    AgentScope.Project,
+                    agentFile.path
+                  )
+                );
+              }
+
+              for (const skillFile of projectSkills) {
+                addSkill(skillFileToSkill(skillFile));
+              }
+            } catch (error) {
+              console.error(`Error scanning project directory ${projectPath}:`, error);
+            }
+          }
+
+          for (const directory of directoriesToScan) {
+            try {
+              const [watchedAgents, watchedSkills] = await Promise.all([
+                listAgentsFromDirectory(directory),
+                listSkillsFromDirectory(directory),
+              ]);
+
+              for (const agentFile of watchedAgents) {
+                addAgent(
+                  markdownToAgent(
+                    agentFile.content,
+                    agentFile.name,
+                    AgentScope.Project,
+                    agentFile.path
+                  )
+                );
+              }
+
+              for (const skillFile of watchedSkills) {
+                addSkill(skillFileToSkill(skillFile));
+              }
+            } catch (error) {
+              console.error(`Error scanning directory ${directory}:`, error);
+            }
+          }
+
+          const previousAgentKeys = new Set(previousAgents.map(makeAgentKey));
+          const newAgentCount = allAgents.filter(
+            agent => !previousAgentKeys.has(makeAgentKey(agent))
+          ).length;
+
+          const previousSkillKeys = new Set(previousSkills.map(makeSkillKey));
+          const newSkillCount = allSkills.filter(
+            skill => !previousSkillKeys.has(makeSkillKey(skill))
+          ).length;
+
+          // Check if scan was cancelled before updating state
+          if (signal.aborted) {
+            console.log('Scan was cancelled, skipping state update');
+            return { total: 0, newCount: 0 };
+          }
+
+          setAgents(allAgents);
+          setSkills(allSkills);
+          return {
+            total: allAgents.length + allSkills.length,
+            newCount: newAgentCount + newSkillCount,
+          };
+        } catch (error: any) {
+          // Don't show error if scan was cancelled
+          if (error.name === 'AbortError' || signal.aborted) {
+            console.log('Scan cancelled');
+            return { total: 0, newCount: 0 };
+          }
+
+          console.error('Error loading workspace:', error);
+          options.showToast('error', 'Failed to load assets from filesystem');
+          throw error;
+        } finally {
+          endScan();
+
+          // Execute pending scan if one was queued during this scan
+          const pendingOpts = pendingScanOptions.current;
+          if (pendingOpts !== null) {
+            pendingScanOptions.current = null;
+            // Use setTimeout to break the call stack and allow state to settle
+            setTimeout(() => {
+              void loadAgents(pendingOpts);
+            }, 0);
           }
         }
+      };
 
-        for (const directory of directoriesToScan) {
-          try {
-            const [watchedAgents, watchedSkills] = await Promise.all([
-              listAgentsFromDirectory(directory),
-              listSkillsFromDirectory(directory),
-            ]);
-
-            for (const agentFile of watchedAgents) {
-              addAgent(
-                markdownToAgent(
-                  agentFile.content,
-                  agentFile.name,
-                  AgentScope.Project,
-                  agentFile.path
-                )
-              );
-            }
-
-            for (const skillFile of watchedSkills) {
-              addSkill(skillFileToSkill(skillFile));
-            }
-          } catch (error) {
-            console.error(`Error scanning directory ${directory}:`, error);
-          }
-        }
-
-        const previousAgentKeys = new Set(previousAgents.map(makeAgentKey));
-        const newAgentCount = allAgents.filter(
-          agent => !previousAgentKeys.has(makeAgentKey(agent))
-        ).length;
-
-        const previousSkillKeys = new Set(previousSkills.map(makeSkillKey));
-        const newSkillCount = allSkills.filter(
-          skill => !previousSkillKeys.has(makeSkillKey(skill))
-        ).length;
-
-        // Check if scan was cancelled before updating state
-        if (signal.aborted) {
-          console.log('Scan was cancelled, skipping state update');
-          return { total: 0, newCount: 0 };
-        }
-
-        setAgents(allAgents);
-        setSkills(allSkills);
-        return {
-          total: allAgents.length + allSkills.length,
-          newCount: newAgentCount + newSkillCount,
-        };
-      } catch (error: any) {
-        // Don't show error if scan was cancelled
-        if (error.name === 'AbortError' || signal.aborted) {
-          console.log('Scan cancelled');
-          return { total: 0, newCount: 0 };
-        }
-
-        console.error('Error loading workspace:', error);
-        options.showToast('error', 'Failed to load assets from filesystem');
-        throw error;
-      } finally {
-        endScan();
-      }
+      return executeScan();
     },
     [beginScan, endScan, makeAgentKey, makeSkillKey, options.scanSettingsRef, options.showToast]
   );

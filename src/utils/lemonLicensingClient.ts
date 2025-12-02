@@ -64,3 +64,108 @@ export async function validateLicenseWithLemon(licenseKey: string): Promise<Lemo
     status
   };
 }
+
+export interface LemonLicenseActivationResult {
+  activated: boolean;
+  error: string | null;
+  instance?: {
+    id: string;
+    name: string;
+    created_at: string;
+  };
+  licenseKey?: {
+    id: number;
+    status: string;
+    activation_limit: number;
+    activation_usage: number;
+  };
+}
+
+export async function activateLicenseWithLemon(
+  licenseKey: string,
+  instanceName: string
+): Promise<LemonLicenseActivationResult> {
+  const baseUrl = getLemonApiBaseUrl();
+  const apiKey = getLemonApiKey();
+  const trimmedKey = licenseKey.trim();
+
+  const response = await fetch(`${baseUrl}/v1/licenses/activate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      license_key: trimmedKey,
+      instance_name: instanceName
+    })
+  });
+
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.error('[Lemon] license activation failed', {
+      status: response.status,
+      statusText: response.statusText,
+      errorCode: payload?.error ?? 'unknown'
+    });
+    const code = payload?.error ?? 'request_failed';
+    return { activated: false, error: code ?? 'request_failed' };
+  }
+
+  const activated = Boolean(payload?.activated);
+
+  return {
+    activated,
+    error: activated ? null : (payload?.error ?? 'activation_failed'),
+    instance: payload?.instance,
+    licenseKey: payload?.license_key
+  };
+}
+
+export interface LemonLicenseDeactivationResult {
+  deactivated: boolean;
+  error: string | null;
+}
+
+export async function deactivateLicenseWithLemon(
+  licenseKey: string,
+  instanceId: string
+): Promise<LemonLicenseDeactivationResult> {
+  const baseUrl = getLemonApiBaseUrl();
+  const apiKey = getLemonApiKey();
+  const trimmedKey = licenseKey.trim();
+
+  const response = await fetch(`${baseUrl}/v1/licenses/deactivate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      license_key: trimmedKey,
+      instance_id: instanceId
+    })
+  });
+
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.error('[Lemon] license deactivation failed', {
+      status: response.status,
+      statusText: response.statusText,
+      errorCode: payload?.error ?? 'unknown'
+    });
+    const code = payload?.error ?? 'request_failed';
+    return { deactivated: false, error: code ?? 'request_failed' };
+  }
+
+  const deactivated = Boolean(payload?.deactivated);
+
+  return {
+    deactivated,
+    error: deactivated ? null : (payload?.error ?? 'deactivation_failed')
+  };
+}

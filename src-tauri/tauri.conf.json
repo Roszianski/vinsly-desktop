@@ -20,7 +20,13 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": {
+        "default-src": "'self'",
+        "connect-src": "'self' https://api.lemonsqueezy.com https://github.com https://*.github.com",
+        "script-src": "'self' 'unsafe-inline' 'unsafe-eval'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: https:"
+      },
       "capabilities": [
         {
           "identifier": "main-capability",
@@ -66,7 +72,7 @@
       "endpoints": [
         "https://updates.vinsly.app/latest.json"
       ],
-      "pubkey": "replace-with-tauri-signing-public-key",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ5RkY2Qzg1QzZERjc1RUIKUldUcmRkL0doV3ovMmZyM1MyODNpYSs0bzcrMERMakJGWkJ4RngxNGU0MW85UnlVMkF5eXpkNW0K",
       "windows": {
         "installMode": "passive"
       }
