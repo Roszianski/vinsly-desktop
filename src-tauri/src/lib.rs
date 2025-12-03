@@ -2519,28 +2519,74 @@ const BLOCKED_PATH_PATTERNS: &[&str] = &[
     "\\Windows\\System32\\",
     "\\Windows\\SysWOW64\\",
     "/root/",
+    "/.config/",
+    "\\.config\\",
+    "/Library/Preferences/",
+    "/.local/share/keyrings/",
 ];
 
 /// Maximum file size for import operations (10 MB)
 const MAX_IMPORT_FILE_SIZE: u64 = 10 * 1024 * 1024;
 
 /// Validates a path is safe for export/import (not in sensitive directories)
-fn validate_user_file_path(path: &Path) -> Result<(), String> {
-    let path_str = path.to_string_lossy();
+/// Uses canonicalization to prevent symlink and traversal attacks
+fn validate_user_file_path(path: &Path, must_exist: bool) -> Result<PathBuf, String> {
+    // First, reject obvious symlinks at the input path level
+    if path.is_symlink() {
+        return Err("Symlinks are not allowed".to_string());
+    }
 
-    // Check against blocked patterns
+    // Canonicalize the path to resolve symlinks and .. in parent directories
+    let canonical = if path.exists() {
+        fs::canonicalize(path).map_err(|e| format!("Failed to resolve path: {}", e))?
+    } else if must_exist {
+        return Err("File does not exist".to_string());
+    } else {
+        // For non-existent paths (export), canonicalize the parent directory
+        let parent = path.parent().ok_or("Invalid path: no parent directory")?;
+
+        // If parent doesn't exist, we'll create it later - but check if grandparent exists
+        let existing_ancestor = std::iter::successors(Some(parent), |p| p.parent())
+            .find(|p| p.exists())
+            .ok_or("Cannot resolve path: no existing ancestor directory")?;
+
+        // Check if the existing ancestor is a symlink
+        if existing_ancestor.is_symlink() {
+            return Err("Path contains symlinks, which are not allowed".to_string());
+        }
+
+        let canonical_ancestor = fs::canonicalize(existing_ancestor)
+            .map_err(|e| format!("Failed to resolve ancestor path: {}", e))?;
+
+        // Rebuild the path from the canonical ancestor
+        let relative_from_ancestor = path.strip_prefix(existing_ancestor)
+            .unwrap_or(path);
+        canonical_ancestor.join(relative_from_ancestor)
+    };
+
+    // After canonicalization, check if the resolved path is a symlink
+    if canonical.is_symlink() {
+        return Err("Resolved path is a symlink, which is not allowed".to_string());
+    }
+
+    // Normalize path separators for cross-platform matching
+    let canonical_str = canonical.to_string_lossy().replace('\\', "/");
+
+    // Check against blocked patterns on the CANONICAL path
     for pattern in BLOCKED_PATH_PATTERNS {
-        if path_str.contains(pattern) {
-            return Err(format!("Access to path containing '{}' is not allowed", pattern));
+        // Normalize the pattern for comparison
+        let normalized_pattern = pattern.replace('\\', "/");
+        if canonical_str.contains(&normalized_pattern) {
+            return Err(format!("Access to sensitive path is not allowed"));
         }
     }
 
-    // Reject paths with .. traversal
-    if path_str.contains("..") {
-        return Err("Path traversal (..) is not allowed".to_string());
+    // Final check: canonical path should not contain .. (should never happen after canonicalize)
+    if canonical_str.contains("..") {
+        return Err("Path traversal detected".to_string());
     }
 
-    Ok(())
+    Ok(canonical)
 }
 
 /// Write text content to a user-selected file path (for export)
@@ -2548,19 +2594,19 @@ fn validate_user_file_path(path: &Path) -> Result<(), String> {
 async fn export_text_file(path: String, content: String) -> Result<(), String> {
     let file_path = PathBuf::from(&path);
 
-    // Validate the path is safe
-    validate_user_file_path(&file_path)?;
+    // Validate the path is safe (must_exist=false for export - file doesn't exist yet)
+    let canonical_path = validate_user_file_path(&file_path, false)?;
 
     // Create parent directories if needed
-    if let Some(parent) = file_path.parent() {
+    if let Some(parent) = canonical_path.parent() {
         if !parent.as_os_str().is_empty() && !parent.exists() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create directory: {}", e))?;
         }
     }
 
-    // Write the file
-    fs::write(&file_path, content)
+    // Write to the canonical path
+    fs::write(&canonical_path, content)
         .map_err(|e| format!("Failed to write file: {}", e))?;
 
     Ok(())
@@ -2571,19 +2617,19 @@ async fn export_text_file(path: String, content: String) -> Result<(), String> {
 async fn export_binary_file(path: String, content: Vec<u8>) -> Result<(), String> {
     let file_path = PathBuf::from(&path);
 
-    // Validate the path is safe
-    validate_user_file_path(&file_path)?;
+    // Validate the path is safe (must_exist=false for export - file doesn't exist yet)
+    let canonical_path = validate_user_file_path(&file_path, false)?;
 
     // Create parent directories if needed
-    if let Some(parent) = file_path.parent() {
+    if let Some(parent) = canonical_path.parent() {
         if !parent.as_os_str().is_empty() && !parent.exists() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create directory: {}", e))?;
         }
     }
 
-    // Write the file
-    fs::write(&file_path, content)
+    // Write to the canonical path
+    fs::write(&canonical_path, content)
         .map_err(|e| format!("Failed to write file: {}", e))?;
 
     Ok(())
@@ -2594,16 +2640,11 @@ async fn export_binary_file(path: String, content: Vec<u8>) -> Result<(), String
 async fn import_text_file(path: String) -> Result<String, String> {
     let file_path = PathBuf::from(&path);
 
-    // Validate the path is safe
-    validate_user_file_path(&file_path)?;
-
-    // Check file exists
-    if !file_path.exists() {
-        return Err("File does not exist".to_string());
-    }
+    // Validate the path is safe (must_exist=true for import - file must exist)
+    let canonical_path = validate_user_file_path(&file_path, true)?;
 
     // Check file size
-    let metadata = fs::metadata(&file_path)
+    let metadata = fs::metadata(&canonical_path)
         .map_err(|e| format!("Failed to read file metadata: {}", e))?;
     if metadata.len() > MAX_IMPORT_FILE_SIZE {
         return Err(format!(
@@ -2613,8 +2654,8 @@ async fn import_text_file(path: String) -> Result<String, String> {
         ));
     }
 
-    // Read the file
-    fs::read_to_string(&file_path)
+    // Read from the canonical path
+    fs::read_to_string(&canonical_path)
         .map_err(|e| format!("Failed to read file: {}", e))
 }
 
@@ -2623,16 +2664,11 @@ async fn import_text_file(path: String) -> Result<String, String> {
 async fn import_binary_file(path: String) -> Result<Vec<u8>, String> {
     let file_path = PathBuf::from(&path);
 
-    // Validate the path is safe
-    validate_user_file_path(&file_path)?;
-
-    // Check file exists
-    if !file_path.exists() {
-        return Err("File does not exist".to_string());
-    }
+    // Validate the path is safe (must_exist=true for import - file must exist)
+    let canonical_path = validate_user_file_path(&file_path, true)?;
 
     // Check file size
-    let metadata = fs::metadata(&file_path)
+    let metadata = fs::metadata(&canonical_path)
         .map_err(|e| format!("Failed to read file metadata: {}", e))?;
     if metadata.len() > MAX_ARCHIVE_SIZE {
         return Err(format!(
@@ -2642,8 +2678,8 @@ async fn import_binary_file(path: String) -> Result<Vec<u8>, String> {
         ));
     }
 
-    // Read the file
-    fs::read(&file_path)
+    // Read from the canonical path
+    fs::read(&canonical_path)
         .map_err(|e| format!("Failed to read file: {}", e))
 }
 
