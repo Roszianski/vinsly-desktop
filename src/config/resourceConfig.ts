@@ -96,13 +96,13 @@ export const SKILL_CONFIG: ResourceConfig<SkillResource> = {
 /**
  * Get configuration for a resource type
  */
-export function getResourceConfig(type: ResourceType): ResourceConfig {
+export function getResourceConfig(type: ResourceType): ResourceConfig<AgentResource> | ResourceConfig<SkillResource> {
   return type === ResourceType.Agent ? AGENT_CONFIG : SKILL_CONFIG;
 }
 
 /**
  * Get all resource configurations
  */
-export function getAllResourceConfigs(): ResourceConfig[] {
+export function getAllResourceConfigs(): Array<ResourceConfig<AgentResource> | ResourceConfig<SkillResource>> {
   return [AGENT_CONFIG, SKILL_CONFIG];
 }

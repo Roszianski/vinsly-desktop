@@ -16,7 +16,7 @@ export function createMockAgent(overrides?: Partial<Agent>): Agent {
     frontmatter: {
       name: 'Test Agent',
       description: 'A test agent for unit tests',
-      model: 'claude-sonnet-4',
+      model: 'sonnet',
       color: 'blue',
       ...overrides?.frontmatter,
     },
@@ -35,7 +35,7 @@ export function createMockSkill(overrides?: Partial<Skill>): Skill {
     scope: AgentScope.Global,
     path: '~/.claude/skills/test-skill/skill.md',
     directoryPath: '~/.claude/skills/test-skill',
-    has_assets: false,
+    hasAssets: false,
     frontmatter: {
       name: 'Test Skill',
       description: 'A test skill for unit tests',

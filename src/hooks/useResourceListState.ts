@@ -62,7 +62,7 @@ export interface ResourceListStateResult<T, TFilter extends string = string> {
   toggleSelection: (id: string) => void;
   toggleSelectAll: () => void;
   clearSelection: () => void;
-  selectAllCheckboxRef: React.RefObject<HTMLInputElement>;
+  selectAllCheckboxRef: React.RefObject<HTMLInputElement | null>;
 }
 
 // Session cache for layout mode

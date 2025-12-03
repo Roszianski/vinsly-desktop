@@ -26,7 +26,7 @@ describe('agentExport', () => {
         frontmatter: {
           name: 'Test Agent',
           description: 'A test agent',
-          model: 'claude-sonnet-4',
+          model: 'sonnet',
           color: 'blue',
         },
         body: 'This is the agent prompt.',
@@ -37,7 +37,7 @@ describe('agentExport', () => {
       expect(markdown).toContain('---');
       expect(markdown).toContain('name: Test Agent');
       expect(markdown).toContain('description: A test agent');
-      expect(markdown).toContain('model: claude-sonnet-4');
+      expect(markdown).toContain('model: sonnet');
       expect(markdown).toContain('color: blue');
       expect(markdown).toContain('This is the agent prompt.');
     });
@@ -129,7 +129,7 @@ describe('agentExport', () => {
         frontmatter: {
           name: 'Export Test',
           description: 'A test agent for unit tests',
-          model: 'claude-sonnet-4',
+          model: 'sonnet',
           color: 'blue',
         },
       });
@@ -293,7 +293,7 @@ describe('agentExport', () => {
           frontmatter: {
             name: 'Test Agent',
             description: 'Test description',
-            model: 'claude-sonnet-4',
+            model: 'sonnet',
           },
           body: 'Test agent body content',
         }),

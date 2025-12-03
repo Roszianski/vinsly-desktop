@@ -9,7 +9,7 @@ import { AnimatePresence } from 'framer-motion';
 import { Header } from './Header';
 import { Theme } from '../hooks/useTheme';
 import { LicenseInfo } from '../types/licensing';
-import { ScanSettings } from '../types';
+import { LoadAgentsOptions, ScanSettings } from '../types';
 
 interface AppShellProps {
   // Theme
@@ -18,14 +18,14 @@ interface AppShellProps {
 
   // Header handlers
   onNavigateHome: () => void;
-  onScan: () => void;
+  onScan: (options?: LoadAgentsOptions) => Promise<{ total: number; newCount: number }>;
   isScanning: boolean;
 
   // License & Profile
   licenseInfo: LicenseInfo | null;
   onResetLicense: () => void;
-  userDisplayName: string | null;
-  onDisplayNameChange: (name: string) => Promise<void>;
+  userDisplayName: string;
+  onDisplayNameChange: (name: string) => void;
 
   // Scan Settings
   scanSettings: ScanSettings;
@@ -33,14 +33,14 @@ interface AppShellProps {
 
   // Update Management
   autoUpdateEnabled: boolean;
-  onAutoUpdateChange: (enabled: boolean) => Promise<void>;
-  onCheckForUpdates: () => Promise<void>;
+  onAutoUpdateChange: (enabled: boolean) => void;
+  onCheckForUpdates: () => void;
   isCheckingUpdate: boolean;
   isInstallingUpdate: boolean;
   pendingUpdate: any;
   appVersion: string;
   lastUpdateCheckAt: string | null;
-  onInstallUpdate: () => Promise<void>;
+  onInstallUpdate: () => void;
 
   // Platform
   isMacPlatform: boolean;

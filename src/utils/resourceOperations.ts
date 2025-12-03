@@ -4,7 +4,7 @@
  */
 
 import { Agent, Skill, AgentScope } from '../types';
-import { Resource, ResourceConfig, ResourceType } from '../types/resource';
+import { Resource, ResourceConfig, ResourceType, AgentResource, SkillResource } from '../types/resource';
 import { getStorageItem, setStorageItem } from './storage';
 
 /**
@@ -110,7 +110,7 @@ export function generateUniqueName<T extends Agent | Skill>(
 export function duplicateResource<T extends Agent | Skill>(
   item: T,
   existingItems: T[],
-  config: ResourceConfig
+  config: ResourceConfig<AgentResource> | ResourceConfig<SkillResource>
 ): T {
   const uniqueName = generateUniqueName(item.name, existingItems);
   const scope = item.scope;

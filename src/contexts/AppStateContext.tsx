@@ -57,12 +57,10 @@ interface AppState {
 
   // License
   licenseInfo: ReturnType<typeof useLicense>['licenseInfo'];
-  deviceFingerprint: ReturnType<typeof useLicense>['deviceFingerprint'];
   licenseBootstrapComplete: boolean;
   isOnboardingComplete: boolean;
   setLicense: ReturnType<typeof useLicense>['setLicense'];
   resetLicense: ReturnType<typeof useLicense>['resetLicense'];
-  ensureDeviceFingerprint: ReturnType<typeof useLicense>['ensureDeviceFingerprint'];
 
   // Workspace
   workspace: ReturnType<typeof useWorkspace>;
@@ -119,12 +117,10 @@ export function AppStateProvider({ children, appVersion }: AppStateProviderProps
 
   const {
     licenseInfo,
-    deviceFingerprint,
     licenseBootstrapComplete,
     isOnboardingComplete,
     setLicense,
     resetLicense,
-    ensureDeviceFingerprint,
   } = license;
 
   const workspace = useWorkspace({
@@ -167,12 +163,10 @@ export function AppStateProvider({ children, appVersion }: AppStateProviderProps
     applyScanSettings,
     loadInitialSettings,
     licenseInfo,
-    deviceFingerprint,
     licenseBootstrapComplete,
     isOnboardingComplete,
     setLicense,
     resetLicense,
-    ensureDeviceFingerprint,
     workspace,
     navigation,
     isCheckingUpdate,

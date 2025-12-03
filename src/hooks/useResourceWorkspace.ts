@@ -5,8 +5,7 @@
 
 import { useCallback } from 'react';
 import { Agent, Skill, AgentScope } from '../types';
-import { Resource, ResourceType, agentToResource, skillToResource } from '../types/resource';
-import { ResourceConfig } from '../types/resource';
+import { Resource, ResourceType, AgentResource, SkillResource, agentToResource, skillToResource, ResourceConfig } from '../types/resource';
 import { AGENT_CONFIG, SKILL_CONFIG } from '../config/resourceConfig';
 import {
   duplicateResource,
@@ -34,7 +33,7 @@ export function useResourceWorkspace(workspace: UseWorkspaceResult) {
   /**
    * Get configuration for a resource type
    */
-  const getConfig = useCallback((type: ResourceType): ResourceConfig => {
+  const getConfig = useCallback((type: ResourceType): ResourceConfig<AgentResource> | ResourceConfig<SkillResource> => {
     return type === ResourceType.Agent ? AGENT_CONFIG : SKILL_CONFIG;
   }, []);
 

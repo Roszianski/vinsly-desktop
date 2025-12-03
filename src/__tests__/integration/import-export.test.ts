@@ -31,7 +31,7 @@ describe('Import/Export Integration Tests', () => {
         frontmatter: {
           name: 'Integration Test Agent',
           description: 'Testing full round-trip',
-          model: 'claude-sonnet-4',
+          model: 'sonnet',
           color: 'blue',
           tools: ['read', 'write', 'bash'],
         },
@@ -69,7 +69,7 @@ describe('Import/Export Integration Tests', () => {
         frontmatter: {
           name: 'Complex Agent',
           description: 'Has complex metadata',
-          model: 'claude-opus-4',
+          model: 'opus',
           tools: ['read', 'write', 'grep', 'glob', 'bash'],
           custom_metadata: {
             version: '2.0.0',

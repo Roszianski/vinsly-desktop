@@ -13,7 +13,7 @@ export const mockAgents: Agent[] = [
     frontmatter: {
       name: 'Code Reviewer',
       description: 'Reviews code for quality and best practices',
-      model: 'claude-sonnet-4',
+      model: 'sonnet',
       color: 'blue',
       tools: ['read', 'grep', 'glob'],
     },
@@ -27,7 +27,7 @@ export const mockAgents: Agent[] = [
     frontmatter: {
       name: 'Project Helper',
       description: 'Helps with project-specific tasks',
-      model: 'claude-opus-4',
+      model: 'opus',
       color: 'green',
       tools: ['read', 'write', 'bash'],
     },
@@ -41,7 +41,7 @@ export const mockAgents: Agent[] = [
     frontmatter: {
       name: 'Test Writer',
       description: 'Writes comprehensive unit tests',
-      model: 'claude-sonnet-4',
+      model: 'sonnet',
       color: 'purple',
       tools: ['read', 'write'],
     },
@@ -56,7 +56,7 @@ export const mockSkills: Skill[] = [
     scope: AgentScope.Global,
     path: '~/.claude/skills/python-expert/skill.md',
     directoryPath: '~/.claude/skills/python-expert',
-    has_assets: true,
+    hasAssets: true,
     frontmatter: {
       name: 'Python Expert',
       description: 'Expert knowledge of Python programming',
@@ -70,7 +70,7 @@ export const mockSkills: Skill[] = [
     scope: AgentScope.Project,
     path: '.claude/skills/api-design/skill.md',
     directoryPath: '.claude/skills/api-design',
-    has_assets: false,
+    hasAssets: false,
     frontmatter: {
       name: 'API Design',
       description: 'REST API design patterns and best practices',
@@ -83,7 +83,7 @@ export const mockSkills: Skill[] = [
 export const mockMarkdownWithFrontmatter = `---
 name: "Sample Agent"
 description: "A sample agent for testing"
-model: "claude-sonnet-4"
+model: "sonnet"
 color: "blue"
 tools:
   - read
@@ -119,7 +119,7 @@ export const mockZipAgents = {
   'agent2.md': `---
 name: "Another Agent"
 description: "Another test agent"
-model: "claude-opus-4"
+model: "opus"
 ---
 
 Another agent body.`,

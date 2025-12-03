@@ -2,11 +2,12 @@ import { useCallback } from 'react';
 import { Agent } from '../types';
 import { AgentCommands } from '../utils/workspaceCommands';
 import { ToastType } from '../components/Toast';
+import { Command } from './useHistory';
 
 export interface UseAgentHandlersOptions {
   agents: Agent[];
   showToast: (type: ToastType, message: string, duration?: number, action?: { label: string; onClick: () => void }) => void;
-  executeCommand: (command: { description: string; execute: () => Promise<void>; undo: () => Promise<void> }) => Promise<boolean>;
+  executeCommand: (command: Command) => Promise<boolean>;
   undo: () => Promise<string | undefined>;
   saveAgentToWorkspace: (agent: Agent, options?: { projectPath?: string }) => Promise<void>;
   deleteAgentFromWorkspace: (agentId: string) => Promise<void>;

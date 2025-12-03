@@ -105,7 +105,7 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
               setGraceExpiresAt(storedGraceExpiry);
 
               const daysRemaining = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              options.showToast?.('warning', `License validation failed. ${daysRemaining} day(s) remaining in grace period.`);
+              options.showToast?.('info', `License validation failed. ${daysRemaining} day(s) remaining in grace period.`);
             }
           } else {
             // Grace period expired - remove license

@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { Skill } from '../types';
 import { SkillCommands } from '../utils/workspaceCommands';
 import { ToastType } from '../components/Toast';
+import { Command } from './useHistory';
 import { save as saveDialog, open as openDialog } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import {
@@ -13,7 +14,7 @@ import {
 export interface UseSkillHandlersOptions {
   skills: Skill[];
   showToast: (type: ToastType, message: string, duration?: number, action?: { label: string; onClick: () => void }) => void;
-  executeCommand: (command: { description: string; execute: () => Promise<void>; undo: () => Promise<void> }) => Promise<boolean>;
+  executeCommand: (command: Command) => Promise<boolean>;
   undo: () => Promise<string | undefined>;
   saveSkillToWorkspace: (skill: Skill, options?: { projectPath?: string }) => Promise<void>;
   deleteSkillFromWorkspace: (skillId: string) => Promise<void>;
