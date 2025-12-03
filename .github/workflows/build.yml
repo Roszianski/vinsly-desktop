@@ -58,17 +58,15 @@ jobs:
         if: matrix.platform == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: macos-app
-          path: |
-            src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/dmg/*.dmg.sig
+          name: Vinsly-macOS
+          path: src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
       - name: Upload artifacts (Ubuntu)
         if: matrix.platform == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: linux-app
+          name: Vinsly-Linux
           path: |
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage
@@ -78,15 +76,15 @@ jobs:
         if: matrix.platform == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: windows-app
-          path: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/nsis/*.exe.sig
+          name: Vinsly-Windows
+          path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
   create-release:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
@@ -104,16 +102,15 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            artifacts/macos-app/*.dmg
-            artifacts/macos-app/*.dmg.sig
-            artifacts/windows-app/*.exe
-            artifacts/windows-app/*.exe.sig
+            artifacts/Vinsly-macOS/*.dmg
+            artifacts/Vinsly-Windows/*.exe
           generate_release_notes: true
 
   generate-manifest:
     needs: create-release
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Disabled until signing is fixed - auto-update requires signatures
+    if: false
 
     steps:
       - name: Checkout repository
@@ -130,14 +127,14 @@ jobs:
           REPO="${GITHUB_REPOSITORY}"
 
           # Find the signature files
-          MACOS_ARM_SIG=$(cat artifacts/macos-app/*_aarch64.dmg.sig 2>/dev/null || cat artifacts/macos-app/*.dmg.sig | head -1)
-          MACOS_X64_SIG=$(cat artifacts/macos-app/*_x64.dmg.sig 2>/dev/null || echo "$MACOS_ARM_SIG")
-          WINDOWS_X64_SIG=$(cat artifacts/windows-app/*_x64-setup.exe.sig 2>/dev/null || cat artifacts/windows-app/*.exe.sig | head -1)
+          MACOS_ARM_SIG=$(cat artifacts/Vinsly-macOS/*_aarch64.dmg.sig 2>/dev/null || cat artifacts/Vinsly-macOS/*.dmg.sig | head -1)
+          MACOS_X64_SIG=$(cat artifacts/Vinsly-macOS/*_x64.dmg.sig 2>/dev/null || echo "$MACOS_ARM_SIG")
+          WINDOWS_X64_SIG=$(cat artifacts/Vinsly-Windows/*_x64-setup.exe.sig 2>/dev/null || cat artifacts/Vinsly-Windows/*.exe.sig | head -1)
 
           # Find installer names
-          MACOS_ARM_FILE=$(basename artifacts/macos-app/*_aarch64.dmg 2>/dev/null || basename artifacts/macos-app/*.dmg | head -1)
-          MACOS_X64_FILE=$(basename artifacts/macos-app/*_x64.dmg 2>/dev/null || echo "$MACOS_ARM_FILE")
-          WINDOWS_X64_FILE=$(basename artifacts/windows-app/*_x64-setup.exe 2>/dev/null || basename artifacts/windows-app/*.exe | head -1)
+          MACOS_ARM_FILE=$(basename artifacts/Vinsly-macOS/*_aarch64.dmg 2>/dev/null || basename artifacts/Vinsly-macOS/*.dmg | head -1)
+          MACOS_X64_FILE=$(basename artifacts/Vinsly-macOS/*_x64.dmg 2>/dev/null || echo "$MACOS_ARM_FILE")
+          WINDOWS_X64_FILE=$(basename artifacts/Vinsly-Windows/*_x64-setup.exe 2>/dev/null || basename artifacts/Vinsly-Windows/*.exe | head -1)
 
           cat > latest.json <<EOF
           {
@@ -173,7 +170,8 @@ jobs:
   publish-manifest:
     needs: generate-manifest
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Disabled until signing is fixed
+    if: false
 
     steps:
       - name: Download manifest artifact
