@@ -144,8 +144,9 @@ vinsly-desktop/
 - **Tauri Plugins**:
   - `tauri-plugin-store` - Persistent key-value storage
   - `tauri-plugin-dialog` - Native file dialogs
-  - `tauri-plugin-fs` - File system access
   - `tauri-plugin-opener` - Reveal files in the OS file manager
+  - `tauri-plugin-updater` - Auto-update functionality
+  - `tauri-plugin-process` - Process management (restart after update)
 
 ## Available Scripts
 
