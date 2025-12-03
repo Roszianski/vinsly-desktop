@@ -17,10 +17,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 18
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 22
           cache: npm
 
       - name: Install Rust stable
@@ -80,8 +80,6 @@ jobs:
         with:
           name: windows-app
           path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/msi/*.msi.sig
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/nsis/*.exe.sig
           if-no-files-found: error
@@ -108,8 +106,6 @@ jobs:
           files: |
             artifacts/macos-app/*.dmg
             artifacts/macos-app/*.dmg.sig
-            artifacts/windows-app/*.msi
-            artifacts/windows-app/*.msi.sig
             artifacts/windows-app/*.exe
             artifacts/windows-app/*.exe.sig
           generate_release_notes: true
