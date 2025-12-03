@@ -470,17 +470,7 @@ export async function detectClaudeSessions(): Promise<ClaudeSessionRaw[]> {
   return await invoke<ClaudeSessionRaw[]>('detect_claude_sessions');
 }
 
-// Open a directory in Terminal
-export async function openDirectoryInTerminal(path: string): Promise<void> {
-  return await invoke('open_directory_in_terminal', { path });
-}
-
 // Kill a Claude Code session by PID
 export async function killClaudeSession(pid: number): Promise<void> {
   return await invoke('kill_claude_session', { pid });
-}
-
-// Open a file in the default text editor
-export async function openFileInDefaultEditor(path: string): Promise<void> {
-  return await invoke('open_file_in_default_editor', { path });
 }

@@ -16,6 +16,8 @@
     "dialog:allow-save",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
-    "fs:allow-write-file"
+    "fs:allow-write-file",
+    "allow-kill-claude-session",
+    "allow-detect-claude-sessions"
   ]
 }

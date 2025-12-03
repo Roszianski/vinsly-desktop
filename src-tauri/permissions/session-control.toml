@@ -1,0 +1,25 @@
+# Permission definitions for session control commands
+
+# Default: deny the dangerous session kill command
+[[permission]]
+identifier = "deny-kill-claude-session"
+description = "Denies terminating Claude Code sessions by default"
+commands.deny = ["kill_claude_session"]
+
+# Explicit allow for kill command (must be granted in capabilities)
+[[permission]]
+identifier = "allow-kill-claude-session"
+description = "Allows terminating Claude Code sessions"
+commands.allow = ["kill_claude_session"]
+
+# Allow detecting sessions (less dangerous, allowed by default)
+[[permission]]
+identifier = "allow-detect-claude-sessions"
+description = "Allows detecting running Claude Code sessions"
+commands.allow = ["detect_claude_sessions"]
+
+# Set for including in default permissions
+[[set]]
+identifier = "default"
+description = "Default session permissions - detection allowed, kill denied"
+permissions = ["deny-kill-claude-session", "allow-detect-claude-sessions"]

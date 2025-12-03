@@ -3,11 +3,76 @@ import { relaunch } from '@tauri-apps/plugin-process';
 import { check, Update } from '@tauri-apps/plugin-updater';
 import { PendingUpdateDetails } from '../types/updater';
 
+// Network configuration for update checks
+const UPDATE_CHECK_TIMEOUT_MS = 30000; // 30 second timeout per attempt
+const UPDATE_MAX_RETRIES = 3;
+const UPDATE_INITIAL_RETRY_DELAY_MS = 2000; // 2 seconds, doubles each retry
+
+/**
+ * Creates a promise that rejects after the specified timeout.
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(errorMessage));
+    }, timeoutMs);
+
+    promise
+      .then((result) => {
+        clearTimeout(timeoutId);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
+/**
+ * Sleep utility for retry delays.
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Check for updates with retry logic and exponential backoff.
+ */
+async function checkWithRetry(): Promise<Update | null> {
+  let lastError: Error | null = null;
+  let delay = UPDATE_INITIAL_RETRY_DELAY_MS;
+
+  for (let attempt = 0; attempt <= UPDATE_MAX_RETRIES; attempt++) {
+    try {
+      const update = await withTimeout(
+        check(),
+        UPDATE_CHECK_TIMEOUT_MS,
+        'Update check timed out'
+      );
+      return update;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`[Updater] Attempt ${attempt + 1}/${UPDATE_MAX_RETRIES + 1} failed:`, lastError.message);
+
+      // Don't sleep after the last attempt
+      if (attempt < UPDATE_MAX_RETRIES) {
+        console.log(`[Updater] Retrying in ${delay}ms...`);
+        await sleep(delay);
+        delay *= 2; // Exponential backoff
+      }
+    }
+  }
+
+  throw lastError ?? new Error('Update check failed after retries');
+}
+
 export interface UseUpdaterResult {
   isChecking: boolean;
   isInstalling: boolean;
   pendingUpdate: PendingUpdateDetails | null;
   lastCheckedAt: string | null;
+  lastCheckError: string | null;
   checkForUpdate: () => Promise<PendingUpdateDetails | null>;
   installUpdate: () => Promise<void>;
   clearPendingUpdate: () => Promise<void>;
@@ -18,6 +83,7 @@ export function useUpdater(): UseUpdaterResult {
   const [isInstalling, setIsInstalling] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState<PendingUpdateDetails | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
+  const [lastCheckError, setLastCheckError] = useState<string | null>(null);
   const updateResourceRef = useRef<Update | null>(null);
 
   const releaseUpdateResource = useCallback(async () => {
@@ -43,8 +109,10 @@ export function useUpdater(): UseUpdaterResult {
       return null;
     }
     setIsChecking(true);
+    setLastCheckError(null);
     try {
-      const update = await check();
+      // Check for updates with retry logic and exponential backoff
+      const update = await checkWithRetry();
       const checkedAt = new Date().toISOString();
       setLastCheckedAt(checkedAt);
 
@@ -71,8 +139,12 @@ export function useUpdater(): UseUpdaterResult {
       setPendingUpdate(details);
       return details;
     } catch (error) {
-      console.error('Update check failed:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Update check failed';
+      console.error('Update check failed after all retries:', errorMessage);
+      setLastCheckError(errorMessage);
+      // Don't throw - return null to indicate no update available
+      // This prevents transient network issues from blocking the app
+      return null;
     } finally {
       setIsChecking(false);
     }
@@ -107,6 +179,7 @@ export function useUpdater(): UseUpdaterResult {
     isInstalling,
     pendingUpdate,
     lastCheckedAt,
+    lastCheckError,
     checkForUpdate,
     installUpdate,
     clearPendingUpdate,

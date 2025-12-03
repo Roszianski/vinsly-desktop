@@ -9,6 +9,79 @@
 
 const LICENSE_API_BASE = 'https://api.lemonsqueezy.com/v1/licenses';
 
+// Network configuration
+const REQUEST_TIMEOUT_MS = 15000; // 15 second timeout
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY_MS = 1000; // 1 second initial delay, doubles each retry
+
+/**
+ * Fetch with timeout support using AbortController.
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number = REQUEST_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Sleep utility for retry delays.
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetch with retry logic and exponential backoff.
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries: number = MAX_RETRIES
+): Promise<Response> {
+  let lastError: Error | null = null;
+  let delay = INITIAL_RETRY_DELAY_MS;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetchWithTimeout(url, options);
+      // Don't retry on client errors (4xx), only on server errors (5xx) or network issues
+      if (response.ok || (response.status >= 400 && response.status < 500)) {
+        return response;
+      }
+      // Server error - will retry
+      lastError = new Error(`Server error: ${response.status}`);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      // Check if it was an abort (timeout)
+      if (lastError.name === 'AbortError') {
+        lastError = new Error('Request timed out');
+      }
+    }
+
+    // Don't sleep after the last attempt
+    if (attempt < maxRetries) {
+      console.log(`[Lemon] Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`);
+      await sleep(delay);
+      delay *= 2; // Exponential backoff
+    }
+  }
+
+  throw lastError ?? new Error('Request failed after retries');
+}
+
 export interface LemonLicenseValidationResult {
   valid: boolean;
   error: string | null;
@@ -77,7 +150,7 @@ export async function validateLicenseWithLemon(
   }
 
   try {
-    const response = await fetch(`${LICENSE_API_BASE}/validate`, {
+    const response = await fetchWithRetry(`${LICENSE_API_BASE}/validate`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -112,9 +185,10 @@ export async function validateLicenseWithLemon(
     };
   } catch (err) {
     console.error('[Lemon] license validation error', err);
+    const errorMessage = err instanceof Error ? err.message : 'network_error';
     return {
       valid: false,
-      error: 'network_error',
+      error: errorMessage.includes('timed out') ? 'timeout' : 'network_error',
     };
   }
 }
@@ -134,7 +208,7 @@ export async function activateLicenseWithLemon(
   body.append('instance_name', instanceName);
 
   try {
-    const response = await fetch(`${LICENSE_API_BASE}/activate`, {
+    const response = await fetchWithRetry(`${LICENSE_API_BASE}/activate`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -168,9 +242,10 @@ export async function activateLicenseWithLemon(
     };
   } catch (err) {
     console.error('[Lemon] license activation error', err);
+    const errorMessage = err instanceof Error ? err.message : 'network_error';
     return {
       activated: false,
-      error: 'network_error',
+      error: errorMessage.includes('timed out') ? 'timeout' : 'network_error',
     };
   }
 }
@@ -190,7 +265,7 @@ export async function deactivateLicenseWithLemon(
   body.append('instance_id', instanceId);
 
   try {
-    const response = await fetch(`${LICENSE_API_BASE}/deactivate`, {
+    const response = await fetchWithRetry(`${LICENSE_API_BASE}/deactivate`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -221,9 +296,10 @@ export async function deactivateLicenseWithLemon(
     };
   } catch (err) {
     console.error('[Lemon] license deactivation error', err);
+    const errorMessage = err instanceof Error ? err.message : 'network_error';
     return {
       deactivated: false,
-      error: 'network_error',
+      error: errorMessage.includes('timed out') ? 'timeout' : 'network_error',
     };
   }
 }

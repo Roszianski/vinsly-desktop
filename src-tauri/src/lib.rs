@@ -134,9 +134,11 @@ fn validate_entry_name(name: &str) -> Result<(), String> {
 
 fn ensure_path_in_claude_subdir(path: &Path, subdir: &str) -> Result<(), String> {
     let canonical = fs::canonicalize(path).map_err(|e| format!("Failed to resolve path: {}", e))?;
-    let canonical_str = canonical.to_string_lossy();
+    // Normalize path separators to forward slashes for cross-platform matching
+    // Windows canonicalize() returns backslashes, but we want consistent matching
+    let canonical_str = canonical.to_string_lossy().replace('\\', "/");
 
-    // Build the expected pattern
+    // Build the expected pattern (always uses forward slashes)
     let pattern = format!(".claude/{}", subdir);
 
     // Find the pattern in the path
@@ -2167,7 +2169,7 @@ struct ClaudeSessionInfo {
     command_line: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(permissions = ["allow-detect-claude-sessions"])]
 async fn detect_claude_sessions() -> Result<Vec<ClaudeSessionInfo>, String> {
     use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
@@ -2224,47 +2226,50 @@ async fn detect_claude_sessions() -> Result<Vec<ClaudeSessionInfo>, String> {
     Ok(sessions)
 }
 
-// Session action commands
-#[tauri::command]
-async fn open_directory_in_terminal(path: String) -> Result<(), String> {
+#[tauri::command(permissions = ["allow-kill-claude-session"])]
+async fn kill_claude_session(app: tauri::AppHandle, pid: u32) -> Result<(), String> {
+    use sysinfo::{ProcessRefreshKind, RefreshKind, System};
     use std::process::Command;
+    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
-    let expanded = expand_path(&path)?;
-    if !expanded.exists() {
-        return Err(format!("Directory does not exist: {}", path));
-    }
-    if !expanded.is_dir() {
-        return Err("Path is not a directory".to_string());
-    }
+    // Security: Verify the PID is actually a Claude-related process before killing
+    let mut sys = System::new_with_specifics(
+        RefreshKind::new().with_processes(ProcessRefreshKind::everything())
+    );
+    sys.refresh_processes();
 
-    #[cfg(target_os = "macos")]
-    {
-        // Use AppleScript to open Terminal at the specified directory
-        let script = format!(
-            r#"tell application "Terminal"
-                activate
-                do script "cd '{}'"
-            end tell"#,
-            expanded.display()
-        );
+    let target_pid = sysinfo::Pid::from_u32(pid);
+    let process = sys.process(target_pid)
+        .ok_or_else(|| format!("Process {} not found", pid))?;
 
-        Command::new("osascript")
-            .args(["-e", &script])
-            .status()
-            .map_err(|e| format!("Failed to open terminal: {}", e))?;
-    }
+    let name = process.name().to_lowercase();
+    let cmd_str = process.cmd().iter()
+        .map(|s| s.as_str())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
 
-    #[cfg(not(target_os = "macos"))]
-    {
-        return Err("open_directory_in_terminal is only supported on macOS".to_string());
+    // Only allow killing Claude-related processes
+    let is_claude_process = name.contains("claude") ||
+        cmd_str.contains("claude-code") ||
+        cmd_str.contains("@anthropic/claude") ||
+        (name.contains("node") && cmd_str.contains("claude"));
+
+    if !is_claude_process {
+        return Err(format!("Process {} is not a Claude session", pid));
     }
 
-    Ok(())
-}
+    // Security: Show native confirmation dialog (cannot be spoofed by XSS)
+    let confirmed = app.dialog()
+        .message("Are you sure you want to terminate this Claude session?")
+        .title("Confirm Session Termination")
+        .kind(MessageDialogKind::Warning)
+        .buttons(tauri_plugin_dialog::MessageDialogButtons::OkCancel)
+        .blocking_show();
 
-#[tauri::command]
-async fn kill_claude_session(pid: u32) -> Result<(), String> {
-    use std::process::Command;
+    if !confirmed {
+        return Err("User cancelled the operation".to_string());
+    }
 
     // Use the system kill command for reliability
     #[cfg(target_os = "macos")]
@@ -2300,32 +2305,6 @@ async fn kill_claude_session(pid: u32) -> Result<(), String> {
     {
         Err("kill_claude_session is only supported on macOS".to_string())
     }
-}
-
-#[tauri::command]
-async fn open_file_in_default_editor(path: String) -> Result<(), String> {
-    use std::process::Command;
-
-    let expanded = expand_path(&path)?;
-    if !expanded.exists() {
-        return Err(format!("File does not exist: {}", path));
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .arg("-t") // Open in default text editor
-            .arg(&expanded)
-            .status()
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        return Err("open_file_in_default_editor is only supported on macOS".to_string());
-    }
-
-    Ok(())
 }
 
 #[tauri::command]
@@ -2434,9 +2413,7 @@ pub fn run() {
             remove_hook,
             // Session detection and actions
             detect_claude_sessions,
-            open_directory_in_terminal,
             kill_claude_session,
-            open_file_in_default_editor,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

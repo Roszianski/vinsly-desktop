@@ -22,9 +22,10 @@
     "security": {
       "csp": {
         "default-src": "'self'",
-        "connect-src": "'self' https://api.lemonsqueezy.com https://github.com https://*.github.com",
-        "script-src": "'self' 'unsafe-inline' 'unsafe-eval'",
-        "style-src": "'self' 'unsafe-inline'",
+        "connect-src": "'self' https://api.lemonsqueezy.com https://raw.githubusercontent.com",
+        "script-src": "'self'",
+        "style-src-elem": "'self'",
+        "style-src-attr": "'unsafe-inline'",
         "img-src": "'self' data: https:"
       },
       "capabilities": [
@@ -45,7 +46,9 @@
             "store:allow-load",
             "store:allow-delete",
             "store:allow-clear",
-            "opener:default"
+            "opener:default",
+            "allow-kill-claude-session",
+            "allow-detect-claude-sessions"
           ]
         }
       ]
