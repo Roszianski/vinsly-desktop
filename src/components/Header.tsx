@@ -51,8 +51,6 @@ interface HeaderProps {
     onDisplayNameChange: (name: string) => void;
     scanSettings: ScanSettings;
     onScanSettingsChange?: (settings: ScanSettings) => void;
-    autoUpdateEnabled: boolean;
-    onAutoUpdateChange: (enabled: boolean) => void;
     onCheckForUpdates: () => void;
     isCheckingUpdate: boolean;
     isInstallingUpdate: boolean;
@@ -83,8 +81,6 @@ export const Header: React.FC<HeaderProps> = ({
   onDisplayNameChange,
   scanSettings,
   onScanSettingsChange,
-  autoUpdateEnabled,
-  onAutoUpdateChange,
   onCheckForUpdates,
   isCheckingUpdate,
   isInstallingUpdate,
@@ -274,16 +270,25 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* Settings Button */}
-            <button
-              onClick={() => setShowSettingsModal(true)}
-              className="p-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer"
-              aria-label="Settings"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowSettingsModal(true)}
+                className="p-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer"
+                aria-label={pendingUpdate ? "Settings (update available)" : "Settings"}
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+              {/* Update available badge */}
+              {pendingUpdate && (
+                <span
+                  className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-v-accent"
+                  aria-hidden="true"
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -302,8 +307,6 @@ export const Header: React.FC<HeaderProps> = ({
         onDisplayNameChange={onDisplayNameChange}
         scanSettings={scanSettings}
         onScanSettingsChange={onScanSettingsChange}
-        autoUpdateEnabled={autoUpdateEnabled}
-        onAutoUpdateChange={onAutoUpdateChange}
         onCheckForUpdates={onCheckForUpdates}
         isCheckingUpdate={isCheckingUpdate}
         isInstallingUpdate={isInstallingUpdate}

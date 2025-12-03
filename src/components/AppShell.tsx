@@ -32,8 +32,6 @@ interface AppShellProps {
   onScanSettingsChange: (settings: ScanSettings) => void;
 
   // Update Management
-  autoUpdateEnabled: boolean;
-  onAutoUpdateChange: (enabled: boolean) => void;
   onCheckForUpdates: () => void;
   isCheckingUpdate: boolean;
   isInstallingUpdate: boolean;
@@ -65,8 +63,6 @@ export function AppShell({
   onDisplayNameChange,
   scanSettings,
   onScanSettingsChange,
-  autoUpdateEnabled,
-  onAutoUpdateChange,
   onCheckForUpdates,
   isCheckingUpdate,
   isInstallingUpdate,
@@ -92,8 +88,6 @@ export function AppShell({
         onDisplayNameChange={onDisplayNameChange}
         scanSettings={scanSettings}
         onScanSettingsChange={onScanSettingsChange}
-        autoUpdateEnabled={autoUpdateEnabled}
-        onAutoUpdateChange={onAutoUpdateChange}
         onCheckForUpdates={onCheckForUpdates}
         isCheckingUpdate={isCheckingUpdate}
         isInstallingUpdate={isInstallingUpdate}

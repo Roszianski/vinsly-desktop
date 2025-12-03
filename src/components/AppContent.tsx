@@ -21,7 +21,6 @@ import { pageTransition } from '../animations';
 import { ToastContainer } from './Toast';
 import { ActivationModal } from './ActivationModal';
 import { SplashScreen } from './SplashScreen';
-import { UpdatePrompt } from './UpdatePrompt';
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 import { DocsPanel } from './DocsPanel';
 import { useToast } from '../contexts/ToastContext';
@@ -72,12 +71,8 @@ export const AppContent: React.FC = () => {
     isInstallingUpdate,
     pendingUpdate,
     lastUpdateCheckAt,
-    autoUpdateEnabled,
-    shouldShowUpdatePrompt,
     handleManualUpdateCheck,
-    handleAutoUpdateChange,
     handleInstallUpdate,
-    handleSnoozeUpdatePrompt,
   } = useUpdateContext();
 
   // Workspace context
@@ -727,8 +722,6 @@ export const AppContent: React.FC = () => {
         onDisplayNameChange={setDisplayName}
         scanSettings={scanSettings}
         onScanSettingsChange={applyScanSettings}
-        autoUpdateEnabled={autoUpdateEnabled}
-        onAutoUpdateChange={handleAutoUpdateChange}
         onCheckForUpdates={handleManualUpdateCheck}
         isCheckingUpdate={isCheckingUpdate}
         isInstallingUpdate={isInstallingUpdate}
@@ -753,17 +746,6 @@ export const AppContent: React.FC = () => {
       </main>
 
       <ToastContainer toasts={toasts} onClose={removeToast} />
-
-      <AnimatePresence>
-        {shouldShowUpdatePrompt && pendingUpdate && (
-          <UpdatePrompt
-            update={pendingUpdate}
-            isInstalling={isInstallingUpdate}
-            onInstall={handleInstallUpdate}
-            onRemindLater={handleSnoozeUpdatePrompt}
-          />
-        )}
-      </AnimatePresence>
 
       <ActivationModal
         isOpen={isActivationOpen}

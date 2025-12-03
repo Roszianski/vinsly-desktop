@@ -22,8 +22,6 @@ interface SettingsModalProps {
   onResetLicense: () => Promise<void> | void;
   onScanSettingsChange?: (settings: ScanSettings) => void;
   scanSettings: ScanSettings;
-  autoUpdateEnabled: boolean;
-  onAutoUpdateChange: (enabled: boolean) => Promise<void> | void;
   onCheckForUpdates: () => Promise<void> | void;
   isCheckingUpdate: boolean;
   isInstallingUpdate: boolean;
@@ -51,8 +49,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onResetLicense,
   onScanSettingsChange,
   scanSettings,
-  autoUpdateEnabled,
-  onAutoUpdateChange,
   onCheckForUpdates,
   isCheckingUpdate,
   isInstallingUpdate,
@@ -978,7 +974,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 Updates
                               </p>
                               <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                                Control how Vinsly delivers new versions
+                                Check for and install new versions of Vinsly
                               </p>
                             </div>
                             {pendingUpdate && (
@@ -1000,16 +996,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           </div>
 
                           <div className="mt-4 flex flex-wrap gap-3 text-sm">
-                            <button
-                              onClick={() => void onAutoUpdateChange(!autoUpdateEnabled)}
-                              className={`px-4 py-2 rounded-lg border transition-colors ${
-                                autoUpdateEnabled
-                                  ? 'border-v-accent text-v-accent bg-v-accent/10'
-                                  : 'border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent/50'
-                              }`}
-                            >
-                              {autoUpdateEnabled ? 'Auto-update enabled' : 'Enable auto-update'}
-                            </button>
                             <button
                               onClick={() => void onCheckForUpdates()}
                               disabled={isCheckingUpdate}

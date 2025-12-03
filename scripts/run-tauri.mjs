@@ -30,8 +30,10 @@ const runTauri = () =>
   new Promise((resolve, reject) => {
     const tauri = spawn('tauri', tauriArgs, {
       stdio: 'inherit',
-      env: process.env
+      env: process.env,
+      shell: true  // Required for Windows to find npm binaries
     });
+    tauri.on('error', (err) => reject(err));
     tauri.on('exit', (code) => {
       if (code === 0) {
         resolve();
