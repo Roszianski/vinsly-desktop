@@ -15,5 +15,5 @@
 - [ ] Updater/capability hardening: ship the real updater pubkey (or disable updater until ready) and scope/remove the process plugin so only relaunch is permitted; confirm updater endpoint + manifest publishing flow.
 
 ## Release/update hygiene (from UPDATES)
-- [ ] Keep a release checklist: version bump → build macOS/Windows installers → generate/publish manifest → upload assets to the release endpoint.
+- [ ] Keep a release checklist: version bump → build macOS/Windows/Linux installers → generate/publish manifest → upload assets to the release endpoint.
 - [ ] Add Windows CI build if no local Windows builder; ensure installers + manifest are published together.

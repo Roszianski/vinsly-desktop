@@ -222,7 +222,7 @@ git push origin v0.1.1
 ```
 
 The GitHub Actions workflow will automatically:
-- Build for macOS (Intel & Apple Silicon) and Windows
+- Build for macOS (Intel & Apple Silicon), Windows, and Linux
 - Sign all installers with Tauri signing keys
 - Create GitHub Release with binaries
 - Generate and publish update manifest
