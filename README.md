@@ -11,10 +11,13 @@ A Tauri-powered desktop application for designing, organising, and analysing Cla
 - 🧠 **Swarm View** – See your “agent organisation” as a mind-map style graph, grouped by scope, with exportable diagrams.
 - 📊 **Analytics Dashboard** – Track agent complexity, model distribution, tool usage, and get data-driven recommendations.
 - 🔍 **Scan & Watch** – Scan global and project directories for agents, and configure watched folders for auto‑discovery.
+- 🧾 **Slash Commands & Memory** – Manage `.claude/commands` and CLAUDE.md memories across global and project scopes, with import/export.
+- 🌐 **MCP Servers** – Configure Model Context Protocol servers at user/project/local scope with favorites and toggles.
+- 🪝 **Hooks** – Register shell hooks for Claude Code events (pre/post tool use, notifications, stop) across scopes.
+- 🖥️ **Session Monitor** – Detect and stop running Claude Code sessions, with quick reveal in Finder/Explorer.
 - 💾 **Persistent Storage** – Settings, layout preferences, and local account details are stored using Tauri Store.
 - 🎨 **Light/Dark Themes** – System-aware theming with a dedicated appearance section in Settings.
 - 📥 **Import/Export** – Import agents from `.md` and `.zip` bundles, export individual agents or curated sets.
-- 🧭 **Guided Tours** – Inline guided tours to explain List, Map, Analytics, and editor flows directly in the app.
 - 🔐 **Licensing & Account (beta)** – In-app licence key + email activation flow (backed by Lemon Squeezy), plus a local display name used across the UI (e.g. "[Name] Organisation").
 
 ## UI/UX Design System
@@ -86,18 +89,20 @@ Before running the Vinsly Desktop application, ensure you have:
 vinsly-desktop/
 ├── src/                          # React TypeScript frontend
 │   ├── components/               # React components
-│   │   ├── screens/             # Main screen components
+│   │   ├── screens/             # Agents, skills, memory, commands, MCP, hooks, analytics, team graph
 │   │   ├── analytics/           # Analytics visualizations
 │   │   ├── form/                # Form components
 │   │   ├── icons/               # Icon components
 │   │   ├── tools/               # Tool selector components
 │   │   └── wizard/              # Wizard step components
+│   ├── contexts/                # App/Workspace/License/Navigation/Toast providers
 │   ├── utils/                   # Utility functions
 │   │   ├── storage.ts           # Tauri Store wrapper (settings, licence, display name)
-│   │   ├── tauriCommands.ts     # Rust command wrappers (agent filesystem)
+│   │   ├── tauriCommands.ts     # Rust command wrappers (agents, skills, memory, commands, MCP, hooks, sessions)
 │   │   ├── agentImport.ts       # Agent import from files / zip
 │   │   ├── agentExport.ts       # Agent export to zip
 │   │   ├── analytics.ts         # Analytics calculations & recommendations
+│   │   ├── lemonLicensingClient.ts # Lemon Squeezy License API client
 │   │   └── fuzzyMatch.ts        # Search functionality
 │   ├── types.ts                 # Core TypeScript type definitions
 │   ├── types/licensing.ts       # Licence-related types
@@ -151,9 +156,13 @@ vinsly-desktop/
 ## Available Scripts
 
 - `npm run dev` - Start Vite development server
-- `npm run build` - Build frontend for production
+- `npm run build:web` - Type-check + build frontend
+- `npm run build:helper` - Build the macOS scan-helper binary
+- `npm run build` - Build frontend and scan-helper (used by Tauri)
+- `npm run preview` - Preview built frontend
 - `npm run tauri dev` - Run Tauri app in development mode
 - `npm run tauri build` - Build Tauri app for production
+- `npm test` / `npm run test:watch` - Run Jest tests
 - `npm run reset:user-data` - Remove cached settings/licence data from the OS app-support folder (handy for testing first-run flows)
 
 ## Resetting Local Data
@@ -163,17 +172,7 @@ Run `npm run reset:user-data` any time you need to simulate a clean install on y
 
 ## Tauri Commands
 
-The application exposes several Rust commands for native functionality:
-
-### File Operations
-- `list_agents(scope, projectPath?)` – List all agent files from project or global scope.
-- `read_agent(path)` – Read a single agent file.
-- `write_agent(scope, name, content, projectPath?)` – Write an agent file (creating directories if needed).
-- `delete_agent(path)` – Delete an agent file.
-- `list_agents_from_directory(directory)` – Scan an arbitrary directory for `.claude/agents` content.
-
-### System
-- `get_home_dir()` – Get cross-platform home directory path.
+The app exposes a broad Rust command surface for agents/skills, slash commands, CLAUDE.md memory, MCP servers, hooks, Claude Code session detection, and safe import/export. See `docs/TAURI_COMMANDS.md` for the full, up-to-date IPC reference (parameters, validation, and scopes).
 
 ## macOS Home Scan Permissions
 
@@ -186,6 +185,7 @@ Add any protected locations you care about as watched folders in Settings if you
 - Enable Tauri DevTools in development mode
 - Rust logs available in terminal
 - Frontend console available via browser DevTools
+- Claude Code session monitor can reveal/terminate active sessions for local debugging
 
 ### Building for Distribution
 ```bash
@@ -196,16 +196,16 @@ This creates platform-specific installers in `src-tauri/target/release/bundle/`
 
 ### Auto-Updates System
 
-Vinsly Desktop includes a fully automated update system:
+Vinsly Desktop includes an update notification system:
 
 **Update Endpoint**: `https://raw.githubusercontent.com/Roszianski/vinsly-updates/main/latest.json`
 
 **How It Works**:
-1. Private repo builds and cryptographically signs installers
-2. GitHub Actions creates a release with signed binaries
-3. Workflow generates `latest.json` with download URLs
-4. Manifest is automatically pushed to [public updates repo](https://github.com/Roszianski/vinsly-updates)
-5. Vinsly Desktop periodically checks for updates
+1. Private repo builds installers (signing coming soon)
+2. GitHub Actions creates a release with binaries
+3. (When enabled) workflow generates `latest.json` with download URLs and signatures
+4. Manifest is pushed to [public updates repo](https://github.com/Roszianski/vinsly-updates)
+5. Vinsly Desktop checks for updates on app launch and shows a badge in Settings when an update is available
 
 **Creating a Release**:
 ```bash
@@ -222,10 +222,9 @@ git push origin v0.1.1
 ```
 
 The GitHub Actions workflow will automatically:
-- Build for macOS (Intel & Apple Silicon), Windows, and Linux
-- Sign all installers with Tauri signing keys
+- Build for macOS, Windows (NSIS), and Linux (deb, AppImage)
 - Create GitHub Release with binaries
-- Generate and publish update manifest
+- Generate update manifest (currently disabled in CI until signing is fully enabled) and publish to the updates repo when re-enabled
 
 **Setup Requirements**:
 1. GitHub token `VINSLY_UPDATES_TOKEN` configured in repo secrets (see [vinsly-updates README](https://github.com/Roszianski/vinsly-updates))
@@ -239,12 +238,11 @@ All permissions are configured in `src-tauri/capabilities/default.json`. The app
 
 ## Hook Architecture & Call Order
 
-`App.tsx` composes the custom hooks in this order:
-- `useTheme` → `usePlatformInfo` → `useUserProfile` → `useNavigation` (independent UI state)
-- `useLicense` (depends on platformIdentifier; exposes reset + onboarding flags)
-- `useScanSettings` (scan settings state + ref for synchronous reads)
-- `useWorkspace` (depends on `scanSettingsRef` + `isOnboardingComplete`; handles scanning, CRUD, cache)
-- `useUpdater` (unchanged)
+`App.tsx` wraps providers (`LicenseProvider` → `UpdateProvider` → `WorkspaceProvider` → `NavigationProvider`). `AppContent` composes the custom hooks roughly as:
+- Theme/platform/user profile/navigation boot
+- License bootstrap (activation + onboarding)
+- Update bootstrap
+- Scan settings + workspace loader (agents, skills, commands, memory, MCP, hooks, sessions) once onboarding completes
 
 Integration example: activation completion calls `useLicense.setLicense`, applies scan settings via `useScanSettings`, then triggers `useWorkspace.loadAgents`.
 
@@ -254,8 +252,13 @@ Integration example: activation completion calls `useLicense.setLicense`, applie
 - Theme toggle: header toggle flips DOM class and persists.
 - Agents: create/edit/duplicate/delete, bulk delete, import/export, favorites, watched directory scan.
 - Skills: create/edit/delete, import/export, favorites, reveal/export selected skills.
+- Slash commands: CRUD, import/export, favorites, watched directory scan.
+- Memory: global/project CLAUDE.md edit/clone, import/export.
+- MCP servers: list/add/update/remove across scopes; favorites.
+- Hooks: add/update/remove across scopes; favorites.
+- Sessions: detect/stop Claude Code sessions; open working directory.
 - Navigation: list ↔ team ↔ skills ↔ analytics transitions; shortcuts (⌘/Ctrl + N) open create.
-- Auto-update: manual check, snooze, auto-update toggle feedback.
+- Updates: manual check button, update badge on settings gear, install flow.
 - Shell (process spawning)
 - Event system (for streaming CLI output)
 
@@ -290,15 +293,6 @@ Vinsly Desktop is intended to be sold as a **pay‑to‑own** product using Lemo
 
 Details may evolve as the product and licensing integration mature, but the intent is to keep activation straightforward: buy on the landing page, receive a Lemon Squeezy licence key, and activate inside the app using the built‑in licence + email flow.
 
-### Lemon Squeezy API Key Expiry
+### Lemon Squeezy API Notes
 
-When generating a Lemon Squeezy **License API key** for Vinsly:
-
-- Prefer a **long‑lived key** (e.g. **12 months**), not a short‑lived token.
-- This key is baked into the desktop build via `VITE_LEMON_LICENSE_API_KEY` so the app can call Lemon’s License API to validate keys.
-- If the key expires too soon, older installers become unable to validate licences.
-- Before the key expires:
-  - Create a **new** License API key in Lemon.
-  - Rebuild Vinsly with `VITE_LEMON_LICENSE_API_KEY` set to the new key.
-  - Ship an update and encourage users to upgrade.
-- Once most users are on a build that uses the new key, you can safely revoke the old key in Lemon.
+Vinsly calls Lemon’s License API directly from the client to validate/activate keys. Prefer long‑lived licence keys on the Lemon side so older installers remain functional; rotate via normal app updates if you need to change products or variants.
