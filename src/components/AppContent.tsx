@@ -767,7 +767,6 @@ export const AppContent: React.FC = () => {
 
       <ActivationModal
         isOpen={isActivationOpen}
-        defaultEmail={licenseInfo?.email}
         defaultDisplayName={userDisplayName}
         defaultScanGlobal={scanSettings.autoScanGlobalOnStartup}
         defaultScanHome={scanSettings.autoScanHomeDirectoryOnStartup}
@@ -777,19 +776,27 @@ export const AppContent: React.FC = () => {
         onValidateLicense={async ({ licenseKey }) => {
           const result = await validateLicenseWithLemon(licenseKey);
           const status = result.status?.toLowerCase();
-          if (!result.valid || (status && status !== 'active')) {
+
+          // Reject if not valid, or if status is explicitly bad (revoked, expired, disabled)
+          // Allow "inactive" status - licenses start inactive until first activation
+          const isBadStatus = status === 'revoked' || status === 'expired' || status === 'disabled';
+
+          if (!result.valid || isBadStatus) {
             const message =
               result.error === 'invalid'
                 ? 'This licence key was not recognised.'
-                : result.error === 'revoked' || status === 'revoked'
+                : status === 'revoked'
                   ? 'This licence has been revoked or refunded.'
-                  : 'Unable to validate your licence right now.';
+                  : status === 'expired'
+                    ? 'This licence has expired.'
+                    : status === 'disabled'
+                      ? 'This licence has been disabled.'
+                      : 'Unable to validate your licence right now.';
             throw new Error(message);
           }
         }}
-        onComplete={async ({ licenseKey, email, displayName, autoScanGlobal, autoScanHome, fullDiskAccessEnabled }) => {
+        onComplete={async ({ licenseKey, displayName, autoScanGlobal, autoScanHome, fullDiskAccessEnabled }) => {
           const trimmedLicenseKey = licenseKey.trim();
-          const trimmedEmail = email.trim();
           const trimmedDisplayName = displayName.trim();
 
           // Generate instance name for Lemon Squeezy
@@ -819,7 +826,7 @@ export const AppContent: React.FC = () => {
 
           const licenseRecord: LicenseInfo = {
             licenseKey: trimmedLicenseKey,
-            email: trimmedEmail,
+            email: activationResult.meta?.customer_email,
             status: 'active',
             lastChecked: new Date().toISOString(),
             instanceId: activationResult.instance.id,

@@ -4,17 +4,15 @@ import { checkFullDiskAccess, openFullDiskAccessSettings } from '../utils/tauriC
 
 interface ActivationModalProps {
   isOpen: boolean;
-  defaultEmail?: string;
   defaultDisplayName?: string;
   defaultScanGlobal?: boolean;
   defaultScanHome?: boolean;
   defaultFullDiskAccess?: boolean;
   isMacPlatform?: boolean;
   macOSVersionMajor?: number | null;
-  onValidateLicense?: (payload: { licenseKey: string; email: string }) => Promise<void>;
+  onValidateLicense?: (payload: { licenseKey: string }) => Promise<void>;
   onComplete: (payload: {
     licenseKey: string;
-    email: string;
     displayName: string;
     autoScanGlobal: boolean;
     autoScanHome: boolean;
@@ -27,7 +25,6 @@ type Step = 'license' | 'profile' | 'scanning' | 'permissions';
 
 export const ActivationModal: React.FC<ActivationModalProps> = ({
   isOpen,
-  defaultEmail = '',
   defaultDisplayName = '',
   defaultScanGlobal = true,
   defaultScanHome = false,
@@ -40,7 +37,6 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
 }) => {
   const [step, setStep] = useState<Step>('license');
   const [licenseKey, setLicenseKey] = useState('');
-  const [email, setEmail] = useState(defaultEmail);
   const [displayName, setDisplayName] = useState(defaultDisplayName);
   const [autoScanGlobal, setAutoScanGlobal] = useState(defaultScanGlobal);
   const [autoScanHome, setAutoScanHome] = useState(defaultScanHome);
@@ -52,7 +48,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [validationState, setValidationState] = useState<'idle' | 'validating' | 'success'>('idle');
   const [licenseStepError, setLicenseStepError] = useState<string | null>(null);
-  const [errors, setErrors] = useState<{ licenseKey?: string; email?: string; displayName?: string }>({});
+  const [errors, setErrors] = useState<{ licenseKey?: string; displayName?: string }>({});
   const validationSuccessTimer = useRef<number | null>(null);
   const wasOpenRef = useRef(false);
   const postGrantCheckTimeoutRef = useRef<number | null>(null);
@@ -62,15 +58,14 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
   const resetFormState = useCallback(() => {
     setStep('license');
     setLicenseKey('');
-    setEmail(defaultEmail);
     setDisplayName(defaultDisplayName);
     setErrors({});
     setAutoScanGlobal(defaultScanGlobal);
     setAutoScanHome(defaultScanHome);
-     setFullDiskAccessEnabled(defaultFullDiskAccess);
-     setFullDiskStatus('unknown');
-     setFullDiskStatusMessage(null);
-     setIsOpeningFullDiskSettings(false);
+    setFullDiskAccessEnabled(defaultFullDiskAccess);
+    setFullDiskStatus('unknown');
+    setFullDiskStatusMessage(null);
+    setIsOpeningFullDiskSettings(false);
     setIsSubmitting(false);
     setSubmitError(null);
     setValidationState('idle');
@@ -79,7 +74,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
       window.clearTimeout(validationSuccessTimer.current);
       validationSuccessTimer.current = null;
     }
-  }, [defaultDisplayName, defaultEmail, defaultScanGlobal, defaultScanHome, defaultFullDiskAccess]);
+  }, [defaultDisplayName, defaultScanGlobal, defaultScanHome, defaultFullDiskAccess]);
 
   const refreshFullDiskStatus = useCallback(async () => {
     if (!isMacPlatform) {
@@ -181,10 +176,6 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
     if (!licenseKey.trim()) {
       nextErrors.licenseKey = 'Please enter your licence key';
     }
-    const trimmedEmail = email.trim();
-    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      nextErrors.email = 'Enter a valid email or leave blank';
-    }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -231,7 +222,6 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
         setValidationState('validating');
         await onValidateLicense({
           licenseKey: licenseKey.trim(),
-          email: email.trim(),
         });
         setValidationState('success');
         proceedToProfile();
@@ -272,7 +262,6 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
     try {
       await onComplete({
         licenseKey: licenseKey.trim(),
-        email: email.trim(),
         displayName: displayName.trim(),
         autoScanGlobal,
         autoScanHome,
@@ -347,24 +336,6 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
 
             {step === 'license' ? (
               <form className="space-y-5" onSubmit={handleLicenseSubmit}>
-                <div>
-                  <label className="block text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary mb-2">
-                    Email (optional)
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="you@example.com"
-                    disabled={isLicenseButtonBusy}
-                    className={`w-full px-4 py-3 rounded-xl border bg-transparent text-v-light-text-primary dark:text-v-text-primary focus-visible:outline-none focus:ring-2 focus:ring-v-accent ${
-                      errors.email ? 'border-red-400' : 'border-v-light-border dark:border-v-border'
-                    }`}
-                  />
-                  {errors.email && (
-                    <p className="text-xs text-red-500 mt-1">{errors.email}</p>
-                  )}
-                </div>
                 <div>
                   <label className="block text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary mb-2">
                     Licence key
@@ -470,10 +441,10 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                 <div className={`flex items-center justify-between p-4 border border-v-light-border dark:border-v-border rounded-xl bg-v-light-bg/60 dark:bg-v-dark/60 ${isSubmitting ? 'opacity-70' : ''}`}>
                   <div className="mr-4">
                     <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                      Auto-scan global agents
+                      Auto-scan global resources
                     </p>
                     <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                      Keeps `~/.claude/agents` synced every launch. Change this any time in Settings.
+                      Keeps ~/.claude synced every launch (agents, skills, commands, memory, etc.). Change this any time in Settings.
                     </p>
                   </div>
                   <button
@@ -502,8 +473,8 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                     </p>
                     <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
                       {isMacPlatform
-                        ? 'Requires Full Disk Access to include Desktop/Documents. You can still scan watched folders without it.'
-                        : 'Finds `.claude/agents` folders across your home directory.'}
+                        ? 'Finds project-level .claude resources across your home directory. Requires Full Disk Access for Desktop/Documents.'
+                        : 'Finds project-level .claude resources across your home directory.'}
                     </p>
                   </div>
                   <button
@@ -526,7 +497,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                 </div>
 
                 <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary text-center">
-                  You can change these scan defaults any time in Settings.
+                  You can change these defaults any time in Settings.
                 </p>
 
                 {!isMacPlatform && submitError && (
