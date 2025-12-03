@@ -15,10 +15,11 @@ jest.mock('@tauri-apps/plugin-dialog', () => ({
   open: jest.fn(),
 }));
 
-jest.mock('@tauri-apps/plugin-fs', () => ({
-  writeTextFile: jest.fn(),
-  writeFile: jest.fn(),
-  readTextFile: jest.fn(),
+jest.mock('../../utils/tauriCommands', () => ({
+  exportTextFile: jest.fn(),
+  exportBinaryFile: jest.fn(),
+  importTextFile: jest.fn(),
+  importBinaryFile: jest.fn(),
 }));
 
 describe('Import/Export Integration Tests', () => {

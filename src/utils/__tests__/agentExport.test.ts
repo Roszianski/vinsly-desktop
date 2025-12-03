@@ -2,16 +2,16 @@ import { agentToMarkdown, exportAgent, exportAgentsAsZip } from '../agentExport'
 import { Agent, AgentScope } from '../../types';
 import { createMockAgent } from '../../test/helpers';
 import * as dialog from '@tauri-apps/plugin-dialog';
-import * as fs from '@tauri-apps/plugin-fs';
+import * as tauriCommands from '../tauriCommands';
 import JSZip from 'jszip';
 
 jest.mock('@tauri-apps/plugin-dialog', () => ({
   save: jest.fn(),
 }));
 
-jest.mock('@tauri-apps/plugin-fs', () => ({
-  writeTextFile: jest.fn(),
-  writeFile: jest.fn(),
+jest.mock('../tauriCommands', () => ({
+  exportTextFile: jest.fn(),
+  exportBinaryFile: jest.fn(),
 }));
 
 describe('agentExport', () => {
@@ -136,7 +136,7 @@ describe('agentExport', () => {
       const mockPath = '/path/to/Export Test.md';
 
       (dialog.save as jest.Mock).mockResolvedValue(mockPath);
-      (fs.writeTextFile as jest.Mock).mockResolvedValue(undefined);
+      (tauriCommands.exportTextFile as jest.Mock).mockResolvedValue(undefined);
 
       const result = await exportAgent(agent);
 
@@ -145,7 +145,7 @@ describe('agentExport', () => {
         defaultPath: 'Export Test.md',
         filters: [{ name: 'Markdown', extensions: ['md'] }],
       });
-      expect(fs.writeTextFile).toHaveBeenCalledWith(
+      expect(tauriCommands.exportTextFile).toHaveBeenCalledWith(
         mockPath,
         expect.stringContaining('name: Export Test')
       );
@@ -159,7 +159,7 @@ describe('agentExport', () => {
       const result = await exportAgent(agent);
 
       expect(result).toBe(false);
-      expect(fs.writeTextFile).not.toHaveBeenCalled();
+      expect(tauriCommands.exportTextFile).not.toHaveBeenCalled();
     });
 
     it('should throw error when file write fails', async () => {
@@ -168,7 +168,7 @@ describe('agentExport', () => {
       const mockError = new Error('Write permission denied');
 
       (dialog.save as jest.Mock).mockResolvedValue(mockPath);
-      (fs.writeTextFile as jest.Mock).mockRejectedValue(mockError);
+      (tauriCommands.exportTextFile as jest.Mock).mockRejectedValue(mockError);
 
       await expect(exportAgent(agent)).rejects.toThrow('Write permission denied');
     });
@@ -178,7 +178,7 @@ describe('agentExport', () => {
       const mockPath = '/path/to/export.md';
 
       (dialog.save as jest.Mock).mockResolvedValue(mockPath);
-      (fs.writeTextFile as jest.Mock).mockResolvedValue(undefined);
+      (tauriCommands.exportTextFile as jest.Mock).mockResolvedValue(undefined);
 
       const result = await exportAgent(agent);
 
@@ -200,7 +200,7 @@ describe('agentExport', () => {
       const mockPath = '/path/to/agents.zip';
 
       (dialog.save as jest.Mock).mockResolvedValue(mockPath);
-      (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
+      (tauriCommands.exportBinaryFile as jest.Mock).mockResolvedValue(undefined);
 
       const result = await exportAgentsAsZip(agents);
 
@@ -209,7 +209,7 @@ describe('agentExport', () => {
         defaultPath: 'agents.zip',
         filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
       });
-      expect(fs.writeFile).toHaveBeenCalledWith(
+      expect(tauriCommands.exportBinaryFile).toHaveBeenCalledWith(
         mockPath,
         expect.any(Uint8Array)
       );
@@ -220,7 +220,7 @@ describe('agentExport', () => {
       const mockPath = '/path/to/custom-name.zip';
 
       (dialog.save as jest.Mock).mockResolvedValue(mockPath);
-      (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
+      (tauriCommands.exportBinaryFile as jest.Mock).mockResolvedValue(undefined);
 
       await exportAgentsAsZip(agents, 'custom-name');
 
@@ -238,21 +238,21 @@ describe('agentExport', () => {
       const result = await exportAgentsAsZip(agents);
 
       expect(result).toBe(false);
-      expect(fs.writeFile).not.toHaveBeenCalled();
+      expect(tauriCommands.exportBinaryFile).not.toHaveBeenCalled();
     });
 
     it('should handle empty agents array', async () => {
       const mockPath = '/path/to/empty.zip';
 
       (dialog.save as jest.Mock).mockResolvedValue(mockPath);
-      (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
+      (tauriCommands.exportBinaryFile as jest.Mock).mockResolvedValue(undefined);
 
       const result = await exportAgentsAsZip([]);
 
       expect(result).toBe(true);
 
       // Verify empty ZIP was created
-      const writeCall = (fs.writeFile as jest.Mock).mock.calls[0];
+      const writeCall = (tauriCommands.exportBinaryFile as jest.Mock).mock.calls[0];
       const zipData = writeCall[1];
 
       // Load the ZIP to verify it's valid but empty
@@ -270,11 +270,11 @@ describe('agentExport', () => {
       const mockPath = '/path/to/test.zip';
 
       (dialog.save as jest.Mock).mockResolvedValue(mockPath);
-      (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
+      (tauriCommands.exportBinaryFile as jest.Mock).mockResolvedValue(undefined);
 
       await exportAgentsAsZip(agents);
 
-      const writeCall = (fs.writeFile as jest.Mock).mock.calls[0];
+      const writeCall = (tauriCommands.exportBinaryFile as jest.Mock).mock.calls[0];
       const zipData = writeCall[1];
 
       // Verify ZIP structure
@@ -301,11 +301,11 @@ describe('agentExport', () => {
       const mockPath = '/path/to/test.zip';
 
       (dialog.save as jest.Mock).mockResolvedValue(mockPath);
-      (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
+      (tauriCommands.exportBinaryFile as jest.Mock).mockResolvedValue(undefined);
 
       await exportAgentsAsZip(agents);
 
-      const writeCall = (fs.writeFile as jest.Mock).mock.calls[0];
+      const writeCall = (tauriCommands.exportBinaryFile as jest.Mock).mock.calls[0];
       const zipData = writeCall[1];
 
       // Verify file content in ZIP
@@ -323,7 +323,7 @@ describe('agentExport', () => {
       const mockError = new Error('Disk full');
 
       (dialog.save as jest.Mock).mockResolvedValue(mockPath);
-      (fs.writeFile as jest.Mock).mockRejectedValue(mockError);
+      (tauriCommands.exportBinaryFile as jest.Mock).mockRejectedValue(mockError);
 
       await expect(exportAgentsAsZip(agents)).rejects.toThrow('Disk full');
     });
@@ -336,11 +336,11 @@ describe('agentExport', () => {
       const mockPath = '/path/to/test.zip';
 
       (dialog.save as jest.Mock).mockResolvedValue(mockPath);
-      (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
+      (tauriCommands.exportBinaryFile as jest.Mock).mockResolvedValue(undefined);
 
       await exportAgentsAsZip(agents);
 
-      const writeCall = (fs.writeFile as jest.Mock).mock.calls[0];
+      const writeCall = (tauriCommands.exportBinaryFile as jest.Mock).mock.calls[0];
       const zipData = writeCall[1];
 
       const zip = await JSZip.loadAsync(zipData);
