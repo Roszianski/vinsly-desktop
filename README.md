@@ -62,7 +62,7 @@ Before running the Vinsly Desktop application, ensure you have:
 
 1. **Clone or navigate to the project**:
    ```bash
-   cd Vinsly-Desktop
+   cd vinsly-desktop
    ```
 
 2. **Install dependencies**:
@@ -83,7 +83,7 @@ Before running the Vinsly Desktop application, ensure you have:
 ## Project Structure
 
 ```
-Vinsly-Desktop/
+vinsly-desktop/
 ├── src/                          # React TypeScript frontend
 │   ├── components/               # React components
 │   │   ├── screens/             # Main screen components
@@ -197,13 +197,13 @@ This creates platform-specific installers in `src-tauri/target/release/bundle/`
 
 Vinsly Desktop includes a fully automated update system:
 
-**Update Endpoint**: `https://raw.githubusercontent.com/Roszianski/Vinsly-Updates/main/latest.json`
+**Update Endpoint**: `https://raw.githubusercontent.com/Roszianski/vinsly-updates/main/latest.json`
 
 **How It Works**:
 1. Private repo builds and cryptographically signs installers
 2. GitHub Actions creates a release with signed binaries
 3. Workflow generates `latest.json` with download URLs
-4. Manifest is automatically pushed to [public updates repo](https://github.com/Roszianski/Vinsly-Updates)
+4. Manifest is automatically pushed to [public updates repo](https://github.com/Roszianski/vinsly-updates)
 5. Vinsly Desktop periodically checks for updates
 
 **Creating a Release**:
@@ -227,7 +227,7 @@ The GitHub Actions workflow will automatically:
 - Generate and publish update manifest
 
 **Setup Requirements**:
-1. GitHub token `VINSLY_UPDATES_TOKEN` configured in repo secrets (see [Vinsly-Updates README](https://github.com/Roszianski/Vinsly-Updates))
+1. GitHub token `VINSLY_UPDATES_TOKEN` configured in repo secrets (see [vinsly-updates README](https://github.com/Roszianski/vinsly-updates))
 2. Tauri signing keys in `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` secrets
 
 ### Permissions

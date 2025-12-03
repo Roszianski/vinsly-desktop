@@ -25,8 +25,8 @@ This guide will help you set up your development environment and understand the 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/YOUR_ORG/Vinsly-Desktop.git
-   cd Vinsly-Desktop
+   git clone https://github.com/YOUR_ORG/vinsly-desktop.git
+   cd vinsly-desktop
    ```
 
 2. **Install dependencies:**
@@ -50,7 +50,7 @@ This will start both the Vite dev server and the Tauri app.
 ## Project Structure
 
 ```
-Vinsly-Desktop/
+vinsly-desktop/
 ├── src/                      # React/TypeScript source code
 │   ├── components/           # React components
 │   │   ├── screens/         # Full-screen views

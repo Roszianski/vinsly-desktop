@@ -190,7 +190,7 @@ jobs:
 
       - name: Clone public updates repo
         run: |
-          git clone https://github.com/Roszianski/Vinsly-Updates.git updates-repo
+          git clone https://github.com/Roszianski/vinsly-updates.git updates-repo
           cd updates-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -207,4 +207,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.VINSLY_UPDATES_TOKEN }}
         run: |
           cd updates-repo
-          git push https://x-access-token:$GITHUB_TOKEN@github.com/Roszianski/Vinsly-Updates.git main
+          git push https://x-access-token:$GITHUB_TOKEN@github.com/Roszianski/vinsly-updates.git main
