@@ -339,6 +339,7 @@ export const Header: React.FC<HeaderProps> = ({
         error={sessionError}
         onClose={() => setShowSessionPanel(false)}
         onRefresh={onRefreshSessions || (() => {})}
+        isMacPlatform={isMacPlatform}
       />
     </header>
   );

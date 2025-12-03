@@ -22,6 +22,7 @@ interface SessionPanelProps {
   error: string | null;
   onClose: () => void;
   onRefresh: () => void;
+  isMacPlatform?: boolean;
 }
 
 export const SessionPanel: React.FC<SessionPanelProps> = ({
@@ -31,6 +32,7 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
   error,
   onClose,
   onRefresh,
+  isMacPlatform = false,
 }) => {
   const [sortBy, setSortBy] = useState<SortOption>('uptime');
 
@@ -144,6 +146,7 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
                       key={session.pid}
                       session={session}
                       onRefresh={onRefresh}
+                      isMacPlatform={isMacPlatform}
                     />
                   ))}
                 </div>
@@ -166,9 +169,10 @@ export const SessionPanel: React.FC<SessionPanelProps> = ({
 interface SessionCardProps {
   session: ClaudeSession;
   onRefresh: () => void;
+  isMacPlatform: boolean;
 }
 
-const SessionCard: React.FC<SessionCardProps> = ({ session, onRefresh }) => {
+const SessionCard: React.FC<SessionCardProps> = ({ session, onRefresh, isMacPlatform }) => {
   const { showToast } = useToast();
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
@@ -249,17 +253,19 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, onRefresh }) => {
           </svg>
           Open Folder
         </button>
-        <button
-          onClick={() => setShowStopConfirm(true)}
-          disabled={isActionLoading === 'stop'}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-red-400 hover:text-red-500 transition-colors disabled:opacity-50 ml-auto"
-          title="Stop this session"
-        >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
-          </svg>
-          Stop
-        </button>
+        {isMacPlatform && (
+          <button
+            onClick={() => setShowStopConfirm(true)}
+            disabled={isActionLoading === 'stop'}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-red-400 hover:text-red-500 transition-colors disabled:opacity-50 ml-auto"
+            title="Stop this session"
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+            </svg>
+            Stop
+          </button>
+        )}
       </div>
 
       <ConfirmDialog
