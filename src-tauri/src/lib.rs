@@ -4,7 +4,9 @@ use scanner::{scan_project_directories, DEFAULT_DISCOVERY_DEPTH};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
 use std::fs;
-use std::io::{ErrorKind, Read, Write};
+use std::io::{Read, Write};
+#[cfg(target_os = "macos")]
+use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -173,7 +175,6 @@ fn ensure_path_in_skills_dir(path: &Path) -> Result<(), String> {
 }
 
 // Security constants for file operations
-const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024; // 10 MB
 const MAX_ARCHIVE_SIZE: u64 = 50 * 1024 * 1024; // 50 MB
 const MAX_ARCHIVE_FILES: usize = 1000;
 
@@ -2370,7 +2371,6 @@ async fn detect_claude_sessions() -> Result<Vec<ClaudeSessionInfo>, String> {
 #[tauri::command]
 async fn kill_claude_session(app: tauri::AppHandle, pid: u32) -> Result<(), String> {
     use sysinfo::{ProcessRefreshKind, RefreshKind, System};
-    use std::process::Command;
     use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
     // Security: Verify the PID is actually a Claude-related process before killing
@@ -2415,6 +2415,7 @@ async fn kill_claude_session(app: tauri::AppHandle, pid: u32) -> Result<(), Stri
     // Use the system kill command for reliability
     #[cfg(target_os = "macos")]
     {
+        use std::process::Command;
         // First try SIGTERM for graceful shutdown
         let result = Command::new("kill")
             .arg("-15") // SIGTERM
