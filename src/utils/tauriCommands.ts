@@ -63,6 +63,24 @@ export async function deleteSkill(path: string): Promise<void> {
   return await invoke('delete_skill', { path });
 }
 
+export async function migrateSkill(
+  oldPath: string,
+  scope: 'project' | 'global',
+  name: string,
+  content: string,
+  projectPath?: string
+): Promise<string> {
+  return await invoke<string>('migrate_skill', {
+    oldPath,
+    old_path: oldPath,
+    scope,
+    name,
+    content,
+    projectPath,
+    project_path: projectPath,
+  });
+}
+
 export async function listSkillsFromDirectory(directory: string): Promise<SkillFile[]> {
   return await invoke<SkillFile[]>('list_skills_from_directory', { directory });
 }
@@ -473,4 +491,28 @@ export async function detectClaudeSessions(): Promise<ClaudeSessionRaw[]> {
 // Kill a Claude Code session by PID
 export async function killClaudeSession(pid: number): Promise<void> {
   return await invoke('kill_claude_session', { pid });
+}
+
+// ============================================================================
+// Safe File Export/Import (replaces @tauri-apps/plugin-fs)
+// ============================================================================
+
+// Write text content to a user-selected file path
+export async function exportTextFile(path: string, content: string): Promise<void> {
+  return await invoke('export_text_file', { path, content });
+}
+
+// Write binary content to a user-selected file path
+export async function exportBinaryFile(path: string, content: number[]): Promise<void> {
+  return await invoke('export_binary_file', { path, content });
+}
+
+// Read text content from a user-selected file path
+export async function importTextFile(path: string): Promise<string> {
+  return await invoke<string>('import_text_file', { path });
+}
+
+// Read binary content from a user-selected file path
+export async function importBinaryFile(path: string): Promise<number[]> {
+  return await invoke<number[]>('import_binary_file', { path });
 }

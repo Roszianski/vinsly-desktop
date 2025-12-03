@@ -342,6 +342,48 @@ fn ensure_path_in_commands_dir(path: &Path) -> Result<(), String> {
     ensure_path_in_claude_subdir(path, "commands")
 }
 
+/// Validates that a path is a valid CLAUDE.md memory file
+/// Must be in format: <any>/.claude/CLAUDE.md
+/// Uses canonicalization to prevent symlink/traversal attacks
+fn ensure_path_is_claude_memory(path: &Path) -> Result<(), String> {
+    // First check if it's a symlink (reject before canonicalization)
+    if path.is_symlink() {
+        return Err("Symlinks are not allowed for memory files".to_string());
+    }
+
+    // Canonicalize to resolve any .. or symlinks in parent directories
+    let canonical = if path.exists() {
+        fs::canonicalize(path).map_err(|e| format!("Failed to resolve path: {}", e))?
+    } else {
+        // For non-existent paths, canonicalize the parent and append filename
+        let parent = path.parent().ok_or("Invalid path: no parent directory")?;
+        let filename = path.file_name().ok_or("Invalid path: no filename")?;
+        let canonical_parent = fs::canonicalize(parent)
+            .map_err(|e| format!("Failed to resolve parent path: {}", e))?;
+        canonical_parent.join(filename)
+    };
+
+    // Check the canonical path doesn't point to a symlink
+    if canonical.is_symlink() {
+        return Err("Resolved path is a symlink, which is not allowed".to_string());
+    }
+
+    // Normalize path separators for cross-platform matching
+    let canonical_str = canonical.to_string_lossy().replace('\\', "/");
+
+    // Must end with .claude/CLAUDE.md
+    if !canonical_str.ends_with(".claude/CLAUDE.md") {
+        return Err("Path must be a .claude/CLAUDE.md memory file".to_string());
+    }
+
+    // Ensure no path traversal - the canonical path should not contain ..
+    if canonical_str.contains("..") {
+        return Err("Path traversal detected in memory path".to_string());
+    }
+
+    Ok(())
+}
+
 fn skill_has_additional_assets(dir: &Path) -> bool {
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -592,6 +634,101 @@ async fn delete_skill(path: String) -> Result<(), String> {
             .map_err(|e| format!("Failed to delete skill folder: {}", e))?;
     }
     Ok(())
+}
+
+/// Recursively copies all contents from src to dst directory
+fn copy_dir_contents(src: &Path, dst: &Path) -> Result<(), String> {
+    if !dst.exists() {
+        fs::create_dir_all(dst).map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+
+    let entries = fs::read_dir(src).map_err(|e| format!("Failed to read source directory: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if src_path.is_dir() {
+            copy_dir_contents(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)
+                .map_err(|e| format!("Failed to copy file: {}", e))?;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn migrate_skill(
+    old_path: String,
+    scope: String,
+    name: String,
+    content: String,
+    project_path: Option<String>,
+) -> Result<String, String> {
+    validate_entry_name(&name)?;
+
+    // Resolve and validate old directory
+    let old_expanded = expand_path(&old_path)?;
+    let old_dir = resolve_skill_directory(&old_expanded)
+        .ok_or_else(|| "Unable to resolve old skill directory".to_string())?;
+    ensure_path_in_skills_dir(&old_dir)?;
+
+    // Get new skill directory path
+    let skills_dir = get_skills_dir(&scope, project_path)?;
+    fs::create_dir_all(&skills_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+    ensure_path_in_skills_dir(&skills_dir)?;
+
+    let mut new_dir = skills_dir;
+    new_dir.push(&name);
+
+    // If old and new are the same, just write the content
+    if old_dir == new_dir {
+        let skill_file = new_dir.join("SKILL.md");
+        fs::write(&skill_file, content).map_err(|e| format!("Failed to write skill: {}", e))?;
+        return Ok(skill_file.to_string_lossy().to_string());
+    }
+
+    // Create new directory
+    fs::create_dir_all(&new_dir).map_err(|e| format!("Failed to create skill folder: {}", e))?;
+
+    // Copy all contents from old directory to new (preserving assets)
+    if old_dir.exists() {
+        let entries = fs::read_dir(&old_dir)
+            .map_err(|e| format!("Failed to read old skill directory: {}", e))?;
+
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+            let src_path = entry.path();
+            let file_name = entry.file_name();
+
+            // Skip SKILL.md - we'll write fresh content
+            if file_name == OsStr::new("SKILL.md") {
+                continue;
+            }
+
+            let dst_path = new_dir.join(&file_name);
+
+            if src_path.is_dir() {
+                copy_dir_contents(&src_path, &dst_path)?;
+            } else {
+                fs::copy(&src_path, &dst_path)
+                    .map_err(|e| format!("Failed to copy file: {}", e))?;
+            }
+        }
+
+        // Delete old directory after successful copy
+        fs::remove_dir_all(&old_dir)
+            .map_err(|e| format!("Failed to remove old skill folder: {}", e))?;
+    }
+
+    // Write new SKILL.md content
+    let skill_file = new_dir.join("SKILL.md");
+    fs::write(&skill_file, content).map_err(|e| format!("Failed to write skill: {}", e))?;
+
+    Ok(skill_file.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -1518,6 +1655,10 @@ async fn export_memories_archive(paths: Vec<String>, destination: String) -> Res
 
     for (index, path_str) in paths.iter().enumerate() {
         let path = expand_path(path_str)?;
+
+        // Security: Validate this is a legitimate .claude/CLAUDE.md path
+        ensure_path_is_claude_memory(&path)?;
+
         if !path.exists() {
             continue;
         }
@@ -2169,7 +2310,7 @@ struct ClaudeSessionInfo {
     command_line: Option<String>,
 }
 
-#[tauri::command(permissions = ["allow-detect-claude-sessions"])]
+#[tauri::command]
 async fn detect_claude_sessions() -> Result<Vec<ClaudeSessionInfo>, String> {
     use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 
@@ -2226,7 +2367,7 @@ async fn detect_claude_sessions() -> Result<Vec<ClaudeSessionInfo>, String> {
     Ok(sessions)
 }
 
-#[tauri::command(permissions = ["allow-kill-claude-session"])]
+#[tauri::command]
 async fn kill_claude_session(app: tauri::AppHandle, pid: u32) -> Result<(), String> {
     use sysinfo::{ProcessRefreshKind, RefreshKind, System};
     use std::process::Command;
@@ -2359,13 +2500,160 @@ fn open_full_disk_access_settings() -> Result<(), String> {
     }
 }
 
+// ============================================================================
+// Safe File Export/Import Commands (replaces unscoped fs plugin)
+// ============================================================================
+
+/// Paths that should never be read from or written to
+const BLOCKED_PATH_PATTERNS: &[&str] = &[
+    "/.ssh/",
+    "\\.ssh\\",
+    "/.gnupg/",
+    "\\.gnupg\\",
+    "/.aws/",
+    "\\.aws\\",
+    "/etc/",
+    "/System/",
+    "/Library/Keychains/",
+    "/private/etc/",
+    "\\Windows\\System32\\",
+    "\\Windows\\SysWOW64\\",
+    "/root/",
+];
+
+/// Maximum file size for import operations (10 MB)
+const MAX_IMPORT_FILE_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Validates a path is safe for export/import (not in sensitive directories)
+fn validate_user_file_path(path: &Path) -> Result<(), String> {
+    let path_str = path.to_string_lossy();
+
+    // Check against blocked patterns
+    for pattern in BLOCKED_PATH_PATTERNS {
+        if path_str.contains(pattern) {
+            return Err(format!("Access to path containing '{}' is not allowed", pattern));
+        }
+    }
+
+    // Reject paths with .. traversal
+    if path_str.contains("..") {
+        return Err("Path traversal (..) is not allowed".to_string());
+    }
+
+    Ok(())
+}
+
+/// Write text content to a user-selected file path (for export)
+#[tauri::command]
+async fn export_text_file(path: String, content: String) -> Result<(), String> {
+    let file_path = PathBuf::from(&path);
+
+    // Validate the path is safe
+    validate_user_file_path(&file_path)?;
+
+    // Create parent directories if needed
+    if let Some(parent) = file_path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
+    }
+
+    // Write the file
+    fs::write(&file_path, content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(())
+}
+
+/// Write binary content to a user-selected file path (for export)
+#[tauri::command]
+async fn export_binary_file(path: String, content: Vec<u8>) -> Result<(), String> {
+    let file_path = PathBuf::from(&path);
+
+    // Validate the path is safe
+    validate_user_file_path(&file_path)?;
+
+    // Create parent directories if needed
+    if let Some(parent) = file_path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
+    }
+
+    // Write the file
+    fs::write(&file_path, content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(())
+}
+
+/// Read text content from a user-selected file path (for import)
+#[tauri::command]
+async fn import_text_file(path: String) -> Result<String, String> {
+    let file_path = PathBuf::from(&path);
+
+    // Validate the path is safe
+    validate_user_file_path(&file_path)?;
+
+    // Check file exists
+    if !file_path.exists() {
+        return Err("File does not exist".to_string());
+    }
+
+    // Check file size
+    let metadata = fs::metadata(&file_path)
+        .map_err(|e| format!("Failed to read file metadata: {}", e))?;
+    if metadata.len() > MAX_IMPORT_FILE_SIZE {
+        return Err(format!(
+            "File too large ({} bytes). Maximum allowed is {} bytes",
+            metadata.len(),
+            MAX_IMPORT_FILE_SIZE
+        ));
+    }
+
+    // Read the file
+    fs::read_to_string(&file_path)
+        .map_err(|e| format!("Failed to read file: {}", e))
+}
+
+/// Read binary content from a user-selected file path (for import)
+#[tauri::command]
+async fn import_binary_file(path: String) -> Result<Vec<u8>, String> {
+    let file_path = PathBuf::from(&path);
+
+    // Validate the path is safe
+    validate_user_file_path(&file_path)?;
+
+    // Check file exists
+    if !file_path.exists() {
+        return Err("File does not exist".to_string());
+    }
+
+    // Check file size
+    let metadata = fs::metadata(&file_path)
+        .map_err(|e| format!("Failed to read file metadata: {}", e))?;
+    if metadata.len() > MAX_ARCHIVE_SIZE {
+        return Err(format!(
+            "File too large ({} bytes). Maximum allowed is {} bytes",
+            metadata.len(),
+            MAX_ARCHIVE_SIZE
+        ));
+    }
+
+    // Read the file
+    fs::read(&file_path)
+        .map_err(|e| format!("Failed to read file: {}", e))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
+        // NOTE: fs plugin removed for security - use vetted export_*/import_* commands instead
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
@@ -2377,6 +2665,7 @@ pub fn run() {
             list_skills,
             write_skill,
             delete_skill,
+            migrate_skill,
             list_skills_from_directory,
             export_skill_directory,
             import_skill_archive,
@@ -2414,6 +2703,11 @@ pub fn run() {
             // Session detection and actions
             detect_claude_sessions,
             kill_claude_session,
+            // Safe file export/import (replaces fs plugin)
+            export_text_file,
+            export_binary_file,
+            import_text_file,
+            import_binary_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

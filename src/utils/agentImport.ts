@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 import YAML from 'yaml';
 import { Agent, AgentScope } from '../types';
 import { open } from '@tauri-apps/plugin-dialog';
-import { readTextFile } from '@tauri-apps/plugin-fs';
+import { importTextFile, importBinaryFile } from './tauriCommands';
 
 const FRONTMATTER_REGEX = /^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?([\s\S]*)$/;
 
@@ -196,7 +196,7 @@ async function importAgentFromPath(
   scope: AgentScope = AgentScope.Global
 ): Promise<Agent | null> {
   try {
-    const content = await readTextFile(filePath);
+    const content = await importTextFile(filePath);
     const fileName = filePath.split('/').pop() || '';
 
     if (!hasSubagentDefinition(content)) {
@@ -222,10 +222,10 @@ async function importAgentsFromZipPath(
   const errors: string[] = [];
 
   try {
-    // Read the zip file as binary
-    const response = await fetch(`tauri://localhost/${filePath}`);
-    const arrayBuffer = await response.arrayBuffer();
-    const zip = await JSZip.loadAsync(arrayBuffer);
+    // Read the zip file as binary using safe Rust command
+    const binaryData = await importBinaryFile(filePath);
+    const uint8Array = new Uint8Array(binaryData);
+    const zip = await JSZip.loadAsync(uint8Array);
 
     for (const [fileName, zipEntry] of Object.entries(zip.files)) {
       if (zipEntry.dir || !fileName.endsWith('.md')) {

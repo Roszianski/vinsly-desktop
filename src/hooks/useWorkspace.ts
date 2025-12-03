@@ -8,6 +8,7 @@ import {
   listAgentsFromDirectory,
   listSkills,
   writeSkill,
+  migrateSkill,
   deleteSkill as deleteSkillFile,
   listSkillsFromDirectory,
 } from '../utils/tauriCommands';
@@ -674,7 +675,23 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
           throw new Error('Select a project folder before saving a project skill.');
         }
 
-        const absolutePath = await writeSkill(scope, skillToSave.name, markdown, projectPath);
+        let absolutePath: string;
+
+        // Check if this is an existing skill that might be renamed/moved
+        // Use migrateSkill to preserve assets when directory path changes
+        if (skillToSave.directoryPath) {
+          absolutePath = await migrateSkill(
+            skillToSave.directoryPath,
+            scope,
+            skillToSave.name,
+            markdown,
+            projectPath
+          );
+        } else {
+          // New skill - use writeSkill
+          absolutePath = await writeSkill(scope, skillToSave.name, markdown, projectPath);
+        }
+
         const directoryPath = getSkillDirectoryFromFilePath(absolutePath || skillToSave.directoryPath);
         const persistedSkill: Skill = {
           ...skillToSave,
@@ -691,18 +708,6 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
           }
           return [...prev, persistedSkill];
         });
-
-        if (
-          skillToSave.directoryPath &&
-          directoryPath &&
-          skillToSave.directoryPath !== directoryPath
-        ) {
-          try {
-            await deleteSkillFile(skillToSave.directoryPath);
-          } catch (cleanupError) {
-            console.warn('Failed to remove previous skill folder:', cleanupError);
-          }
-        }
 
         options.showToast('success', `Skill "${skillToSave.name}" saved successfully`);
       } catch (error) {

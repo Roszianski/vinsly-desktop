@@ -37,9 +37,6 @@
             "core:default",
             "dialog:allow-open",
             "dialog:allow-save",
-            "fs:allow-read-text-file",
-            "fs:allow-write-text-file",
-            "fs:allow-write-file",
             "store:allow-get",
             "store:allow-set",
             "store:allow-save",
@@ -47,8 +44,8 @@
             "store:allow-delete",
             "store:allow-clear",
             "opener:default",
-            "allow-kill-claude-session",
-            "allow-detect-claude-sessions"
+            "updater:default",
+            "process:allow-restart"
           ]
         }
       ]
@@ -75,6 +72,7 @@
       "endpoints": [
         "https://raw.githubusercontent.com/Roszianski/vinsly-updates/main/latest.json"
       ],
+      "_pubkey_note": "This IS the real signing key (fingerprint D9FF6C85C6DF75EB), NOT a template. Matches ~/.tauri/vinsly-signing.key.pub. Private key is in GitHub secrets.",
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ5RkY2Qzg1QzZERjc1RUIKUldUcmRkL0doV3ovMmZyM1MyODNpYSs0bzcrMERMakJGWkJ4RngxNGU0MW85UnlVMkF5eXpkNW0K",
       "windows": {
         "installMode": "passive"

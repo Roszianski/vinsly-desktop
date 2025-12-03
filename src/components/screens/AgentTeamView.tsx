@@ -2,7 +2,7 @@ import React, { useMemo, useState, useRef, useEffect, useCallback, useLayoutEffe
 import { motion } from 'framer-motion';
 import { toPng } from 'html-to-image';
 import { save } from '@tauri-apps/plugin-dialog';
-import { writeFile } from '@tauri-apps/plugin-fs';
+import { exportBinaryFile } from '../../utils/tauriCommands';
 import { Agent, AgentScope } from '../../types';
 import { buttonVariants, fadeIn } from '../../animations';
 import { StarIcon } from '../icons/StarIcon';
@@ -643,8 +643,8 @@ useEffect(() => {
       const base64Data = dataUrl.split(',')[1];
       const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
 
-      // Write file using Tauri
-      await writeFile(filePath, binaryData);
+      // Write file using safe Tauri command
+      await exportBinaryFile(filePath, Array.from(binaryData));
       showToast('success', 'Organisation map exported successfully');
     } catch (error) {
       console.error('Failed to export map:', error);

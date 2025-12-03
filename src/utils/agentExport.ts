@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { Agent } from '../types';
 import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile, writeFile } from '@tauri-apps/plugin-fs';
+import { exportTextFile, exportBinaryFile } from './tauriCommands';
 import { serializeFrontmatter } from './frontmatter';
 
 /**
@@ -30,7 +30,7 @@ export async function exportAgent(agent: Agent): Promise<boolean> {
     });
 
     if (filePath) {
-      await writeTextFile(filePath, markdown);
+      await exportTextFile(filePath, markdown);
       return true;
     }
     return false; // User cancelled
@@ -63,7 +63,7 @@ export async function exportAgentsAsZip(agents: Agent[], zipName: string = 'agen
 
     if (filePath) {
       const zipBlob = await zip.generateAsync({ type: 'uint8array' });
-      await writeFile(filePath, zipBlob);
+      await exportBinaryFile(filePath, Array.from(zipBlob));
       return true;
     }
     return false; // User cancelled
