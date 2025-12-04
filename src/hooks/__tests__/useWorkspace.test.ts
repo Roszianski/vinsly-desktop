@@ -23,6 +23,7 @@ jest.mock('../../utils/tauriCommands', () => ({
   deleteAgent: jest.fn(),
   writeSkill: jest.fn(),
   deleteSkill: jest.fn(),
+  migrateSkill: jest.fn(),
 }));
 
 jest.mock('../../utils/agentImport', () => ({
@@ -76,6 +77,7 @@ describe('useWorkspace', () => {
     (skillParser.skillToMarkdown as jest.Mock).mockReturnValue('skill-md');
     (tauriCommands.writeAgent as jest.Mock).mockResolvedValue('/tmp/agent.md');
     (tauriCommands.writeSkill as jest.Mock).mockResolvedValue('/tmp/skill/skill.md');
+    (tauriCommands.migrateSkill as jest.Mock).mockResolvedValue('/tmp/skill/skill.md');
     (tauriCommands.deleteAgent as jest.Mock).mockResolvedValue(undefined);
     (tauriCommands.deleteSkill as jest.Mock).mockResolvedValue(undefined);
   });
@@ -125,14 +127,15 @@ describe('useWorkspace', () => {
     expect(result.current.agents.find(a => a.name === agent.name)).toBeTruthy();
   });
 
-  test('saveSkill persists via writeSkill', async () => {
+  test('saveSkill persists via migrateSkill for existing skills', async () => {
     const { result } = renderHook(() =>
       useWorkspace({ showToast: mockShowToast, scanSettingsRef, isOnboardingComplete: true })
     );
     await act(async () => {
       await result.current.saveSkill(skill);
     });
-    expect(tauriCommands.writeSkill).toHaveBeenCalled();
+    // Existing skills with directoryPath use migrateSkill
+    expect(tauriCommands.migrateSkill).toHaveBeenCalled();
     expect(result.current.skills.find(s => s.name === skill.name)).toBeTruthy();
   });
 });

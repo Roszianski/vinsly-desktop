@@ -8,10 +8,15 @@ export interface UseClaudeMemoryListOptions {
   scanSettingsRef: React.RefObject<ScanSettings>;
 }
 
+export interface LoadMemoriesOptions {
+  projectPaths?: string[];
+  includeGlobal?: boolean;
+}
+
 export interface UseClaudeMemoryListResult {
   memories: ClaudeMemory[];
   isLoading: boolean;
-  loadMemories: () => Promise<void>;
+  loadMemories: (options?: LoadMemoriesOptions) => Promise<void>;
   toggleFavorite: (memory: ClaudeMemory) => void;
 }
 
@@ -20,49 +25,56 @@ export function useClaudeMemoryList(options: UseClaudeMemoryListOptions): UseCla
   const [memories, setMemories] = useState<ClaudeMemory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const loadMemories = useCallback(async () => {
+  const loadMemories = useCallback(async (loadOptions: LoadMemoriesOptions = {}) => {
+    const { projectPaths = [], includeGlobal = true } = loadOptions;
     setIsLoading(true);
     const discovered: ClaudeMemory[] = [];
     const seenPaths = new Set<string>();
 
     try {
       // 1. Load global CLAUDE.md
-      try {
-        const globalResult = await readClaudeMemory('global');
-        if (globalResult.exists && !seenPaths.has(globalResult.path)) {
-          seenPaths.add(globalResult.path);
-          discovered.push({
-            id: globalResult.path,
-            scope: AgentScope.Global,
-            path: globalResult.path,
-            content: globalResult.content,
-            exists: true,
-          });
+      if (includeGlobal) {
+        try {
+          const globalResult = await readClaudeMemory('global');
+          if (globalResult.exists && !seenPaths.has(globalResult.path)) {
+            seenPaths.add(globalResult.path);
+            discovered.push({
+              id: globalResult.path,
+              scope: AgentScope.Global,
+              path: globalResult.path,
+              content: globalResult.content,
+              exists: true,
+            });
+          }
+        } catch (error) {
+          console.error('Error loading global CLAUDE.md:', error);
         }
-      } catch (error) {
-        console.error('Error loading global CLAUDE.md:', error);
       }
 
-      // 2. Load project CLAUDE.md from watched directories
+      // 2. Combine project paths from options and watched directories
       const scanSettings = scanSettingsRef.current;
-      if (scanSettings?.watchedDirectories) {
-        for (const directory of scanSettings.watchedDirectories) {
-          try {
-            const projectResult = await readClaudeMemory('project', directory);
-            if (projectResult.exists && !seenPaths.has(projectResult.path)) {
-              seenPaths.add(projectResult.path);
-              discovered.push({
-                id: projectResult.path,
-                scope: AgentScope.Project,
-                path: projectResult.path,
-                content: projectResult.content,
-                exists: true,
-              });
-            }
-          } catch (error) {
-            // Silently skip directories that don't have CLAUDE.md
-            console.debug(`No CLAUDE.md found in ${directory}:`, error);
+      const allProjectPaths = new Set([
+        ...projectPaths,
+        ...(scanSettings?.watchedDirectories || []),
+      ]);
+
+      // 3. Load project CLAUDE.md from all project paths
+      for (const directory of allProjectPaths) {
+        try {
+          const projectResult = await readClaudeMemory('project', directory);
+          if (projectResult.exists && !seenPaths.has(projectResult.path)) {
+            seenPaths.add(projectResult.path);
+            discovered.push({
+              id: projectResult.path,
+              scope: AgentScope.Project,
+              path: projectResult.path,
+              content: projectResult.content,
+              exists: true,
+            });
           }
+        } catch (error) {
+          // Silently skip directories that don't have CLAUDE.md
+          console.debug(`No CLAUDE.md found in ${directory}:`, error);
         }
       }
 

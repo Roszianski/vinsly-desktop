@@ -722,70 +722,66 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           Permissions
                         </h3>
                         <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
-                          Choose between one-time Full Disk Access or selective folder monitoring.
+                          Manage access to protected folders on your Mac.
                         </p>
                       </div>
 
                       {isMacPlatform ? (
                         <>
                           <div className="space-y-4 border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex-1">
                                 <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                                  Full Disk Access (macOS)
+                                  Full Disk Access
                                 </p>
                                 <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                                  Grant this once so Vinsly can scan Desktop, Documents, iCloud Drive, and other protected folders.
+                                  Allows Vinsly to scan Desktop, Documents, and iCloud Drive.
                                 </p>
                               </div>
-                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${fullDiskStatusTone}`}>
+                              <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${fullDiskStatusTone}`}>
                                 {fullDiskStatusLabel}
                               </span>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                onClick={() => void handleOpenFullDiskSettings()}
-                                disabled={isOpeningFullDiskSettings}
-                                className="px-4 py-2 rounded-lg text-sm font-medium bg-v-accent text-white hover:bg-v-accent-hover disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                              >
-                                {isOpeningFullDiskSettings ? 'Opening…' : 'Grant Full Disk Access'}
-                              </button>
-                              <button
-                                onClick={() => fullDiskStatus !== 'checking' && void refreshFullDiskStatus()}
-                                disabled={fullDiskStatus === 'checking'}
-                                className="px-4 py-2 rounded-lg text-sm font-medium border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-light-text-primary dark:hover:text-v-text-primary disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                              >
-                                {fullDiskStatus === 'checking' ? 'Checking…' : 'Check status'}
-                              </button>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                                  Use Full Disk Access for home scans
-                                </p>
-                                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                                  Turn this on to automatically include Desktop/Documents when you run a home scan.
-                                </p>
-                              </div>
-                              <button
-                                onClick={() => void handleFullDiskAccessToggle(!localScanSettings.fullDiskAccessEnabled)}
-                                disabled={fullDiskStatus !== 'granted'}
-                                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-v-accent ${
-                                  localScanSettings.fullDiskAccessEnabled ? 'bg-v-accent' : 'bg-v-light-border dark:bg-v-border'
-                                } ${fullDiskStatus !== 'granted' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                role="switch"
-                                aria-checked={localScanSettings.fullDiskAccessEnabled}
-                              >
-                                <span
-                                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
-                                    localScanSettings.fullDiskAccessEnabled ? 'translate-x-5' : 'translate-x-0'
+
+                            <button
+                              onClick={() => void handleOpenFullDiskSettings()}
+                              disabled={isOpeningFullDiskSettings || fullDiskStatus === 'checking'}
+                              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+                                fullDiskStatus === 'granted'
+                                  ? 'border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent'
+                                  : 'bg-v-accent text-white hover:bg-v-accent-hover'
+                              }`}
+                            >
+                              {isOpeningFullDiskSettings ? 'Opening…' : fullDiskStatus === 'granted' ? 'Open System Settings' : 'Grant Access'}
+                            </button>
+
+                            {fullDiskStatus === 'granted' && (
+                              <div className="flex items-center justify-between gap-3 pt-2 border-t border-v-light-border/50 dark:border-v-border/50">
+                                <div>
+                                  <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                                    Include protected folders in home scans
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => void handleFullDiskAccessToggle(!localScanSettings.fullDiskAccessEnabled)}
+                                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-v-accent ${
+                                    localScanSettings.fullDiskAccessEnabled ? 'bg-v-accent' : 'bg-v-light-border dark:bg-v-border'
                                   }`}
-                                />
-                              </button>
-                            </div>
-                            {fullDiskStatus !== 'granted' && (
+                                  role="switch"
+                                  aria-checked={localScanSettings.fullDiskAccessEnabled}
+                                >
+                                  <span
+                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                                      localScanSettings.fullDiskAccessEnabled ? 'translate-x-5' : 'translate-x-0'
+                                    }`}
+                                  />
+                                </button>
+                              </div>
+                            )}
+
+                            {fullDiskStatus !== 'granted' && fullDiskStatus !== 'checking' && (
                               <p className="text-xs text-amber-600 dark:text-amber-300">
-                                Add Vinsly in System Settings → Privacy &amp; Security → Full Disk Access, then click “Check status”.
+                                Open System Settings → Privacy &amp; Security → Full Disk Access and enable Vinsly.
                               </p>
                             )}
                             {fullDiskStatusMessage && (
@@ -793,60 +789,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 {fullDiskStatusMessage.text}
                               </div>
                             )}
-                            {isSequoiaOrNewer && (
+                            {isSequoiaOrNewer && fullDiskStatus !== 'granted' && (
                               <div className="text-xs text-v-light-text-secondary dark:text-v-text-secondary border border-dashed border-v-light-border/80 dark:border-v-border/70 rounded-lg p-3 bg-v-light-bg/40 dark:bg-v-dark/40">
                                 <button
                                   type="button"
                                   onClick={() => setShowSequoiaTip(prev => !prev)}
                                   className="font-semibold text-v-accent hover:text-v-accent-hover"
                                 >
-                                  Having trouble on macOS 15 (Sequoia)?
+                                  Trouble on macOS 15 (Sequoia)?
                                 </button>
                                 {showSequoiaTip && (
                                   <p className="mt-2">
-                                    Apple’s latest beta can hide helper tools in the Full Disk Access list. Even if Vinsly isn’t visible, macOS still honors the entitlement once you grant it (FB20662270). Click “Check status” here to verify.
+                                    macOS 15 may hide Vinsly in the Full Disk Access list. The permission still works once granted.
                                   </p>
                                 )}
                               </div>
                             )}
                           </div>
 
-                          <div className="border border-dashed border-v-light-border dark:border-v-border rounded-lg p-4 bg-v-light-bg/60 dark:bg-v-dark/60 space-y-2">
-                            <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">Prefer selective access?</p>
-                            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                              Leave Full Disk Access off and add Desktop, Documents, or any other folder manually under Settings → Scanning → Watched Directories.
-                            </p>
-                            <button
-                              onClick={() => setActiveSection('scanning')}
-                              className="inline-flex items-center text-xs font-semibold text-v-accent hover:text-v-accent-hover transition-colors"
-                            >
-                              Go to Scanning →
-                            </button>
-                          </div>
-
-                          <div className="border border-v-light-border dark:border-v-border rounded-lg p-4 bg-v-light-bg/40 dark:bg-v-dark/60 space-y-2">
-                            <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">Need an admin shortcut?</p>
-                            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                              Follow&nbsp;
-                              <a href="https://support.apple.com/HT210595" target="_blank" rel="noreferrer" className="text-v-accent hover:text-v-accent-hover underline">
-                                Apple HT210595
-                              </a>
-                              &nbsp;or deploy a&nbsp;
-                              <a
-                                href="https://developer.apple.com/documentation/devicemanagement/privacy_preferences_policy_control"
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-v-accent hover:text-v-accent-hover underline"
+                          <div className="border border-dashed border-v-light-border dark:border-v-border rounded-lg p-4 bg-v-light-bg/60 dark:bg-v-dark/60">
+                            <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
+                              <span className="font-semibold text-v-light-text-primary dark:text-v-text-primary">Alternative:</span> Skip Full Disk Access and add specific folders in{' '}
+                              <button
+                                onClick={() => setActiveSection('scanning')}
+                                className="font-semibold text-v-accent hover:text-v-accent-hover"
                               >
-                                PrivacyPreferencesPolicyControl
-                              </a>
-                              &nbsp;payload allowing <code className="font-mono">kTCCServiceSystemPolicyAllFiles</code> for <code className="font-mono">com.vinsly.desktop</code>. Users who skip Full Disk Access can keep scanning via watched directories.
+                                Scanning → Watched Directories
+                              </button>
                             </p>
                           </div>
                         </>
                       ) : (
                         <div className="border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg/60 dark:bg-v-dark/60 text-sm text-v-light-text-secondary dark:text-v-text-secondary">
-                          Your operating system already lets Vinsly read your home directory. Use watched directories if you want to scope scanning to specific projects.
+                          Your operating system already provides full access. Use{' '}
+                          <button
+                            onClick={() => setActiveSection('scanning')}
+                            className="font-semibold text-v-accent hover:text-v-accent-hover"
+                          >
+                            Watched Directories
+                          </button>{' '}
+                          to limit scanning to specific folders.
                         </div>
                       )}
                     </div>

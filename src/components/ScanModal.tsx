@@ -5,7 +5,7 @@ import { useToast } from '../contexts/ToastContext';
 import { cancelHomeDiscovery, DEFAULT_HOME_DISCOVERY_DEPTH, discoverHomeDirectories } from '../utils/homeDiscovery';
 import { LoadAgentsOptions, ScanSettings } from '../types';
 
-type ScanSource = 'home' | 'watched' | 'global';
+type ScanSource = 'home' | 'watched';
 
 interface ScanModalProps {
   isOpen: boolean;
@@ -85,9 +85,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
     if (watchedDirectoryCount > 0) {
       defaults.push('watched');
     }
-    if (defaults.length === 0) {
-      defaults.push('global');
-    }
+    // Global resources are always included - no need to select explicitly
     return new Set(defaults);
   }, [canUseHomeSource, watchedDirectoryCount]);
 
@@ -168,7 +166,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({
     setScanMessage('Preparing sources…');
 
     let directories: string[] = [];
-    const includeGlobal = selectedSources.has('global');
+    // Always include global resources (they're lightweight and always useful)
+    const includeGlobal = true;
 
     if (selectedSources.has('watched') && watchedDirectoryCount > 0) {
       directories = directories.concat(scanSettings.watchedDirectories);
@@ -203,7 +202,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       try {
         const discovered = await discoverHomeDirectories({
           maxDepth: DEFAULT_HOME_DISCOVERY_DEPTH,
-          includeProtectedDirs: canUseHomeSource,
+          includeProtectedDirs: false, // Never scan Music/Movies/Pictures etc.
           signal: controller.signal,
         });
 
@@ -237,12 +236,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       )
     );
 
-    if (!includeGlobal && uniqueDirectories.length === 0) {
-      setIsScanning(false);
-      setScanMessage(null);
-      showToast('info', 'Add at least one folder or enable global scanning.');
-      return;
-    }
+    // Global is always included, so even with no directories we still scan global resources
 
     try {
       setScanMessage('Scanning selected sources…');
@@ -270,9 +264,9 @@ export const ScanModal: React.FC<ScanModalProps> = ({
   if (!isOpen) return null;
 
   const sourcesSummary = [
+    'Global (~/.claude/)', // Always included
     selectedSources.has('home') ? 'Home directory' : null,
     selectedSources.has('watched') ? `Watched folders (${watchedDirectoryCount || 0})` : null,
-    selectedSources.has('global') ? 'Global resources (~/.claude/)' : null,
     customPaths.length > 0 ? `${customPaths.length} custom folder${customPaths.length === 1 ? '' : 's'}` : null,
   ]
     .filter(Boolean)
@@ -324,7 +318,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                   Pick your sources
                 </p>
                 <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                  Turn on one or multiple sources. Vinsly scans everything you enable below.
+                  Global resources (~/.claude/) are always included. Add more sources below.
                 </p>
 
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -346,14 +340,6 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                     active={selectedSources.has('watched')}
                     disabled={watchedDirectoryCount === 0 || isScanning || isDiscoveringHome}
                     onClick={() => toggleSource('watched')}
-                  />
-
-                  <SourceChip
-                    label="Global resources"
-                    description="~/.claude/"
-                    active={selectedSources.has('global')}
-                    disabled={isScanning || isDiscoveringHome}
-                    onClick={() => toggleSource('global')}
                   />
 
                   <button

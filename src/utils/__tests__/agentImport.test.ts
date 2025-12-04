@@ -46,7 +46,7 @@ describe('agentImport', () => {
       expect(agent).not.toBeNull();
       expect(agent?.name).toBe('Sample Agent');
       expect(agent?.frontmatter.description).toBe('A sample agent for testing');
-      expect(agent?.frontmatter.model).toBe('claude-sonnet-4');
+      expect(agent?.frontmatter.model).toBe('sonnet');
       expect(agent?.scope).toBe(AgentScope.Global);
       expect(agent?.body).toContain('This is the agent\'s prompt body');
     });

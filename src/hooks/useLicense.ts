@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { LicenseInfo } from '../types/licensing';
 import { getStorageItem, removeStorageItem, setStorageItem } from '../utils/storage';
 import { validateLicenseWithLemon } from '../utils/lemonLicensingClient';
@@ -28,6 +28,14 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
   const [licenseBootstrapComplete, setLicenseBootstrapComplete] = useState(false);
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [graceExpiresAt, setGraceExpiresAt] = useState<string | null>(null);
+
+  // Use refs for callbacks to avoid re-running effects when options object changes
+  const showToastRef = useRef(options.showToast);
+  const onResetCompleteRef = useRef(options.onResetComplete);
+  useEffect(() => {
+    showToastRef.current = options.showToast;
+    onResetCompleteRef.current = options.onResetComplete;
+  }, [options.showToast, options.onResetComplete]);
 
   // Hydrate license on mount and validate with Lemon Squeezy
   useEffect(() => {
@@ -105,7 +113,7 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
               setGraceExpiresAt(storedGraceExpiry);
 
               const daysRemaining = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              options.showToast?.('info', `License validation failed. ${daysRemaining} day(s) remaining in grace period.`);
+              showToastRef.current?.('info', `License validation failed. ${daysRemaining} day(s) remaining in grace period.`);
             }
           } else {
             // Grace period expired - remove license
@@ -117,7 +125,7 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
               setLicenseInfo(null);
               setIsOnboardingComplete(false);
               setGraceExpiresAt(null);
-              options.showToast?.('error', 'License grace period expired. Please reactivate.');
+              showToastRef.current?.('error', 'License grace period expired. Please reactivate.');
             }
           }
         } else {
@@ -131,7 +139,7 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
             setLicenseInfo(storedLicense);
             setIsOnboardingComplete(true);
             setGraceExpiresAt(graceExpiryISO);
-            options.showToast?.('info', `License validation failed. Entering ${GRACE_PERIOD_DAYS}-day grace period.`);
+            showToastRef.current?.('info', `License validation failed. Entering ${GRACE_PERIOD_DAYS}-day grace period.`);
           }
         }
       } finally {
@@ -146,7 +154,7 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
     return () => {
       cancelled = true;
     };
-  }, [options]);
+  }, []); // Run only on mount - refs ensure latest callbacks are used
 
   const setLicense = useCallback(
     async (info: LicenseInfo) => {
@@ -166,10 +174,10 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
     setGraceExpiresAt(null);
     await removeStorageItem('vinsly-license-info');
     await removeStorageItem(GRACE_PERIOD_KEY);
-    if (options.onResetComplete) {
-      await options.onResetComplete();
+    if (onResetCompleteRef.current) {
+      await onResetCompleteRef.current();
     }
-  }, [options]);
+  }, []); // Uses ref for callback
 
   return {
     licenseInfo,

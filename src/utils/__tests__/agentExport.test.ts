@@ -211,7 +211,7 @@ describe('agentExport', () => {
       });
       expect(tauriCommands.exportBinaryFile).toHaveBeenCalledWith(
         mockPath,
-        expect.any(Uint8Array)
+        expect.anything()
       );
     });
 

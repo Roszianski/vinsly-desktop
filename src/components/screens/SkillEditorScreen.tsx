@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AgentScope, AgentModel, Skill, ToolCategory, ToolRisk, Tool } from '../../types';
 import { InputField, TextareaField } from '../form';
 import { FolderIcon } from '../icons/FolderIcon';
+import { SpinnerIcon } from '../icons/SpinnerIcon';
 import { open } from '@tauri-apps/plugin-dialog';
 import { extractProjectRootFromSkillPath } from '../../utils/path';
 import { WizardStepHeader } from '../wizard';
@@ -45,6 +46,19 @@ const WIZARD_STEPS: { id: SkillWizardStepId; label: string; description: string 
 
 const TOOL_CATEGORY_ORDER: ToolCategory[] = ['Read-only', 'Edit', 'Execution', 'Other'];
 
+const SCOPE_DETAILS: Record<AgentScope, { title: string; description: string; path: string }> = {
+  [AgentScope.Global]: {
+    title: 'Global skill',
+    description: 'Saved inside ~/.claude/skills/ and available in every project you open.',
+    path: '~/.claude/skills/'
+  },
+  [AgentScope.Project]: {
+    title: 'Project skill',
+    description: 'Saved inside .claude/skills/ for this project. Perfect for project-specific workflows.',
+    path: '.claude/skills/'
+  },
+};
+
 interface SkillEditorScreenProps {
   skill: Skill;
   onSave: (skill: Skill, options?: { projectPath?: string }) => void;
@@ -65,6 +79,7 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
     skill.scope === AgentScope.Project ? extractProjectRootFromSkillPath(skill.directoryPath) || '' : ''
   );
   const [nameError, setNameError] = useState('');
+  const [isPickingProjectFolder, setIsPickingProjectFolder] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
   const [direction, setDirection] = useState(1);
@@ -328,17 +343,24 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
     }
   };
 
-  const handleChooseProjectFolder = async () => {
+  const handleChooseProjectFolder = async (event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    if (isPickingProjectFolder) return;
+
+    setIsPickingProjectFolder(true);
     try {
       const selected = await open({
         directory: true,
         multiple: false,
+        title: 'Select Project Directory'
       });
       if (typeof selected === 'string') {
         setProjectFolderPath(selected);
       }
     } catch (error) {
       console.error('Failed to select project folder for skill:', error);
+    } finally {
+      setIsPickingProjectFolder(false);
     }
   };
 
@@ -403,57 +425,66 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
     switch (currentStep.id) {
       case 'scope':
         return (
-          <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              {[AgentScope.Global, AgentScope.Project].map(scope => {
-                const isActive = formData.scope === scope;
+          <div className="space-y-3">
+            <div className="grid gap-4 md:grid-cols-2">
+              {(Object.keys(SCOPE_DETAILS) as AgentScope[]).map((scope) => {
+                const detail = SCOPE_DETAILS[scope];
+                const selected = formData.scope === scope;
+                const isProjectScope = scope === AgentScope.Project;
                 return (
                   <button
-                    key={scope}
                     type="button"
+                    key={scope}
                     onClick={() => handleScopeChange(scope)}
-                    className={`text-left rounded-xl border px-4 py-3 transition-colors ${
-                      isActive
-                        ? 'border-v-accent bg-v-accent/10 text-v-light-text-primary dark:text-v-text-primary'
-                        : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent/50'
+                    className={`relative text-left border rounded-lg p-4 transition-colors duration-150 ${
+                      selected
+                        ? 'border-v-accent bg-v-light-hover dark:bg-v-light-dark'
+                        : 'border-v-light-border dark:border-v-border hover:border-v-accent'
                     }`}
                   >
-                    <p className="text-sm font-semibold">
-                      {scope === AgentScope.Global ? 'Global skill' : 'Project skill'}
-                    </p>
-                    <p className="text-xs mt-1">
-                      {scope === AgentScope.Global
-                        ? 'Saved in ~/.claude/skills and available everywhere.'
-                        : 'Lives inside .claude/skills for a specific project.'}
+                    {isProjectScope && (
+                      <div className="absolute top-3 right-3">
+                        <button
+                          type="button"
+                          onClick={handleChooseProjectFolder}
+                          disabled={isPickingProjectFolder}
+                          className={`p-1.5 rounded-md transition-colors hover:bg-v-light-border dark:hover:bg-v-border ${isPickingProjectFolder ? 'cursor-wait opacity-80' : ''}`}
+                          aria-label="Choose project folder"
+                          title={projectFolderPath || 'Choose project folder'}
+                        >
+                          {isPickingProjectFolder ? (
+                            <SpinnerIcon className="h-4 w-4 text-v-accent" />
+                          ) : (
+                            <FolderIcon
+                              className={`h-4 w-4 ${
+                                projectFolderPath
+                                  ? 'text-v-accent'
+                                  : 'text-v-light-text-secondary dark:text-v-text-secondary'
+                              }`}
+                            />
+                          )}
+                        </button>
+                      </div>
+                    )}
+                    <p className="text-sm font-bold text-v-light-text-primary dark:text-v-text-primary">{detail.title}</p>
+                    <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">{detail.description}</p>
+                    <p className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary mt-2">
+                      Location: {detail.path}
                     </p>
                   </button>
                 );
               })}
             </div>
-            {formData.scope === AgentScope.Project && (
-              <div className="space-y-1.5">
-                <label className="text-xs uppercase tracking-[0.3em] text-v-light-text-secondary dark:text-v-text-secondary">
-                  Project folder
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 text-sm font-mono truncate border border-v-light-border dark:border-v-border rounded-md px-3 py-2 bg-v-light-surface dark:bg-v-mid-dark">
-                    {projectFolderPath || 'Select project directory'}
-                  </div>
-                  <button
-                    onClick={handleChooseProjectFolder}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 border border-v-light-border dark:border-v-border rounded-md text-sm text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent"
-                  >
-                    <FolderIcon className="h-4 w-4" />
-                    Browse
-                  </button>
-                </div>
-                {!projectFolderPath && (
-                  <p className="text-xs text-v-danger flex items-center gap-1">
-                    <WarningIcon className="h-3 w-3" />
-                    Select the project root where .claude/skills should live.
-                  </p>
-                )}
-              </div>
+            {formData.scope === AgentScope.Project && projectFolderPath && (
+              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary font-mono break-all">
+                Saving to: {projectFolderPath}
+              </p>
+            )}
+            {formData.scope === AgentScope.Project && !projectFolderPath && (
+              <p className="text-sm text-v-danger flex items-center gap-2">
+                <WarningIcon className="h-4 w-4" />
+                Select the project root where .claude/skills should live.
+              </p>
             )}
           </div>
         );
@@ -590,31 +621,23 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
     }
   };
 
-  const title = mode === 'create-skill' ? 'Create New Skill' : 'Edit Skill';
-  const breadcrumbLabel = mode === 'create-skill' ? 'Create New Skill' : `Edit ${skill.name || 'Skill'}`;
+  const title = mode === 'create-skill' ? 'New Skill' : `Edit ${skill.name || 'Skill'}`;
   const saveLabel = mode === 'edit-skill' ? 'Save Changes' : 'Create Skill';
 
   return (
     <div className="space-y-8">
-      <div className="space-y-2">
+      <div className="flex items-center gap-4">
         <button
           onClick={onCancel}
-          className="text-sm font-semibold text-v-accent hover:text-v-accent-hover inline-flex items-center gap-2"
+          className="p-2 rounded-lg hover:bg-v-light-hover dark:hover:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary transition-colors"
         >
-          <span aria-hidden="true">←</span>
-          Back to skills
+          <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
+          </svg>
         </button>
-        <div className="flex items-center gap-2 text-sm text-v-light-text-secondary dark:text-v-text-secondary">
-          <span className="text-v-light-text-primary dark:text-v-text-primary">Skills</span>
-          <span>/</span>
-          <span className="text-v-light-text-primary dark:text-v-text-primary">{breadcrumbLabel}</span>
-        </div>
-      </div>
-      <div>
-        <h1 className="text-3xl font-bold text-v-light-text-primary dark:text-v-text-primary -ml-px">{title}</h1>
-        <p className="text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-          Design a reusable workflow Claude can invoke automatically.
-        </p>
+        <h1 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary">
+          {title}
+        </h1>
       </div>
 
       <div className="grid gap-6 md:grid-cols-[260px,1fr]" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.5rem' }}>

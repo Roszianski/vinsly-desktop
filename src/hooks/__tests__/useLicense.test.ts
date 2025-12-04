@@ -32,6 +32,8 @@ describe('useLicense', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (storage.getStorageItem as jest.Mock).mockResolvedValue(null);
+    (storage.setStorageItem as jest.Mock).mockResolvedValue(undefined);
+    (storage.removeStorageItem as jest.Mock).mockResolvedValue(undefined);
     (lemonLicensingClient.validateLicenseWithLemon as jest.Mock).mockResolvedValue({
       valid: true,
       status: 'active',

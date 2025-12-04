@@ -5,11 +5,6 @@ import { GlobeIcon } from '../icons/GlobeIcon';
 import { FolderIcon } from '../icons/FolderIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
 import { DocumentIcon } from '../icons/DocumentIcon';
-import { ListIcon } from '../icons/ListIcon';
-import { LayersIcon } from '../icons/LayersIcon';
-import { TerminalIcon } from '../icons/TerminalIcon';
-import { ServerIcon } from '../icons/ServerIcon';
-import { LightningIcon } from '../icons/LightningIcon';
 
 interface MemoryScreenProps {
   globalMemory: ClaudeMemory | null;
@@ -18,12 +13,7 @@ interface MemoryScreenProps {
   activeScope: AgentScope;
   onScopeChange: (scope: AgentScope) => void;
   onSave: (scope: AgentScope, content: string, projectPath?: string) => Promise<void>;
-  onShowSubagents: () => void;
-  onShowSkills: () => void;
-  onShowMemory: () => void;
-  onShowCommands: () => void;
-  onShowMCP: () => void;
-  onShowHooks: () => void;
+  onCancel: () => void;
 }
 
 // Simple markdown renderer for preview
@@ -107,12 +97,7 @@ export const MemoryScreen: React.FC<MemoryScreenProps> = ({
   activeScope,
   onScopeChange,
   onSave,
-  onShowSubagents,
-  onShowSkills,
-  onShowMemory,
-  onShowCommands,
-  onShowMCP,
-  onShowHooks,
+  onCancel,
 }) => {
   const currentMemory = activeScope === AgentScope.Global ? globalMemory : projectMemory;
   const [editContent, setEditContent] = useState('');
@@ -176,7 +161,8 @@ export const MemoryScreen: React.FC<MemoryScreenProps> = ({
     };
   }, []);
 
-  const handleProjectFolderPick = async () => {
+  const handleProjectFolderPick = async (event?: React.MouseEvent) => {
+    event?.stopPropagation();
     if (isPickingProjectFolder) return;
 
     setIsPickingProjectFolder(true);
@@ -200,100 +186,36 @@ export const MemoryScreen: React.FC<MemoryScreenProps> = ({
     }
   };
 
-  const handleScopeToggle = (newScope: AgentScope) => {
-    if (newScope === AgentScope.Project && !projectFolderPath) {
-      // Trigger folder picker when switching to Project without a folder
+  const handleScopeSelect = (scope: AgentScope) => {
+    if (scope === AgentScope.Project && !projectFolderPath) {
       handleProjectFolderPick();
     } else {
-      onScopeChange(newScope);
+      onScopeChange(scope);
     }
   };
-
-  // Get display path for project folder
-  const displayProjectPath = projectFolderPath
-    ? projectFolderPath.split('/').slice(-2).join('/')
-    : '';
-
-  const canShowProject = !!projectFolderPath;
 
   const wordCount = editContent.trim().split(/\s+/).filter(Boolean).length;
   const charCount = editContent.length;
 
-  const viewSwitcherItems = [
-    { key: 'subagents', label: 'Subagents', icon: <ListIcon className="h-4 w-4" />, action: onShowSubagents },
-    { key: 'skills', label: 'Skills', icon: <LayersIcon className="h-4 w-4" />, action: onShowSkills },
-    { key: 'memory', label: 'Memory', icon: <DocumentIcon className="h-4 w-4" />, action: onShowMemory },
-    { key: 'commands', label: 'Commands', icon: <TerminalIcon className="h-4 w-4" />, action: onShowCommands },
-    { key: 'mcp', label: 'MCP', icon: <ServerIcon className="h-4 w-4" />, action: onShowMCP },
-    { key: 'hooks', label: 'Hooks', icon: <LightningIcon className="h-4 w-4" />, action: onShowHooks },
-  ];
-
   return (
-    <div className="space-y-6">
-      {/* View Switcher */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-stretch border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark">
-          {viewSwitcherItems.map((item, index, array) => (
-            <React.Fragment key={item.key}>
-              <button
-                onClick={item.action}
-                className={`px-3 py-2 text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 ${
-                  item.key === 'memory'
-                    ? 'bg-v-accent/10 text-v-accent'
-                    : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary hover:bg-v-accent/10 dark:hover:bg-v-light-dark'
-                }`}
-              >
-                {item.icon}
-                <span className="hidden sm:inline">{item.label}</span>
-              </button>
-              {index < array.length - 1 && (
-                <div className="w-px bg-v-light-border dark:bg-v-border opacity-50" />
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-
-        {/* Scope Toggle */}
-        <div className="flex items-center gap-2 bg-v-light-bg dark:bg-v-dark rounded-lg p-1 border border-v-light-border dark:border-v-border">
-          <button
-            onClick={() => handleScopeToggle(AgentScope.Global)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              activeScope === AgentScope.Global
-                ? 'bg-v-light-surface dark:bg-v-mid-dark text-v-light-text-primary dark:text-v-text-primary shadow-sm'
-                : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
-            }`}
-          >
-            <GlobeIcon className="w-4 h-4" />
-            Global
-          </button>
-          <button
-            onClick={() => handleScopeToggle(AgentScope.Project)}
-            disabled={isPickingProjectFolder}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              activeScope === AgentScope.Project
-                ? 'bg-v-light-surface dark:bg-v-mid-dark text-v-light-text-primary dark:text-v-text-primary shadow-sm'
-                : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary'
-            }`}
-            title={projectFolderPath || 'Click to choose a project folder'}
-          >
-            {isPickingProjectFolder ? (
-              <SpinnerIcon className="w-4 h-4 animate-spin" />
-            ) : (
-              <FolderIcon className="w-4 h-4" />
-            )}
-            {canShowProject ? displayProjectPath : 'Choose Project...'}
-          </button>
-        </div>
-      </div>
-
-      {/* Status bar */}
+    <div className="space-y-4">
+      {/* Header with back button */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <DocumentIcon className="w-5 h-5 text-v-accent" />
-          <h1 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary">CLAUDE.md</h1>
-          <span className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
-            {activeScope === AgentScope.Global ? 'Global memory' : 'Project memory'}
-          </span>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onCancel}
+            className="p-2 rounded-lg hover:bg-v-light-hover dark:hover:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary transition-colors"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
+            </svg>
+          </button>
+          <div className="flex items-center gap-3">
+            <DocumentIcon className="w-5 h-5 text-v-accent" />
+            <h1 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary">
+              CLAUDE.md
+            </h1>
+          </div>
         </div>
 
         <div className="flex items-center gap-3 text-sm">
@@ -312,14 +234,57 @@ export const MemoryScreen: React.FC<MemoryScreenProps> = ({
         </div>
       </div>
 
-      {/* Main content area */}
+      {/* Scope Selection */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => handleScopeSelect(AgentScope.Global)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeScope === AgentScope.Global
+              ? 'bg-v-accent/10 text-v-accent border border-v-accent/30'
+              : 'bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent/50'
+          }`}
+        >
+          <GlobeIcon className="w-4 h-4" />
+          Global
+        </button>
+        <button
+          onClick={() => handleScopeSelect(AgentScope.Project)}
+          disabled={isPickingProjectFolder}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeScope === AgentScope.Project
+              ? 'bg-v-accent/10 text-v-accent border border-v-accent/30'
+              : 'bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent/50'
+          }`}
+        >
+          {isPickingProjectFolder ? (
+            <SpinnerIcon className="w-4 h-4 animate-spin" />
+          ) : (
+            <FolderIcon className="w-4 h-4" />
+          )}
+          {projectFolderPath ? projectFolderPath.split('/').slice(-2).join('/') : 'Choose Project...'}
+        </button>
+        {activeScope === AgentScope.Project && projectFolderPath && (
+          <button
+            onClick={handleProjectFolderPick}
+            disabled={isPickingProjectFolder}
+            className="p-2 rounded-lg hover:bg-v-light-hover dark:hover:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary"
+            title="Change project folder"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Editor and Preview */}
       <div className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-24">
             <SpinnerIcon className="w-8 h-8 animate-spin text-v-accent" />
           </div>
         ) : (
-          <div className="flex min-h-[500px]">
+          <div className="flex min-h-[450px]">
             {/* Editor panel */}
             <div className="flex-1 flex flex-col border-r border-v-light-border dark:border-v-border">
               <div className="px-4 py-2 bg-v-light-hover dark:bg-v-light-dark border-b border-v-light-border dark:border-v-border">

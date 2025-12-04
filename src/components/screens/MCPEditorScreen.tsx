@@ -343,6 +343,58 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
   const currentStep = WIZARD_STEPS[currentStepIndex];
   const isLastStep = currentStepIndex === WIZARD_STEPS.length - 1;
 
+  // Get visible steps (filter based on server type)
+  const visibleSteps = WIZARD_STEPS.filter(step => {
+    if (step.id === 'args' && formData.type !== 'stdio') return false;
+    if (step.id === 'headers' && formData.type === 'stdio') return false;
+    return true;
+  });
+
+  // Step completion check
+  const isStepComplete = (stepId: WizardStepId): boolean => {
+    switch (stepId) {
+      case 'template':
+        return true; // Optional step
+      case 'type':
+        return Boolean(formData.type);
+      case 'config':
+        if (!formData.name) return false;
+        if (formData.type === 'stdio' && !formData.command) return false;
+        if ((formData.type === 'http' || formData.type === 'sse') && !formData.url) return false;
+        return true;
+      case 'args':
+        return true; // Optional step
+      case 'headers':
+        return true; // Optional step
+      case 'env':
+        return true; // Optional step
+      case 'scope':
+        if (formData.scope === 'project' && !projectFolderPath) return false;
+        return true;
+      case 'review':
+        return isStepComplete('type') && isStepComplete('config') && isStepComplete('scope');
+      default:
+        return false;
+    }
+  };
+
+  // Calculate completion percentage
+  const completionPercentage = (() => {
+    const requiredSteps = visibleSteps.filter(s => s.required);
+    const completedRequired = requiredSteps.filter(s => isStepComplete(s.id)).length;
+    return Math.round((completedRequired / requiredSteps.length) * 100);
+  })();
+
+  // Sidebar steps data
+  const sidebarSteps = visibleSteps.map((step, index) => ({
+    ...step,
+    originalIndex: WIZARD_STEPS.findIndex(s => s.id === step.id),
+    displayIndex: index,
+    isActive: currentStep.id === step.id,
+    isVisited: visitedSteps.has(WIZARD_STEPS.findIndex(s => s.id === step.id)),
+    isComplete: isStepComplete(step.id),
+  }));
+
   // Add/remove handlers for key-value editors
   const addHeaderEntry = () => setHeaderEntries(prev => [...prev, { key: '', value: '' }]);
   const removeHeaderEntry = (index: number) => setHeaderEntries(prev => prev.filter((_, i) => i !== index));
@@ -751,126 +803,164 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
     }
   };
 
-  const breadcrumbLabel = mode === 'create' ? 'New Server' : `Edit: ${server?.name}`;
+  const title = mode === 'create' ? 'New MCP Server' : `Edit ${server?.name}`;
+  const saveLabel = mode === 'edit' ? 'Save Changes' : 'Create Server';
 
   return (
     <div className="space-y-8">
-      <div className="space-y-2">
+      {/* Header */}
+      <div className="flex items-center gap-4">
         <button
           onClick={onCancel}
-          className="text-sm font-semibold text-v-accent hover:text-v-accent-hover inline-flex items-center gap-2"
+          className="p-2 rounded-lg hover:bg-v-light-hover dark:hover:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary transition-colors"
         >
-          <span aria-hidden="true">←</span>
-          Back to MCP servers
+          <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
+          </svg>
         </button>
-        <div className="flex items-center gap-2 text-sm text-v-light-text-secondary dark:text-v-text-secondary">
-          <span className="text-v-light-text-primary dark:text-v-text-primary">MCP Servers</span>
-          <span>/</span>
-          <span className="text-v-light-text-primary dark:text-v-text-primary">{breadcrumbLabel}</span>
+        <div className="flex items-center gap-3">
+          <ServerIcon className="w-5 h-5 text-v-accent" />
+          <h1 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary">
+            {title}
+          </h1>
         </div>
       </div>
-      <div>
-        <h1 className="text-3xl font-bold text-v-light-text-primary dark:text-v-text-primary -ml-px">
-          {mode === 'create' ? 'Add MCP Server' : `Edit ${server?.name}`}
-        </h1>
-        <p className="text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-          {mode === 'create' ? 'Configure a new MCP server connection.' : 'Update server configuration.'}
-        </p>
-      </div>
 
-      {/* Progress Steps */}
-      {isWizard && (
-        <div className="mb-6 flex items-center gap-1 overflow-x-auto pb-2">
-          {WIZARD_STEPS.map((step, index) => {
-            // Skip irrelevant steps in progress bar too
-            if (step.id === 'args' && formData.type !== 'stdio') return null;
-            if (step.id === 'headers' && formData.type === 'stdio') return null;
+      {/* Sidebar Layout for Wizard */}
+      {isWizard ? (
+        <div className="grid gap-6 md:grid-cols-[260px,1fr]" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.5rem' }}>
+          {/* Sidebar */}
+          <aside className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-5 space-y-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-v-light-text-secondary dark:text-v-text-secondary">Steps</p>
+              <p className="text-base font-semibold text-v-light-text-primary dark:text-v-text-primary">Server setup</p>
+            </div>
 
-            return (
-              <div
-                key={step.id}
-                className={`flex items-center gap-1 ${index > 0 ? 'ml-1' : ''}`}
-              >
-                {index > 0 && (
-                  <div className={`w-8 h-0.5 ${
-                    visitedSteps.has(index) ? 'bg-v-accent' : 'bg-v-light-border dark:bg-v-border'
-                  }`} />
-                )}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-v-light-text-secondary dark:text-v-text-secondary">Progress</span>
+                <span className="font-semibold text-v-light-text-primary dark:text-v-text-primary">{completionPercentage}%</span>
+              </div>
+              <div className="h-2 bg-v-light-border dark:bg-v-border rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-gradient-to-r from-v-accent to-v-accent-hover rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${completionPercentage}%` }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {sidebarSteps.map(step => (
                 <button
                   type="button"
-                  onClick={() => visitedSteps.has(index) && goToStep(index)}
-                  disabled={!visitedSteps.has(index)}
-                  className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${
-                    currentStepIndex === index
-                      ? 'bg-v-accent text-white'
-                      : visitedSteps.has(index)
-                        ? 'bg-v-accent/20 text-v-accent cursor-pointer hover:bg-v-accent/30'
-                        : 'bg-v-light-border dark:bg-v-border text-v-light-text-secondary dark:text-v-text-secondary'
+                  key={step.id}
+                  onClick={() => goToStep(step.originalIndex)}
+                  className={`w-full text-left flex items-start gap-4 rounded-xl border px-4 py-3 transition-all duration-150 ${
+                    step.isActive
+                      ? 'border-v-accent/80'
+                      : 'border-v-light-border/70 dark:border-v-border/70 hover:border-v-accent/50'
                   }`}
+                  aria-current={step.isActive ? 'step' : undefined}
                 >
-                  {visitedSteps.has(index) && index < currentStepIndex ? (
-                    <CheckIcon className="h-4 w-4" />
-                  ) : (
-                    index + 1
-                  )}
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold transition-colors ${
+                      step.isComplete && step.isVisited
+                        ? 'bg-v-accent text-white border-v-accent'
+                        : step.isActive
+                        ? 'border-v-accent text-v-accent'
+                        : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary'
+                    }`}
+                  >
+                    {step.isComplete && step.isVisited ? <CheckIcon className="h-4 w-4" /> : step.displayIndex + 1}
+                  </span>
+                  <div className="flex-1 pr-2">
+                    <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                      {step.label}
+                    </p>
+                  </div>
                 </button>
+              ))}
+            </div>
+          </aside>
+
+          {/* Main Content */}
+          <div className="space-y-6">
+            <WizardStepHeader currentStepIndex={currentStepIndex} wizardSteps={WIZARD_STEPS} />
+            <AnimatePresence mode="wait" custom={direction}>
+              <motion.div
+                key={currentStep.id}
+                custom={direction}
+                variants={wizardStepVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-6 shadow-xl backdrop-blur-xl"
+              >
+                {renderStepContent()}
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Navigation Buttons */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <button
+                onClick={onCancel}
+                className="px-4 py-2 bg-transparent border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary rounded-md text-sm transition-transform duration-150 active:scale-95"
+              >
+                Cancel
+              </button>
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                {currentStepIndex > 0 && (
+                  <button
+                    onClick={handlePrevStep}
+                    className="px-4 py-2 bg-v-light-hover dark:bg-v-light-dark hover:bg-v-light-border dark:hover:bg-v-border text-v-light-text-primary dark:text-v-text-primary font-semibold text-sm transition-all duration-150 rounded-md active:scale-95"
+                  >
+                    Previous
+                  </button>
+                )}
+                {!isLastStep && (
+                  <button
+                    onClick={handleNextStep}
+                    className="px-4 py-2 bg-v-accent hover:bg-v-accent-hover text-white font-semibold text-sm transition-all duration-150 rounded-md active:scale-95"
+                  >
+                    Next
+                  </button>
+                )}
+                {isLastStep && (
+                  <button
+                    onClick={handleSave}
+                    className="px-4 py-2 bg-v-accent hover:bg-v-accent-hover text-white font-semibold text-sm transition-all duration-150 rounded-md active:scale-95"
+                  >
+                    {saveLabel}
+                  </button>
+                )}
               </div>
-            );
-          })}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Edit mode - simpler layout without sidebar */
+        <div className="space-y-6">
+          <div className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-6">
+            {renderStepContent()}
+          </div>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={onCancel}
+              className="px-4 py-2 bg-transparent border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary rounded-md text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 bg-v-accent hover:bg-v-accent-hover text-white font-semibold text-sm rounded-md"
+            >
+              {saveLabel}
+            </button>
+          </div>
         </div>
       )}
-
-      {/* Step Content */}
-      <div className="flex-1 overflow-auto min-h-0">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={currentStep.id}
-            variants={wizardStepVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            custom={direction}
-            className="h-full"
-          >
-            <WizardStepHeader
-              currentStepIndex={currentStepIndex}
-              wizardSteps={WIZARD_STEPS}
-            />
-            <div className="mt-6 max-w-2xl">
-              {renderStepContent()}
-            </div>
-          </motion.div>
-        </AnimatePresence>
-      </div>
-
-      {/* Navigation Buttons */}
-      <div className="flex items-center justify-between mt-6 pt-4 border-t border-v-light-border dark:border-v-border">
-        <button
-          type="button"
-          onClick={currentStepIndex === 0 ? onCancel : handlePrevStep}
-          className="px-4 py-2 text-sm font-medium text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary transition-colors"
-        >
-          {currentStepIndex === 0 ? 'Cancel' : 'Back'}
-        </button>
-
-        {isLastStep ? (
-          <button
-            type="button"
-            onClick={handleSave}
-            className="px-6 py-2 bg-v-accent text-white text-sm font-semibold rounded-md hover:bg-v-accent-hover transition-colors shadow-sm hover:shadow-md"
-          >
-            {mode === 'create' ? 'Create Server' : 'Save Changes'}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleNextStep}
-            className="px-6 py-2 bg-v-accent text-white text-sm font-semibold rounded-md hover:bg-v-accent-hover transition-colors shadow-sm hover:shadow-md"
-          >
-            Continue
-          </button>
-        )}
-      </div>
     </div>
   );
 };

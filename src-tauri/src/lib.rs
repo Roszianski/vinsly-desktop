@@ -1154,43 +1154,20 @@ async fn discover_project_directories(
 fn check_full_disk_access() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        use std::fs;
         log_tcc_full_disk_status();
 
-        let home_dir =
-            dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
-        let targets = [
-            home_dir.join("Documents"),
-            home_dir.join("Desktop"),
-            home_dir.join("Library").join("Application Support"),
-        ];
-
+        // Clear the home discovery cache so next scan picks up any permission changes
         tauri::async_runtime::block_on(async {
             let mut cache = home_discovery_cache().lock().await;
             *cache = None;
         });
 
-        if let Some(allowed) = query_tcc_full_disk_entry()? {
-            return Ok(allowed);
+        // Only check TCC.db - never attempt to read protected directories directly
+        // as that triggers macOS permission prompts for Music, Documents, Desktop, etc.
+        match query_tcc_full_disk_entry()? {
+            Some(allowed) => Ok(allowed),
+            None => Ok(false), // No TCC entry means FDA not granted
         }
-
-        for target in targets {
-            if !target.exists() {
-                continue;
-            }
-            match fs::read_dir(&target) {
-                Ok(_) => return Ok(true),
-                Err(err) => match err.kind() {
-                    ErrorKind::PermissionDenied => continue,
-                    ErrorKind::NotFound => continue,
-                    _ => {
-                        return Err(format!("Failed to inspect {}: {}", target.display(), err));
-                    }
-                },
-            }
-        }
-
-        Ok(false)
     }
     #[cfg(not(target_os = "macos"))]
     {

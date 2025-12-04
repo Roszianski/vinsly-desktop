@@ -10,15 +10,26 @@ describe('usePlatformInfo', () => {
       writable: false,
       configurable: true,
     });
+    Object.defineProperty(global, 'navigator', {
+      value: originalNavigator,
+      writable: false,
+      configurable: true,
+    });
   });
 
   const mockNavigator = (platform: string, platformVersion: string, userAgent: string) => {
+    const mockNav = {
+      userAgent,
+      platform,
+      userAgentData: { platform, platformVersion },
+    };
     Object.defineProperty(window, 'navigator', {
-      value: {
-        userAgent,
-        platform,
-        userAgentData: { platform, platformVersion },
-      },
+      value: mockNav,
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(global, 'navigator', {
+      value: mockNav,
       writable: true,
       configurable: true,
     });

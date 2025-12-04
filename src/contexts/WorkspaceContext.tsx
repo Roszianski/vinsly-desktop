@@ -47,7 +47,7 @@ interface WorkspaceContextType {
   mcpServersList: MCPServer[];
   isMCPLoading: boolean;
   addMCPServer: (server: MCPServer, projectPath?: string) => Promise<void>;
-  updateMCPServer: (server: MCPServer, projectPath?: string) => Promise<void>;
+  updateMCPServer: (server: MCPServer, oldServer: MCPServer, projectPath?: string) => Promise<void>;
   removeMCPServer: (name: string, scope: MCPScope) => Promise<void>;
   toggleMCPFavorite: (server: MCPServer) => void;
 
@@ -199,7 +199,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
         try {
           homeDirectories = await discoverHomeDirectories({
             maxDepth: HOME_DISCOVERY_MAX_DEPTH,
-            includeProtectedDirs: storedSettings.fullDiskAccessEnabled,
+            includeProtectedDirs: false, // Never scan Music/Movies/Pictures - no Claude projects there
           });
         } catch (error) {
           console.error('Error discovering home directories:', error);
@@ -218,17 +218,36 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
         scanWatchedDirectories: shouldScanWatched,
       });
 
+      // Collect all project paths for loading other resources
+      const allProjectPaths = [
+        ...homeDirectories,
+        ...(shouldScanWatched ? storedSettings.watchedDirectories : []),
+      ];
+
       await loadCommands({
         includeGlobal: storedSettings.autoScanGlobalOnStartup,
+        projectPaths: allProjectPaths,
         watchedDirectories: storedSettings.watchedDirectories,
       });
 
-      await loadMCPServers();
-      await loadHooks();
+      await loadMCPServers({
+        includeGlobal: storedSettings.autoScanGlobalOnStartup,
+        projectPaths: allProjectPaths,
+      });
+
+      await loadHooks({
+        includeGlobal: storedSettings.autoScanGlobalOnStartup,
+        projectPaths: allProjectPaths,
+      });
+
+      await loadMemories({
+        includeGlobal: storedSettings.autoScanGlobalOnStartup,
+        projectPaths: allProjectPaths,
+      });
     };
 
     initializeWorkspace();
-  }, [isActivationOpen, isOnboardingComplete, loadAgents, loadCommands, loadMCPServers, loadHooks, loadInitialSettings]);
+  }, [isActivationOpen, isOnboardingComplete, loadAgents, loadCommands, loadMCPServers, loadHooks, loadMemories, loadInitialSettings]);
 
   // Agent operations with undo support
   const saveAgent = useCallback(async (agent: Agent, options?: { projectPath?: string }) => {
@@ -356,8 +375,18 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
       path: '',
     };
 
+    // Extract project path from the original command's path for project commands
+    // Path format: /path/to/project/.claude/commands/name.md
+    let projectPath: string | undefined;
+    if (commandToDuplicate.scope === AgentScope.Project && commandToDuplicate.path) {
+      const claudeIndex = commandToDuplicate.path.indexOf('/.claude/');
+      if (claudeIndex !== -1) {
+        projectPath = commandToDuplicate.path.substring(0, claudeIndex);
+      }
+    }
+
     try {
-      await saveCommandToBackend(duplicatedCommand);
+      await saveCommandToBackend(duplicatedCommand, { projectPath });
       showToast('success', `Duplicated command as "/${newName}"`);
     } catch (error) {
       console.error('Error duplicating command:', error);
@@ -370,8 +399,8 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     await addMCPServerToBackend(server, projectPath);
   }, [addMCPServerToBackend]);
 
-  const updateMCPServer = useCallback(async (server: MCPServer, projectPath?: string) => {
-    await updateMCPServerToBackend(server, projectPath);
+  const updateMCPServer = useCallback(async (server: MCPServer, oldServer: MCPServer, projectPath?: string) => {
+    await updateMCPServerToBackend(server, oldServer, projectPath);
   }, [updateMCPServerToBackend]);
 
   const removeMCPServer = useCallback(async (name: string, scope: MCPScope) => {
@@ -411,14 +440,37 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
   const handleFullScan = useCallback(async (options?: LoadAgentsOptions) => {
     const agentResult = await loadAgents(options);
 
+    // Collect all project paths from options
+    const projectPathsFromOptions = options?.projectPaths
+      ? (Array.isArray(options.projectPaths) ? options.projectPaths : [options.projectPaths])
+      : [];
+    const additionalDirs = options?.additionalDirectories || [];
+    const watchedDirs = options?.scanWatchedDirectories ? scanSettings.watchedDirectories : [];
+
+    const allProjectPaths = [
+      ...projectPathsFromOptions,
+      ...additionalDirs,
+      ...watchedDirs,
+    ];
+
     await Promise.all([
       loadCommands({
         includeGlobal: options?.includeGlobal,
+        projectPaths: allProjectPaths,
         watchedDirectories: scanSettings.watchedDirectories,
       }),
-      loadMCPServers(),
-      loadHooks(),
-      loadMemories(),
+      loadMCPServers({
+        includeGlobal: options?.includeGlobal,
+        projectPaths: allProjectPaths,
+      }),
+      loadHooks({
+        includeGlobal: options?.includeGlobal,
+        projectPaths: allProjectPaths,
+      }),
+      loadMemories({
+        includeGlobal: options?.includeGlobal,
+        projectPaths: allProjectPaths,
+      }),
     ]);
 
     return agentResult;

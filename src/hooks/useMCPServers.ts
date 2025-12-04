@@ -53,13 +53,18 @@ export interface UseMCPServersOptions {
   showToast: (type: ToastType, message: string) => void;
 }
 
+export interface LoadServersOptions {
+  projectPaths?: string[];
+  includeGlobal?: boolean;
+}
+
 export interface UseMCPServersResult {
   servers: MCPServer[];
   serversRef: React.RefObject<MCPServer[]>;
   isLoading: boolean;
-  loadServers: (projectPath?: string) => Promise<void>;
+  loadServers: (options?: LoadServersOptions) => Promise<void>;
   addServer: (server: MCPServer, projectPath?: string) => Promise<void>;
-  updateServer: (server: MCPServer, projectPath?: string) => Promise<void>;
+  updateServer: (server: MCPServer, oldServer: MCPServer, projectPath?: string) => Promise<void>;
   removeServer: (name: string, scope: MCPScope, projectPath?: string) => Promise<void>;
   toggleFavorite: (server: MCPServer) => void;
   getServerById: (id: string) => MCPServer | undefined;
@@ -74,12 +79,40 @@ export function useMCPServers({ showToast }: UseMCPServersOptions): UseMCPServer
   // Keep ref in sync with state
   serversRef.current = servers;
 
-  const loadServers = useCallback(async (projectPath?: string) => {
+  const loadServers = useCallback(async (options: LoadServersOptions = {}) => {
+    const { projectPaths = [], includeGlobal = true } = options;
     setIsLoading(true);
     try {
-      const rawServers = await listMCPServers(projectPath);
-      const mcpServers = rawServers.map(rawToMCPServer);
-      setServers(mcpServers);
+      const allServers: MCPServer[] = [];
+      const seenIds = new Set<string>();
+
+      const addServer = (server: MCPServer) => {
+        if (seenIds.has(server.id)) return;
+        seenIds.add(server.id);
+        allServers.push(server);
+      };
+
+      // Load global servers
+      if (includeGlobal) {
+        const globalServers = await listMCPServers();
+        for (const raw of globalServers) {
+          addServer(rawToMCPServer(raw));
+        }
+      }
+
+      // Load project-specific servers
+      for (const projectPath of projectPaths) {
+        try {
+          const projectServers = await listMCPServers(projectPath);
+          for (const raw of projectServers) {
+            addServer(rawToMCPServer(raw));
+          }
+        } catch (error) {
+          console.error(`Error loading MCP servers from ${projectPath}:`, error);
+        }
+      }
+
+      setServers(allServers);
     } catch (error) {
       console.error('Failed to load MCP servers:', error);
       showToast('error', `Failed to load MCP servers: ${error}`);
@@ -110,15 +143,23 @@ export function useMCPServers({ showToast }: UseMCPServersOptions): UseMCPServer
     }
   }, [showToast]);
 
-  const updateServer = useCallback(async (server: MCPServer, projectPath?: string) => {
+  const updateServer = useCallback(async (server: MCPServer, oldServer: MCPServer, projectPath?: string) => {
     try {
+      // If name changed, remove the old entry first to avoid duplicates
+      if (oldServer.name !== server.name) {
+        try {
+          await removeMCPServerCmd(oldServer.scope, oldServer.name, projectPath);
+        } catch (removeError) {
+          console.warn('Failed to remove old MCP server entry:', removeError);
+        }
+      }
+
       const rawConfig = mcpServerToRawConfig(server);
-      // Remove old and add new (in case name changed)
       await addMCPServerCmd(server.scope, server.name, rawConfig, projectPath);
 
-      // Update local state
+      // Update local state - filter by old server ID
       setServers(prev => {
-        const filtered = prev.filter(s => s.id !== server.id);
+        const filtered = prev.filter(s => s.id !== oldServer.id);
         return [...filtered, server];
       });
 

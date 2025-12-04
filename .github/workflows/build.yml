@@ -52,6 +52,13 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS code signing and notarization (Tauri handles this automatically when set)
+          APPLE_CERTIFICATE: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
         run: npm run tauri build
 
       - name: Upload artifacts (macOS)
@@ -113,6 +120,12 @@ jobs:
             artifacts/Vinsly-Windows/*.exe
             artifacts/Vinsly-Windows/*.exe.sig
           generate_release_notes: true
+          body: |
+            ## Installation Notes
+
+            **Windows users:** Windows may show a security warning (SmartScreen). Click "More info" then "Run anyway" to proceed. This warning appears because the app is new and not yet widely recognized by Microsoft.
+
+            ---
 
   generate-manifest:
     needs: create-release

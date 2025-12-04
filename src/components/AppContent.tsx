@@ -235,7 +235,7 @@ export const AppContent: React.FC = () => {
   const handleSaveMCP = async (server: MCPServer, projectPath?: string) => {
     const existingServer = mcpServersList.find(s => s.id === server.id);
     if (existingServer) {
-      await updateMCPServer(server, projectPath);
+      await updateMCPServer(server, existingServer, projectPath);
     } else {
       await addMCPServer(server, projectPath);
     }
@@ -563,12 +563,7 @@ export const AppContent: React.FC = () => {
               activeScope={selectedMemory?.scope || memoryActiveScope}
               onScopeChange={setMemoryActiveScope}
               onSave={saveMemory}
-              onShowSubagents={handleShowSubagents}
-              onShowSkills={handleShowSkills}
-              onShowMemory={handleShowMemory}
-              onShowCommands={handleShowCommands}
-              onShowMCP={handleShowMCP}
-              onShowHooks={handleShowHooks}
+              onCancel={handleShowMemory}
             />
           </motion.div>
         );
@@ -833,7 +828,7 @@ export const AppContent: React.FC = () => {
             try {
               onboardingDirectories = await discoverHomeDirectories({
                 maxDepth: HOME_DISCOVERY_MAX_DEPTH,
-                includeProtectedDirs: fullDiskAccessEnabled,
+                includeProtectedDirs: false, // Never scan Music/Movies/Pictures - no Claude projects there
                 force: true,
               });
             } catch (error) {

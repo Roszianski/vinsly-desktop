@@ -891,25 +891,19 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
 
   return (
     <div className="space-y-8" onKeyDownCapture={handleWizardKeyDown}>
-      <div className="space-y-2">
+      {/* Header */}
+      <div className="flex items-center gap-4">
         <button
           onClick={onCancel}
-          className="text-sm font-semibold text-v-accent hover:text-v-accent-hover inline-flex items-center gap-2"
+          className="p-2 rounded-lg hover:bg-v-light-hover dark:hover:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary transition-colors"
         >
-          <span aria-hidden="true">←</span>
-          Back to agents
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
         </button>
-        <div className="flex items-center gap-2 text-sm text-v-light-text-secondary dark:text-v-text-secondary">
-          <span className="text-v-light-text-primary dark:text-v-text-primary">Agents</span>
-          <span>/</span>
-          <span className="text-v-light-text-primary dark:text-v-text-primary">{breadcrumbLabel}</span>
-        </div>
-      </div>
-      <div>
-        <h1 className="text-3xl font-bold text-v-light-text-primary dark:text-v-text-primary -ml-px">{title}</h1>
-        <p className="text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-          Configure your agent's identity, tools, and instructions.
-        </p>
+        <h1 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary">
+          {title}
+        </h1>
       </div>
 
       <div className="grid gap-6 md:grid-cols-[260px,1fr]" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.5rem' }}>

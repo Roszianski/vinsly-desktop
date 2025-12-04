@@ -51,14 +51,12 @@ export const LicenseProvider: React.FC<LicenseProviderProps> = ({ children }) =>
   // Load app version on mount
   useEffect(() => {
     const loadAppVersion = async () => {
-      if (typeof window === 'undefined' || !(window as any).__TAURI__) {
-        return;
-      }
       try {
         const { getVersion } = await import('@tauri-apps/api/app');
         const version = await getVersion();
         setAppVersion(version);
       } catch (error) {
+        // Expected to fail in browser/non-Tauri environment
         console.warn('Unable to read application version', error);
       }
     };

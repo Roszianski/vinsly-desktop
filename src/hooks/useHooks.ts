@@ -49,11 +49,16 @@ export interface UseHooksOptions {
   showToast: (type: ToastType, message: string) => void;
 }
 
+export interface LoadHooksOptions {
+  projectPaths?: string[];
+  includeGlobal?: boolean;
+}
+
 export interface UseHooksResult {
   hooks: Hook[];
   hooksRef: React.RefObject<Hook[]>;
   isLoading: boolean;
-  loadHooks: (projectPath?: string) => Promise<void>;
+  loadHooks: (options?: LoadHooksOptions) => Promise<void>;
   addHook: (hook: Hook, projectPath?: string) => Promise<void>;
   updateHook: (hook: Hook, oldHook: Hook, projectPath?: string) => Promise<void>;
   removeHook: (hook: Hook, projectPath?: string) => Promise<void>;
@@ -70,12 +75,40 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
   // Keep ref in sync with state
   hooksRef.current = hooks;
 
-  const loadHooks = useCallback(async (projectPath?: string) => {
+  const loadHooks = useCallback(async (options: LoadHooksOptions = {}) => {
+    const { projectPaths = [], includeGlobal = true } = options;
     setIsLoading(true);
     try {
-      const rawHooks = await listHooks(projectPath);
-      const loadedHooks = rawHooks.map(rawToHook);
-      setHooks(loadedHooks);
+      const allHooks: Hook[] = [];
+      const seenIds = new Set<string>();
+
+      const addHook = (hook: Hook) => {
+        if (seenIds.has(hook.id)) return;
+        seenIds.add(hook.id);
+        allHooks.push(hook);
+      };
+
+      // Load global hooks
+      if (includeGlobal) {
+        const globalHooks = await listHooks();
+        for (const raw of globalHooks) {
+          addHook(rawToHook(raw));
+        }
+      }
+
+      // Load project-specific hooks
+      for (const projectPath of projectPaths) {
+        try {
+          const projectHooks = await listHooks(projectPath);
+          for (const raw of projectHooks) {
+            addHook(rawToHook(raw));
+          }
+        } catch (error) {
+          console.error(`Error loading hooks from ${projectPath}:`, error);
+        }
+      }
+
+      setHooks(allHooks);
     } catch (error) {
       console.error('Failed to load hooks:', error);
       showToast('error', `Failed to load hooks: ${error}`);
