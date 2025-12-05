@@ -117,6 +117,8 @@ jobs:
             artifacts/Vinsly-macOS/*.dmg
             artifacts/Vinsly-macOS/*.tar.gz
             artifacts/Vinsly-macOS/*.tar.gz.sig
+            artifacts/Vinsly-Linux/*.deb
+            artifacts/Vinsly-Linux/*.AppImage
             artifacts/Vinsly-Windows/*.exe
             artifacts/Vinsly-Windows/*.exe.sig
           generate_release_notes: true
@@ -124,6 +126,8 @@ jobs:
             ## Installation Notes
 
             **Windows users:** Windows may show a security warning (SmartScreen). Click "More info" then "Run anyway" to proceed. This warning appears because the app is new and not yet widely recognized by Microsoft.
+
+            **Linux users:** For the AppImage, you may need to make it executable: `chmod +x Vinsly_*.AppImage`
 
             ---
 
