@@ -137,7 +137,8 @@ export function useScopeSelection(options: UseScopeSelectionOptions): ScopeSelec
 
   const displayProjectPath = useMemo(() => {
     if (!projectFolderPath) return 'Choose folder...';
-    return projectFolderPath.split('/').slice(-2).join('/');
+    // Normalize separators for cross-platform compatibility
+    return projectFolderPath.replace(/\\/g, '/').split('/').slice(-2).join('/');
   }, [projectFolderPath]);
 
   const reset = useCallback(() => {

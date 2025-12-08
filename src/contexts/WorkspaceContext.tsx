@@ -453,7 +453,9 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
       ...watchedDirs,
     ];
 
-    await Promise.all([
+    // Use Promise.allSettled to allow partial success - if one loader fails,
+    // the others can still complete successfully
+    const results = await Promise.allSettled([
       loadCommands({
         includeGlobal: options?.includeGlobal,
         projectPaths: allProjectPaths,
@@ -472,6 +474,14 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
         projectPaths: allProjectPaths,
       }),
     ]);
+
+    // Log any failures but don't throw - allow app to continue with partial data
+    const loaderNames = ['Commands', 'MCP Servers', 'Hooks', 'Memories'];
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.error(`Failed to load ${loaderNames[index]}:`, result.reason);
+      }
+    });
 
     return agentResult;
   }, [loadAgents, loadCommands, loadMCPServers, loadHooks, loadMemories, scanSettings.watchedDirectories]);

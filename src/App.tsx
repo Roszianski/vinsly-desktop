@@ -1,4 +1,5 @@
 import React from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { LicenseProvider } from './contexts/LicenseContext';
 import { UpdateProvider } from './contexts/UpdateContext';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
@@ -7,15 +8,17 @@ import { AppContent } from './components/AppContent';
 
 const App: React.FC = () => {
   return (
-    <LicenseProvider>
-      <UpdateProvider>
-        <WorkspaceProvider>
-          <NavigationProvider>
-            <AppContent />
-          </NavigationProvider>
-        </WorkspaceProvider>
-      </UpdateProvider>
-    </LicenseProvider>
+    <ErrorBoundary>
+      <LicenseProvider>
+        <UpdateProvider>
+          <WorkspaceProvider>
+            <NavigationProvider>
+              <AppContent />
+            </NavigationProvider>
+          </WorkspaceProvider>
+        </UpdateProvider>
+      </LicenseProvider>
+    </ErrorBoundary>
   );
 };
 

@@ -213,7 +213,7 @@ fn validate_and_canonicalize_directory(dir: &str) -> Result<PathBuf, String> {
 }
 
 /// Validates export destination paths.
-/// Rejects system directories and other sensitive locations.
+/// Rejects system directories and other sensitive locations on all platforms.
 fn validate_export_destination(dest: &Path) -> Result<(), String> {
     // Must be absolute
     if !dest.is_absolute() {
@@ -221,17 +221,35 @@ fn validate_export_destination(dest: &Path) -> Result<(), String> {
     }
 
     let dest_str = dest.to_string_lossy();
+    // Normalize to lowercase for case-insensitive Windows path comparison
+    let dest_lower = dest_str.to_lowercase();
 
-    // Block system directories
-    let forbidden_prefixes = [
+    // Block Unix system directories
+    let unix_forbidden_prefixes = [
         "/etc", "/usr", "/bin", "/sbin", "/var", "/lib",
         "/System", "/Library", "/Applications",
         "/private/etc", "/private/var",
     ];
 
-    for prefix in forbidden_prefixes {
+    for prefix in unix_forbidden_prefixes {
         if dest_str.starts_with(prefix) {
             return Err(format!("Cannot export to system directory: {}", prefix));
+        }
+    }
+
+    // Block Windows system directories (case-insensitive)
+    let windows_forbidden_patterns = [
+        "c:\\windows\\",
+        "c:\\program files\\",
+        "c:\\program files (x86)\\",
+        "c:\\programdata\\",
+        "c:\\$recycle.bin\\",
+        "c:\\system volume information\\",
+    ];
+
+    for pattern in windows_forbidden_patterns {
+        if dest_lower.starts_with(pattern) || dest_lower.replace('/', "\\").starts_with(pattern) {
+            return Err(format!("Cannot export to system directory: {}", pattern));
         }
     }
 
@@ -2390,7 +2408,7 @@ async fn kill_claude_session(app: tauri::AppHandle, pid: u32) -> Result<(), Stri
     }
 
     // Use the system kill command for reliability
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
         use std::process::Command;
         // First try SIGTERM for graceful shutdown
@@ -2420,9 +2438,30 @@ async fn kill_claude_session(app: tauri::AppHandle, pid: u32) -> Result<(), Stri
         }
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
     {
-        Err("kill_claude_session is only supported on macOS".to_string())
+        use std::process::Command;
+        // Use taskkill to terminate the process on Windows
+        let result = Command::new("taskkill")
+            .args(&["/PID", &pid.to_string(), "/F"])
+            .output();
+
+        match result {
+            Ok(output) => {
+                if output.status.success() {
+                    Ok(())
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    Err(format!("Failed to terminate process {}: {}", pid, stderr.trim()))
+                }
+            }
+            Err(e) => Err(format!("Failed to execute taskkill command: {}", e))
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        Err("kill_claude_session is not supported on this platform".to_string())
     }
 }
 

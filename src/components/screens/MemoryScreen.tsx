@@ -261,7 +261,7 @@ export const MemoryScreen: React.FC<MemoryScreenProps> = ({
           ) : (
             <FolderIcon className="w-4 h-4" />
           )}
-          {projectFolderPath ? projectFolderPath.split('/').slice(-2).join('/') : 'Choose Project...'}
+          {projectFolderPath ? projectFolderPath.replace(/\\/g, '/').split('/').slice(-2).join('/') : 'Choose Project...'}
         </button>
         {activeScope === AgentScope.Project && projectFolderPath && (
           <button

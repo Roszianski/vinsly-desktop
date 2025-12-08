@@ -141,9 +141,9 @@ export const SlashCommandEditorScreen: React.FC<SlashCommandEditorScreenProps> =
     }
   };
 
-  // Get display path for project folder
+  // Get display path for project folder - normalize separators for cross-platform
   const displayProjectPath = projectFolderPath
-    ? projectFolderPath.split('/').slice(-2).join('/')
+    ? projectFolderPath.replace(/\\/g, '/').split('/').slice(-2).join('/')
     : 'Choose folder...';
 
   return (

@@ -184,8 +184,9 @@ const getDisplayName = (memory: ClaudeMemory): string => {
   if (memory.scope === AgentScope.Global) {
     return 'Global Memory';
   }
-  // Extract project folder name from path
-  const parts = memory.path.split('/');
+  // Extract project folder name from path - normalize separators for cross-platform
+  const normalizedPath = memory.path.replace(/\\/g, '/');
+  const parts = normalizedPath.split('/');
   const claudeIndex = parts.findIndex(p => p === '.claude' || p === 'CLAUDE.md');
   if (claudeIndex > 0) {
     return parts[claudeIndex - 1];

@@ -76,9 +76,9 @@ export const ScopeSelector: React.FC<ScopeSelectorProps> = ({
     ...scopeOptions?.project,
   };
 
-  // Get display path (last 2 segments)
+  // Get display path (last 2 segments) - normalize separators for cross-platform
   const displayProjectPath = projectFolderPath
-    ? projectFolderPath.split('/').slice(-2).join('/')
+    ? projectFolderPath.replace(/\\/g, '/').split('/').slice(-2).join('/')
     : 'Choose folder...';
 
   const projectDescription = projectFolderPath

@@ -71,6 +71,25 @@ describe('pathHelpers', () => {
     it('should handle mixed path separators', () => {
       expect(isPathSafe('folder/subfolder\\file.md')).toBe(true);
     });
+
+    describe('UNC paths', () => {
+      it('should accept valid UNC paths', () => {
+        expect(isPathSafe('\\\\server\\share')).toBe(true);
+        expect(isPathSafe('\\\\server\\share\\folder\\file.txt')).toBe(true);
+        expect(isPathSafe('\\\\myserver\\myshare\\.claude\\agents\\agent.md')).toBe(true);
+      });
+
+      it('should accept long path syntax', () => {
+        expect(isPathSafe('\\\\?\\C:\\Users\\user')).toBe(true);
+        expect(isPathSafe('\\\\?\\D:\\Project\\file.md')).toBe(true);
+      });
+
+      it('should reject malformed UNC paths', () => {
+        expect(isPathSafe('\\\\')).toBe(false);  // No server
+        expect(isPathSafe('\\\\server')).toBe(false);  // No share
+        expect(isPathSafe('\\\\')).toBe(false);  // Empty
+      });
+    });
   });
 
   describe('isPathWithinBase', () => {

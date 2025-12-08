@@ -3,6 +3,40 @@ import { homeDir, join, normalize } from '@tauri-apps/api/path';
 let cachedHomeDir: string | null = null;
 
 /**
+ * Normalize path separators to forward slashes for consistent cross-platform handling.
+ * Use this before splitting paths or extracting path components.
+ */
+export function normalizeSeparators(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+/**
+ * Split a path into its components, handling both Windows and Unix separators.
+ * Normalizes backslashes to forward slashes before splitting.
+ */
+export function getPathParts(path: string): string[] {
+  return normalizeSeparators(path).split('/').filter(Boolean);
+}
+
+/**
+ * Get the last N parts of a path, handling both Windows and Unix separators.
+ * Useful for displaying shortened project paths like "parent/project".
+ */
+export function getLastPathParts(path: string, count: number): string {
+  const parts = getPathParts(path);
+  return parts.slice(-count).join('/');
+}
+
+/**
+ * Get the file or directory name from a path (last component).
+ * Handles both Windows and Unix separators.
+ */
+export function getPathBasename(path: string): string {
+  const parts = getPathParts(path);
+  return parts[parts.length - 1] || '';
+}
+
+/**
  * Validate that a path doesn't contain traversal sequences that could
  * escape the intended directory scope
  */
@@ -36,6 +70,18 @@ export function isPathSafe(path: string): boolean {
   for (const pattern of dangerousPatterns) {
     if (pattern.test(normalized)) {
       return false;
+    }
+  }
+
+  // Validate UNC paths (Windows network paths like \\server\share)
+  if (normalized.startsWith('\\\\')) {
+    // UNC must have at least \\server\share format
+    // Valid: \\server\share, \\server\share\folder, \\?\C:\path
+    const uncPattern = /^\\\\[^\\]+\\[^\\]+/;  // \\server\share
+    const uncLongPathPattern = /^\\\\\?\\[a-zA-Z]:\\/;  // \\?\C:\
+
+    if (!uncPattern.test(normalized) && !uncLongPathPattern.test(normalized)) {
+      return false;  // Malformed UNC path
     }
   }
 

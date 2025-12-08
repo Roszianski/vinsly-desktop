@@ -80,10 +80,13 @@ export function formatUptime(startTime: number): string {
 }
 
 /**
- * Extract project name from working directory
+ * Extract project name from working directory.
+ * Handles both Windows and Unix path separators.
  */
 export function getProjectName(workingDirectory: string): string {
-  const parts = workingDirectory.split('/');
+  // Normalize separators for cross-platform compatibility
+  const normalized = workingDirectory.replace(/\\/g, '/');
+  const parts = normalized.split('/');
   return parts[parts.length - 1] || workingDirectory;
 }
 

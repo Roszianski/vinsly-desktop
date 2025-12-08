@@ -160,6 +160,7 @@ jobs:
           WINDOWS_X64_SIG=$(cat artifacts/Vinsly-Windows/*_x64-setup.exe.sig 2>/dev/null || cat artifacts/Vinsly-Windows/*.exe.sig 2>/dev/null | head -1)
 
           # Find update bundle names (macOS uses .tar.gz, Windows uses .exe)
+          # Note: Linux auto-updater is not supported - Tauri doesn't generate signed AppImage bundles
           MACOS_ARM_FILE=$(basename artifacts/Vinsly-macOS/*_aarch64.app.tar.gz 2>/dev/null || basename artifacts/Vinsly-macOS/*.app.tar.gz 2>/dev/null | head -1)
           MACOS_X64_FILE=$(basename artifacts/Vinsly-macOS/*_x64.app.tar.gz 2>/dev/null || echo "$MACOS_ARM_FILE")
           WINDOWS_X64_FILE=$(basename artifacts/Vinsly-Windows/*_x64-setup.exe 2>/dev/null || basename artifacts/Vinsly-Windows/*.exe 2>/dev/null | head -1)

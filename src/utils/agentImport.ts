@@ -197,7 +197,8 @@ async function importAgentFromPath(
 ): Promise<Agent | null> {
   try {
     const content = await importTextFile(filePath);
-    const fileName = filePath.split('/').pop() || '';
+    // Normalize path separators for cross-platform compatibility
+    const fileName = filePath.replace(/\\/g, '/').split('/').pop() || '';
 
     if (!hasSubagentDefinition(content)) {
       throw new Error('File does not contain a valid subagent definition');
