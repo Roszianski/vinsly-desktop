@@ -222,7 +222,6 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
     (loadOptions: LoadAgentsOptions = {}): Promise<{ total: number; newCount: number }> => {
       // Queue scan if one is already in progress - carry latest intent forward
       if (inFlightScanCount.current > 0) {
-        console.log('Scan in progress, queuing request for after completion');
         pendingScanOptions.current = loadOptions;
         return Promise.resolve({ total: 0, newCount: 0 });
       }
@@ -249,7 +248,6 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
         try {
           // Check if scan was cancelled
           if (signal.aborted) {
-            console.log('Scan cancelled before execution');
             return { total: 0, newCount: 0 };
           }
 
@@ -441,7 +439,6 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
 
           // Check if scan was cancelled before updating state
           if (signal.aborted) {
-            console.log('Scan was cancelled, skipping state update');
             return { total: 0, newCount: 0 };
           }
 
@@ -454,7 +451,6 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
         } catch (error: any) {
           // Don't show error if scan was cancelled
           if (error.name === 'AbortError' || signal.aborted) {
-            console.log('Scan cancelled');
             return { total: 0, newCount: 0 };
           }
 

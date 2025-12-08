@@ -25,7 +25,7 @@ This guide will help you set up your development environment and understand the 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/YOUR_ORG/vinsly-desktop.git
+   git clone https://github.com/Roszianski/vinsly-desktop.git
    cd vinsly-desktop
    ```
 

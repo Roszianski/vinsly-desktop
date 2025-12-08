@@ -222,7 +222,7 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
 
     return (
         <motion.div
-           
+
             variants={listItem}
             initial="hidden"
             animate="visible"

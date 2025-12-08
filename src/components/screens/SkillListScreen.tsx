@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { motion } from 'framer-motion';
 import { Skill, AgentScope } from '../../types';
 import { PlusIcon } from '../icons/PlusIcon';
 import { SearchIcon } from '../icons/SearchIcon';
@@ -841,8 +842,12 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
         </button>
         {showMenu && menuCoords && typeof document !== 'undefined' &&
           createPortal(
-            <div
+            <motion.div
               ref={menuRef}
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
               style={{
                 position: 'fixed',
                 top: menuCoords.top,
@@ -891,7 +896,7 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
                 <DeleteIcon className="h-4 w-4" />
                 <span>Delete</span>
               </button>
-            </div>,
+            </motion.div>,
             document.body
           )}
         <ConfirmDialog

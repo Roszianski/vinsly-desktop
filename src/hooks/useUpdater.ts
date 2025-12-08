@@ -57,7 +57,6 @@ async function checkWithRetry(): Promise<Update | null> {
 
       // Don't sleep after the last attempt
       if (attempt < UPDATE_MAX_RETRIES) {
-        console.log(`[Updater] Retrying in ${delay}ms...`);
         await sleep(delay);
         delay *= 2; // Exponential backoff
       }

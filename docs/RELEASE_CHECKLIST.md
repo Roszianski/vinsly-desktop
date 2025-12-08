@@ -41,7 +41,7 @@ Use this checklist to ensure all steps are completed when releasing a new versio
   git push origin v{version}
   ```
 - [ ] **Wait for CI builds to complete**
-  - Check GitHub Actions: https://github.com/YOUR_ORG/vinsly-desktop/actions
+  - Check GitHub Actions: https://github.com/Roszianski/vinsly-desktop/actions
   - [ ] macOS build successful
   - [ ] Windows build successful
   - [ ] Linux build successful
@@ -88,7 +88,7 @@ Use this checklist to ensure all steps are completed when releasing a new versio
 ## Publishing
 
 - [ ] **Create GitHub release:**
-  - Go to: https://github.com/YOUR_ORG/vinsly-desktop/releases/new
+  - Go to: https://github.com/Roszianski/vinsly-desktop/releases/new
   - Select the tag: `v{version}`
   - Release title: `v{version}`
   - Copy release notes from CHANGELOG.md

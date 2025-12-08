@@ -106,7 +106,6 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
 
           if (now < expiryDate) {
             // Still within grace period - keep license active
-            console.log('License validation failed but within grace period until:', expiryDate);
             if (!cancelled) {
               setLicenseInfo(storedLicense);
               setIsOnboardingComplete(true);
@@ -117,7 +116,6 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
             }
           } else {
             // Grace period expired - remove license
-            console.log('License grace period expired');
             await removeStorageItem('vinsly-license-info');
             await removeStorageItem(GRACE_PERIOD_KEY);
 
@@ -134,7 +132,6 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
           const graceExpiryISO = graceExpiry.toISOString();
           await setStorageItem(GRACE_PERIOD_KEY, graceExpiryISO);
 
-          console.log('Starting license grace period until:', graceExpiry);
           if (!cancelled) {
             setLicenseInfo(storedLicense);
             setIsOnboardingComplete(true);

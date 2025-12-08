@@ -266,10 +266,10 @@ export const DocsPanel: React.FC<DocsPanelProps> = ({ isOpen, onClose }) => {
 
           {/* Panel */}
           <motion.div
-            initial={{ opacity: 0, x: '100%' }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'tween', ease: 'easeOut', duration: 0.25 }}
             className="fixed top-0 right-0 h-full w-full max-w-lg bg-v-light-surface dark:bg-v-mid-dark border-l border-v-light-border dark:border-v-border shadow-2xl z-50 flex flex-col"
           >
             {/* Header */}

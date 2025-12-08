@@ -32,7 +32,7 @@ const SourceChip: React.FC<SourceChipProps> = ({ label, description, active, dis
     className={`px-4 py-3 rounded-xl border transition-colors text-left ${
       active
         ? 'border-v-accent bg-v-accent/10 text-v-light-text-primary dark:text-v-text-primary'
-        : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent'
+        : 'border-v-light-border dark:border-v-border bg-v-light-bg/60 dark:bg-v-dark/60 text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent'
     } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
   >
     <div className="flex items-start justify-between gap-3">
@@ -315,16 +315,16 @@ export const ScanModal: React.FC<ScanModalProps> = ({
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
               <section>
                 <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                  Pick your sources
+                  Sources
                 </p>
                 <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                  Global resources (~/.claude/) are always included. Add more sources below.
+                  Global (~/.claude/) always included.
                 </p>
 
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <SourceChip
                     label="Home directory"
-                    description="Scan your entire home directory - requires macOS Full Disk Access."
+                    description="Requires Full Disk Access."
                     active={selectedSources.has('home')}
                     disabled={(!canUseHomeSource && isMacPlatform) || isScanning || isDiscoveringHome}
                     onClick={ensureHomeSource}
@@ -335,7 +335,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                     description={
                       watchedDirectoryCount > 0
                         ? `${watchedDirectoryCount} folder${watchedDirectoryCount === 1 ? '' : 's'}`
-                        : 'Add folders in Settings → Scanning'
+                        : 'Configured in Settings.'
                     }
                     active={selectedSources.has('watched')}
                     disabled={watchedDirectoryCount === 0 || isScanning || isDiscoveringHome}
@@ -346,20 +346,15 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                     type="button"
                     onClick={handleCustomPath}
                     disabled={isScanning || isDiscoveringHome}
-                    className="px-4 py-3 rounded-xl border border-dashed border-v-light-border dark:border-v-border text-left text-v-accent hover:border-v-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-3 rounded-xl border border-dashed border-v-light-border dark:border-v-border bg-v-light-bg/60 dark:bg-v-dark/60 text-left text-v-accent hover:border-v-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <p className="text-sm font-semibold">+ Custom folder</p>
                     <p className="text-xs mt-1 text-v-light-text-secondary dark:text-v-text-secondary">
-                      Scan one or more specific folders without adding to watched directories
+                      One-time scan without saving.
                     </p>
                   </button>
                 </div>
 
-                {!canUseHomeSource && isMacPlatform && (
-                  <div className="mt-3 text-xs text-amber-600 dark:text-amber-300 bg-amber-100/60 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/40 rounded-lg px-3 py-2">
-                    Grant Full Disk Access in Settings → Permissions to scan Desktop and Documents automatically.
-                  </div>
-                )}
 
                 {customPaths.length > 0 && (
                   <div className="mt-4 space-y-2">
@@ -418,11 +413,6 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                 </div>
               )}
 
-              {(!isMacPlatform || !scanSettings.fullDiskAccessEnabled) && (
-                <div className="text-xs text-v-light-text-secondary dark:text-v-text-secondary border border-dashed border-v-light-border dark:border-v-border rounded-lg px-3 py-2">
-                  Prefer selective access? Leave Full Disk Access off and add Desktop, Documents, or any other folder manually under Settings → Scanning → Watched Directories.
-                </div>
-              )}
             </div>
           </div>
         </motion.div>

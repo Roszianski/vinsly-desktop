@@ -143,7 +143,6 @@ export const Header: React.FC<HeaderProps> = ({
   const handleThemePreference = async (preference: 'system' | 'light' | 'dark') => {
     setDefaultTheme(preference);
     await setStorageItem('vinsly-theme-preference', preference);
-    console.log(`Theme preference set to: ${preference}`);
 
     // Immediately apply the theme
     if (preference === 'system') {
@@ -166,7 +165,6 @@ export const Header: React.FC<HeaderProps> = ({
     await setStorageItem('vinsly-agent-list-layout', preference);
     // Dispatch custom event to immediately update the current view
     window.dispatchEvent(new CustomEvent('vinsly-view-change', { detail: { view: preference } }));
-    console.log(`Default view preference set to: ${preference}`);
   };
 
   const handleResetPreferences = async () => {

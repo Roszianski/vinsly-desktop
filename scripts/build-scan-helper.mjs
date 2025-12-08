@@ -78,3 +78,13 @@ for (const destPath of outputs) {
   }
   console.log(`[scan-helper] Helper copied to ${destPath}`);
 }
+
+// Verify the target-triple suffixed binary exists (required by Tauri's externalBin)
+if (hostTriple) {
+  const tauriExpectedPath = path.join(binDir, `scan-helper-${hostTriple}${extension}`);
+  if (!existsSync(tauriExpectedPath)) {
+    console.error(`[scan-helper] ERROR: Tauri expects ${tauriExpectedPath} but it was not created!`);
+    process.exit(1);
+  }
+  console.log(`[scan-helper] Verified Tauri sidecar: ${tauriExpectedPath}`);
+}

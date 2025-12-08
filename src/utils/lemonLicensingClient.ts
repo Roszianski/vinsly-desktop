@@ -73,7 +73,6 @@ async function fetchWithRetry(
 
     // Don't sleep after the last attempt
     if (attempt < maxRetries) {
-      console.log(`[Lemon] Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`);
       await sleep(delay);
       delay *= 2; // Exponential backoff
     }
