@@ -119,6 +119,8 @@ jobs:
             artifacts/Vinsly-macOS/*.tar.gz.sig
             artifacts/Vinsly-Linux/*.deb
             artifacts/Vinsly-Linux/*.AppImage
+            artifacts/Vinsly-Linux/*.AppImage.tar.gz
+            artifacts/Vinsly-Linux/*.AppImage.tar.gz.sig
             artifacts/Vinsly-Windows/*.exe
             artifacts/Vinsly-Windows/*.exe.sig
           generate_release_notes: true
@@ -153,17 +155,19 @@ jobs:
           echo "Listing artifacts..."
           ls -la artifacts/Vinsly-macOS/ || true
           ls -la artifacts/Vinsly-Windows/ || true
+          ls -la artifacts/Vinsly-Linux/ || true
 
-          # Find the signature files (macOS uses .tar.gz for updater)
+          # Find the signature files (all platforms use .tar.gz or similar for updater)
           MACOS_ARM_SIG=$(cat artifacts/Vinsly-macOS/*_aarch64.app.tar.gz.sig 2>/dev/null || cat artifacts/Vinsly-macOS/*.app.tar.gz.sig 2>/dev/null | head -1)
           MACOS_X64_SIG=$(cat artifacts/Vinsly-macOS/*_x64.app.tar.gz.sig 2>/dev/null || echo "$MACOS_ARM_SIG")
           WINDOWS_X64_SIG=$(cat artifacts/Vinsly-Windows/*_x64-setup.exe.sig 2>/dev/null || cat artifacts/Vinsly-Windows/*.exe.sig 2>/dev/null | head -1)
+          LINUX_X64_SIG=$(cat artifacts/Vinsly-Linux/*.AppImage.tar.gz.sig 2>/dev/null | head -1)
 
-          # Find update bundle names (macOS uses .tar.gz, Windows uses .exe)
-          # Note: Linux auto-updater is not supported - Tauri doesn't generate signed AppImage bundles
+          # Find update bundle names (macOS uses .app.tar.gz, Windows uses .exe, Linux uses .AppImage.tar.gz)
           MACOS_ARM_FILE=$(basename artifacts/Vinsly-macOS/*_aarch64.app.tar.gz 2>/dev/null || basename artifacts/Vinsly-macOS/*.app.tar.gz 2>/dev/null | head -1)
           MACOS_X64_FILE=$(basename artifacts/Vinsly-macOS/*_x64.app.tar.gz 2>/dev/null || echo "$MACOS_ARM_FILE")
           WINDOWS_X64_FILE=$(basename artifacts/Vinsly-Windows/*_x64-setup.exe 2>/dev/null || basename artifacts/Vinsly-Windows/*.exe 2>/dev/null | head -1)
+          LINUX_X64_FILE=$(basename artifacts/Vinsly-Linux/*.AppImage.tar.gz 2>/dev/null | head -1)
 
           cat > latest.json <<EOF
           {
@@ -182,6 +186,10 @@ jobs:
               "windows-x86_64": {
                 "signature": "$WINDOWS_X64_SIG",
                 "url": "https://github.com/$REPO/releases/download/v$VERSION/$WINDOWS_X64_FILE"
+              },
+              "linux-x86_64": {
+                "signature": "$LINUX_X64_SIG",
+                "url": "https://github.com/$REPO/releases/download/v$VERSION/$LINUX_X64_FILE"
               }
             }
           }
