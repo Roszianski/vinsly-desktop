@@ -798,7 +798,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                   Full Disk Access
                                 </p>
                                 <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                                  Allows Vinsly to scan Desktop, Documents, and iCloud Drive.
+                                  Allows Vinsly to scan Desktop, Documents, and other protected folders.
                                 </p>
                               </div>
                               <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${fullDiskStatusTone}`}>

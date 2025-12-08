@@ -176,7 +176,7 @@ The app exposes a broad Rust command surface for agents/skills, slash commands, 
 
 ## macOS Home Scan Permissions
 
-The optional “scan home directory for project agents” feature now skips macOS-protected folders (Desktop, Documents, Downloads, Music, Pictures, Movies, Applications, Library/iCloud Drive, etc.) to avoid the OS bombarding users with permission alerts.  
+The optional "scan home directory for project agents" feature now skips macOS-protected folders (Desktop, Documents, Downloads, Music, Pictures, Movies, Applications, Library, etc.) to avoid the OS bombarding users with permission alerts.  
 Add any protected locations you care about as watched folders in Settings if you still need them indexed.
 
 ## Development Notes

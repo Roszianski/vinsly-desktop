@@ -535,7 +535,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                           Full Disk Access (recommended)
                         </p>
                         <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                          Enables scanning Desktop, Documents, and iCloud Drive.
+                          Enables scanning Desktop, Documents, and other protected folders.
                         </p>
                       </div>
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${fullDiskStatusTone}`}>
