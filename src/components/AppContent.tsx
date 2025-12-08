@@ -20,6 +20,7 @@ import { Header } from './Header';
 import { pageTransition } from '../animations';
 import { ToastContainer } from './Toast';
 import { ActivationModal } from './ActivationModal';
+import { ChangeLicenseModal } from './ChangeLicenseModal';
 import { SplashScreen } from './SplashScreen';
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 import { DocsPanel } from './DocsPanel';
@@ -32,7 +33,7 @@ import { useTheme } from '../hooks/useTheme';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { useClaudeSessions } from '../hooks/useClaudeSessions';
 import { useKeyboardShortcuts, CommonShortcuts } from '../hooks/useKeyboardShortcuts';
-import { validateLicenseWithLemon, activateLicenseWithLemon } from '../utils/lemonLicensingClient';
+import { validateLicenseWithLemon, activateLicenseWithLemon, deactivateLicenseWithLemon } from '../utils/lemonLicensingClient';
 import { saveScanSettings } from '../utils/scanSettings';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
@@ -154,6 +155,7 @@ export const AppContent: React.FC = () => {
   const [showSplash, setShowSplash] = useState(true);
   const [showShortcutsPanel, setShowShortcutsPanel] = useState(false);
   const [showDocsPanel, setShowDocsPanel] = useState(false);
+  const [isChangeLicenseOpen, setIsChangeLicenseOpen] = useState(false);
 
   // Claude sessions
   const claudeSessions = useClaudeSessions({ autoStart: true, pollInterval: 5000 });
@@ -260,12 +262,9 @@ export const AppContent: React.FC = () => {
     await removeHook(hook);
   };
 
-  const handleResetLicense = useCallback(async () => {
-    await resetLicense();
-    cancelEditing();
-    navigateHome();
-    setIsActivationOpen(true);
-  }, [cancelEditing, navigateHome, resetLicense, setIsActivationOpen]);
+  const handleChangeLicense = useCallback(() => {
+    setIsChangeLicenseOpen(true);
+  }, []);
 
   // Skill handlers
   const handleRevealSkill = useCallback(async (skill: Skill) => {
@@ -712,7 +711,7 @@ export const AppContent: React.FC = () => {
         onScan={handleFullScan}
         isScanning={isScanBusy}
         licenseInfo={licenseInfo}
-        onResetLicense={handleResetLicense}
+        onResetLicense={handleChangeLicense}
         userDisplayName={userDisplayName}
         onDisplayNameChange={setDisplayName}
         scanSettings={scanSettings}
@@ -746,6 +745,7 @@ export const AppContent: React.FC = () => {
         isOpen={isActivationOpen}
         defaultDisplayName={userDisplayName}
         defaultScanGlobal={scanSettings.autoScanGlobalOnStartup}
+        defaultScanWatched={scanSettings.autoScanWatchedOnStartup}
         defaultScanHome={scanSettings.autoScanHomeDirectoryOnStartup}
         defaultFullDiskAccess={scanSettings.fullDiskAccessEnabled}
         isMacPlatform={isMacLike}
@@ -772,7 +772,7 @@ export const AppContent: React.FC = () => {
             throw new Error(message);
           }
         }}
-        onComplete={async ({ licenseKey, displayName, autoScanGlobal, autoScanHome, fullDiskAccessEnabled }) => {
+        onComplete={async ({ licenseKey, displayName, autoScanGlobal, autoScanWatched, autoScanHome, fullDiskAccessEnabled }) => {
           const trimmedLicenseKey = licenseKey.trim();
           const trimmedDisplayName = displayName.trim();
 
@@ -817,6 +817,7 @@ export const AppContent: React.FC = () => {
           const updatedScanSettings: ScanSettings = {
             ...scanSettings,
             autoScanGlobalOnStartup: autoScanGlobal,
+            autoScanWatchedOnStartup: autoScanWatched,
             autoScanHomeDirectoryOnStartup: autoScanHome,
             fullDiskAccessEnabled,
           };
@@ -836,8 +837,7 @@ export const AppContent: React.FC = () => {
             }
           }
 
-          const homeScanActive = autoScanHome && fullDiskAccessEnabled;
-          const shouldScanWatched = (autoScanGlobal || homeScanActive) && updatedScanSettings.watchedDirectories.length > 0;
+          const shouldScanWatched = autoScanWatched && updatedScanSettings.watchedDirectories.length > 0;
 
           await handleFullScan({
             includeGlobal: autoScanGlobal,
@@ -849,6 +849,75 @@ export const AppContent: React.FC = () => {
         }}
         onClose={() => {
           setIsActivationOpen(false);
+        }}
+      />
+
+      <ChangeLicenseModal
+        isOpen={isChangeLicenseOpen}
+        onValidateLicense={async ({ licenseKey }) => {
+          const result = await validateLicenseWithLemon(licenseKey);
+          const status = result.status?.toLowerCase();
+          const isBadStatus = status === 'revoked' || status === 'expired' || status === 'disabled';
+
+          if (!result.valid || isBadStatus) {
+            const message =
+              result.error === 'invalid'
+                ? 'This licence key was not recognised.'
+                : status === 'revoked'
+                  ? 'This licence has been revoked or refunded.'
+                  : status === 'expired'
+                    ? 'This licence has expired.'
+                    : status === 'disabled'
+                      ? 'This licence has been disabled.'
+                      : 'Unable to validate your licence right now.';
+            throw new Error(message);
+          }
+        }}
+        onComplete={async ({ licenseKey }) => {
+          const trimmedLicenseKey = licenseKey.trim();
+
+          // Deactivate old license instance if exists
+          if (licenseInfo?.licenseKey && licenseInfo?.instanceId) {
+            try {
+              await deactivateLicenseWithLemon(licenseInfo.licenseKey, licenseInfo.instanceId);
+            } catch (error) {
+              // Log but don't fail - the old instance might already be deactivated
+              console.warn('Failed to deactivate old license instance:', error);
+            }
+          }
+
+          // Activate new license
+          const instanceName = `${platformIdentifier} - ${new Date().toLocaleDateString()}`;
+          const activationResult = await activateLicenseWithLemon(trimmedLicenseKey, instanceName);
+
+          if (!activationResult.activated || !activationResult.instance) {
+            const errorMessage = activationResult.error === 'activation_limit_exceeded'
+              ? 'This licence is already active on the maximum number of devices.'
+              : activationResult.error === 'license_invalid'
+              ? 'This licence key is invalid.'
+              : activationResult.error === 'license_inactive'
+              ? 'This licence has been revoked, expired, or refunded.'
+              : 'Unable to activate your licence right now.';
+            throw new Error(errorMessage);
+          }
+
+          const licenseRecord: LicenseInfo = {
+            licenseKey: trimmedLicenseKey,
+            email: activationResult.meta?.customer_email,
+            status: 'active',
+            lastChecked: new Date().toISOString(),
+            instanceId: activationResult.instance.id,
+            instanceName: activationResult.instance.name,
+            activationLimit: activationResult.licenseKey?.activation_limit ?? 0,
+            activationUsage: activationResult.licenseKey?.activation_usage ?? 0,
+          };
+          await setLicense(licenseRecord);
+
+          showToast('success', 'Licence changed successfully.');
+          setIsChangeLicenseOpen(false);
+        }}
+        onClose={() => {
+          setIsChangeLicenseOpen(false);
         }}
       />
 

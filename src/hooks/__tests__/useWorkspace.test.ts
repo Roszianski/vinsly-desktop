@@ -41,7 +41,7 @@ jest.mock('../../utils/skillParser', () => ({
 
 const mockShowToast = jest.fn<void, [ToastType, string]>();
 
-const scanSettingsRef = { current: { autoScanGlobalOnStartup: false, autoScanHomeDirectoryOnStartup: false, fullDiskAccessEnabled: false, watchedDirectories: [] } as ScanSettings };
+const scanSettingsRef = { current: { autoScanGlobalOnStartup: false, autoScanWatchedOnStartup: false, autoScanHomeDirectoryOnStartup: false, fullDiskAccessEnabled: false, watchedDirectories: [] } as ScanSettings };
 
 describe('useWorkspace', () => {
   const agent: Agent = {

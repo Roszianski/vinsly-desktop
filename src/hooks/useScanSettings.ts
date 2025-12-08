@@ -4,6 +4,7 @@ import { getScanSettings } from '../utils/scanSettings';
 
 export const DEFAULT_SCAN_SETTINGS: ScanSettings = {
   autoScanGlobalOnStartup: false,
+  autoScanWatchedOnStartup: false,
   autoScanHomeDirectoryOnStartup: false,
   fullDiskAccessEnabled: false,
   watchedDirectories: [],

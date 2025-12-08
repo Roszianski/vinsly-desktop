@@ -350,6 +350,9 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
     return true;
   });
 
+  // Calculate the visible step index (position within visibleSteps)
+  const visibleStepIndex = visibleSteps.findIndex(s => s.id === currentStep.id);
+
   // Step completion check
   const isStepComplete = (stepId: WizardStepId): boolean => {
     switch (stepId) {
@@ -378,12 +381,8 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
     }
   };
 
-  // Calculate completion percentage
-  const completionPercentage = (() => {
-    const requiredSteps = visibleSteps.filter(s => s.required);
-    const completedRequired = requiredSteps.filter(s => isStepComplete(s.id)).length;
-    return Math.round((completedRequired / requiredSteps.length) * 100);
-  })();
+  // Calculate progress percentage based on current step position
+  const progressPercentage = Math.round(((visibleStepIndex + 1) / visibleSteps.length) * 100);
 
   // Sidebar steps data
   const sidebarSteps = visibleSteps.map((step, index) => ({
@@ -423,7 +422,7 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
               <button
                 type="button"
                 onClick={() => handleTemplateSelect(null)}
-                className={`p-4 rounded-lg border-2 text-left transition-all ${
+                className={`p-4 rounded-lg border text-left transition-all ${
                   selectedTemplate === null
                     ? 'border-v-accent bg-v-accent/10'
                     : 'border-v-light-border dark:border-v-border hover:border-v-accent/50'
@@ -445,7 +444,7 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
                   key={template.id}
                   type="button"
                   onClick={() => handleTemplateSelect(template)}
-                  className={`p-4 rounded-lg border-2 text-left transition-all ${
+                  className={`p-4 rounded-lg border text-left transition-all ${
                     selectedTemplate?.id === template.id
                       ? 'border-v-accent bg-v-accent/10'
                       : 'border-v-light-border dark:border-v-border hover:border-v-accent/50'
@@ -474,7 +473,7 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
                 key={option.value}
                 type="button"
                 onClick={() => handleTypeChange(option.value)}
-                className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
+                className={`w-full p-4 rounded-lg border text-left transition-all ${
                   formData.type === option.value
                     ? 'border-v-accent bg-v-accent/10'
                     : 'border-v-light-border dark:border-v-border hover:border-v-accent/50'
@@ -664,7 +663,7 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
                 key={scope}
                 type="button"
                 onClick={() => handleScopeChange(scope)}
-                className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
+                className={`w-full p-4 rounded-lg border text-left transition-all ${
                   formData.scope === scope
                     ? 'border-v-accent bg-v-accent/10'
                     : 'border-v-light-border dark:border-v-border hover:border-v-accent/50'
@@ -838,14 +837,14 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
 
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-v-light-text-secondary dark:text-v-text-secondary">Progress</span>
-                <span className="font-semibold text-v-light-text-primary dark:text-v-text-primary">{completionPercentage}%</span>
+                <span className="text-v-light-text-secondary dark:text-v-text-secondary">Step {visibleStepIndex + 1} of {visibleSteps.length}</span>
+                <span className="font-semibold text-v-light-text-primary dark:text-v-text-primary">{progressPercentage}%</span>
               </div>
               <div className="h-2 bg-v-light-border dark:bg-v-border rounded-full overflow-hidden">
                 <motion.div
                   className="h-full bg-gradient-to-r from-v-accent to-v-accent-hover rounded-full"
                   initial={{ width: 0 }}
-                  animate={{ width: `${completionPercentage}%` }}
+                  animate={{ width: `${progressPercentage}%` }}
                   transition={{ duration: 0.3, ease: 'easeOut' }}
                 />
               </div>
@@ -887,7 +886,7 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
 
           {/* Main Content */}
           <div className="space-y-6">
-            <WizardStepHeader currentStepIndex={currentStepIndex} wizardSteps={WIZARD_STEPS} />
+            <WizardStepHeader currentStepIndex={visibleStepIndex} wizardSteps={visibleSteps} />
             <AnimatePresence mode="wait" custom={direction}>
               <motion.div
                 key={currentStep.id}

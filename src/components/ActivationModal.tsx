@@ -6,6 +6,7 @@ interface ActivationModalProps {
   isOpen: boolean;
   defaultDisplayName?: string;
   defaultScanGlobal?: boolean;
+  defaultScanWatched?: boolean;
   defaultScanHome?: boolean;
   defaultFullDiskAccess?: boolean;
   isMacPlatform?: boolean;
@@ -15,6 +16,7 @@ interface ActivationModalProps {
     licenseKey: string;
     displayName: string;
     autoScanGlobal: boolean;
+    autoScanWatched: boolean;
     autoScanHome: boolean;
     fullDiskAccessEnabled: boolean;
   }) => Promise<void> | void;
@@ -27,6 +29,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
   isOpen,
   defaultDisplayName = '',
   defaultScanGlobal = true,
+  defaultScanWatched = true,
   defaultScanHome = false,
   defaultFullDiskAccess = false,
   isMacPlatform = false,
@@ -39,6 +42,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
   const [licenseKey, setLicenseKey] = useState('');
   const [displayName, setDisplayName] = useState(defaultDisplayName);
   const [autoScanGlobal, setAutoScanGlobal] = useState(defaultScanGlobal);
+  const [autoScanWatched, setAutoScanWatched] = useState(defaultScanWatched);
   const [autoScanHome, setAutoScanHome] = useState(defaultScanHome);
   const [fullDiskAccessEnabled, setFullDiskAccessEnabled] = useState(defaultFullDiskAccess);
   const [fullDiskStatus, setFullDiskStatus] = useState<'unknown' | 'checking' | 'granted' | 'denied'>('unknown');
@@ -61,6 +65,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
     setDisplayName(defaultDisplayName);
     setErrors({});
     setAutoScanGlobal(defaultScanGlobal);
+    setAutoScanWatched(defaultScanWatched);
     setAutoScanHome(defaultScanHome);
     setFullDiskAccessEnabled(defaultFullDiskAccess);
     setFullDiskStatus('unknown');
@@ -74,7 +79,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
       window.clearTimeout(validationSuccessTimer.current);
       validationSuccessTimer.current = null;
     }
-  }, [defaultDisplayName, defaultScanGlobal, defaultScanHome, defaultFullDiskAccess]);
+  }, [defaultDisplayName, defaultScanGlobal, defaultScanWatched, defaultScanHome, defaultFullDiskAccess]);
 
   const refreshFullDiskStatus = useCallback(async () => {
     if (!isMacPlatform) {
@@ -91,7 +96,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
         setFullDiskAccessEnabled(false);
         setFullDiskStatusMessage({
           tone: 'warn',
-          text: 'macOS is still blocking Desktop/Documents. Grant Full Disk Access or keep using watched folders.',
+          text: 'Access not granted. Grant permission or use watched folders instead.',
         });
       } else {
         setFullDiskStatusMessage(null);
@@ -264,12 +269,16 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
         licenseKey: licenseKey.trim(),
         displayName: displayName.trim(),
         autoScanGlobal,
+        autoScanWatched,
         autoScanHome,
         fullDiskAccessEnabled: isMacPlatform ? (fullDiskAccessEnabled && fullDiskStatus === 'granted') : true,
       });
     } catch (error) {
       console.error('Activation completion failed:', error);
-      setSubmitError('Something went wrong while setting up scans. Please try again.');
+      const message = error instanceof Error && error.message
+        ? error.message
+        : 'Something went wrong while setting up. Please try again.';
+      setSubmitError(message);
       setIsSubmitting(false);
     }
   };
@@ -438,67 +447,59 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
               </form>
             ) : step === 'scanning' ? (
               <form className="space-y-5" onSubmit={handleScanningSubmit}>
-                <div className={`flex items-center justify-between p-4 border border-v-light-border dark:border-v-border rounded-xl bg-v-light-bg/60 dark:bg-v-dark/60 ${isSubmitting ? 'opacity-70' : ''}`}>
-                  <div className="mr-4">
-                    <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                      Auto-scan global resources
-                    </p>
-                    <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                      Keeps ~/.claude synced every launch (agents, skills, commands, memory, etc.). Change this any time in Settings.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => !isSubmitting && setAutoScanGlobal(prev => !prev)}
-                    disabled={isSubmitting}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-v-accent ${
-                      autoScanGlobal ? 'bg-v-accent' : 'bg-v-light-border dark:bg-v-border'
-                    } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    role="switch"
-                    aria-checked={autoScanGlobal}
-                    aria-disabled={isSubmitting}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
-                        autoScanGlobal ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
+                <div>
+                  <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary mb-3">
+                    Auto-scan on startup
+                  </p>
+                  <div className="space-y-3">
+                    {/* Global resources */}
+                    <label className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent transition-colors ${isSubmitting ? 'opacity-70 pointer-events-none' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={autoScanGlobal}
+                        onChange={(e) => setAutoScanGlobal(e.target.checked)}
+                        disabled={isSubmitting}
+                        className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Global resources</p>
+                        <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">~/.claude</p>
+                      </div>
+                    </label>
 
-                <div className={`flex items-center justify-between p-4 border border-v-light-border dark:border-v-border rounded-xl bg-v-light-bg/60 dark:bg-v-dark/60 ${isSubmitting ? 'opacity-70' : ''}`}>
-                  <div className="mr-4">
-                    <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                      Scan home directory on launch
-                    </p>
-                    <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                      {isMacPlatform
-                        ? 'Finds project-level .claude resources across your home directory. Requires Full Disk Access for Desktop/Documents.'
-                        : 'Finds project-level .claude resources across your home directory.'}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => !isSubmitting && setAutoScanHome(prev => !prev)}
-                    disabled={isSubmitting}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-v-accent ${
-                      autoScanHome ? 'bg-v-accent' : 'bg-v-light-border dark:bg-v-border'
-                    } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    role="switch"
-                    aria-checked={autoScanHome}
-                    aria-disabled={isSubmitting}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
-                        autoScanHome ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
+                    {/* Watched folders */}
+                    <label className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent transition-colors ${isSubmitting ? 'opacity-70 pointer-events-none' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={autoScanWatched}
+                        onChange={(e) => setAutoScanWatched(e.target.checked)}
+                        disabled={isSubmitting}
+                        className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Watched folders</p>
+                        <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">Configured in settings</p>
+                      </div>
+                    </label>
 
-                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary text-center">
-                  You can change these defaults any time in Settings.
-                </p>
+                    {/* Home directory */}
+                    <label className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent transition-colors ${isSubmitting ? 'opacity-70 pointer-events-none' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={autoScanHome}
+                        onChange={(e) => setAutoScanHome(e.target.checked)}
+                        disabled={isSubmitting}
+                        className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Home directory</p>
+                        <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                          {isMacPlatform ? 'Requires Full Disk Access' : 'Scan entire home folder'}
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
 
                 {!isMacPlatform && submitError && (
                   <p className="text-sm text-red-500" role="alert">
@@ -534,7 +535,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                           Full Disk Access (recommended)
                         </p>
                         <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                          Let Vinsly read Desktop, Documents, and iCloud Drive automatically. You can skip this and keep using watched folders.
+                          Enables scanning Desktop, Documents, and iCloud Drive.
                         </p>
                       </div>
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${fullDiskStatusTone}`}>
@@ -548,22 +549,13 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                         disabled={isOpeningFullDiskSettings || isSubmitting}
                         className="px-4 py-2 rounded-lg text-sm font-medium bg-v-accent text-white hover:bg-v-accent-hover disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                       >
-                        {isOpeningFullDiskSettings ? 'Opening…' : 'Grant Full Disk Access'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => !isSubmitting && fullDiskStatus !== 'checking' && void refreshFullDiskStatus()}
-                        disabled={isSubmitting || fullDiskStatus === 'checking'}
-                        className="px-4 py-2 rounded-lg text-sm font-medium border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-light-text-primary dark:hover:text-v-text-primary disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {fullDiskStatus === 'checking' ? 'Checking…' : 'Check status'}
+                        {isOpeningFullDiskSettings ? 'Opening…' : 'Grant Access'}
                       </button>
                     </div>
                     <div className="flex items-center justify-between gap-3 border-t border-dashed border-v-light-border dark:border-v-border pt-3">
-                      <div className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                        <p className="font-medium text-v-light-text-primary dark:text-v-text-primary">Use Full Disk Access for home scans</p>
-                        <p className="mt-1">Leave this off if you’d rather add folders manually later.</p>
-                      </div>
+                      <p className="text-xs font-medium text-v-light-text-primary dark:text-v-text-primary">
+                        Use Full Disk Access for home scans
+                      </p>
                       <button
                         type="button"
                         onClick={() => {
@@ -588,7 +580,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                     </div>
                     {fullDiskStatus !== 'granted' && (
                       <p className="text-xs text-amber-600 dark:text-amber-300">
-                        Add Vinsly under System Settings → Privacy &amp; Security → Full Disk Access, then click “Check status”.
+                        System Settings → Privacy &amp; Security → Full Disk Access
                       </p>
                     )}
                     {fullDiskStatusMessage && (

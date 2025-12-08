@@ -302,12 +302,8 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
     }
   };
 
-  // Calculate completion percentage
-  const completionPercentage = (() => {
-    const requiredSteps = WIZARD_STEPS.filter(s => s.required);
-    const completedRequired = requiredSteps.filter(s => isStepComplete(s.id)).length;
-    return Math.round((completedRequired / requiredSteps.length) * 100);
-  })();
+  // Calculate progress percentage based on current step position
+  const progressPercentage = Math.round(((currentStepIndex + 1) / WIZARD_STEPS.length) * 100);
 
   // Sidebar steps data
   const sidebarSteps = WIZARD_STEPS.map((step, index) => ({
@@ -330,7 +326,7 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
               <button
                 type="button"
                 onClick={() => handleTemplateSelect(null)}
-                className={`p-4 rounded-lg border-2 text-left transition-all ${
+                className={`p-4 rounded-lg border text-left transition-all ${
                   selectedTemplate === null
                     ? 'border-v-accent bg-v-accent/10'
                     : 'border-v-light-border dark:border-v-border hover:border-v-accent/50'
@@ -352,7 +348,7 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
                   key={template.id}
                   type="button"
                   onClick={() => handleTemplateSelect(template)}
-                  className={`p-4 rounded-lg border-2 text-left transition-all ${
+                  className={`p-4 rounded-lg border text-left transition-all ${
                     selectedTemplate?.id === template.id
                       ? 'border-v-accent bg-v-accent/10'
                       : 'border-v-light-border dark:border-v-border hover:border-v-accent/50'
@@ -381,7 +377,7 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
                 key={option.value}
                 type="button"
                 onClick={() => handleEventTypeChange(option.value)}
-                className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
+                className={`w-full p-4 rounded-lg border text-left transition-all ${
                   formData.type === option.value
                     ? 'border-v-accent bg-v-accent/10'
                     : 'border-v-light-border dark:border-v-border hover:border-v-accent/50'
@@ -492,7 +488,7 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
                 key={scope}
                 type="button"
                 onClick={() => handleScopeChange(scope)}
-                className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
+                className={`w-full p-4 rounded-lg border text-left transition-all ${
                   formData.scope === scope
                     ? 'border-v-accent bg-v-accent/10'
                     : 'border-v-light-border dark:border-v-border hover:border-v-accent/50'
@@ -648,14 +644,14 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
 
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-v-light-text-secondary dark:text-v-text-secondary">Progress</span>
-                <span className="font-semibold text-v-light-text-primary dark:text-v-text-primary">{completionPercentage}%</span>
+                <span className="text-v-light-text-secondary dark:text-v-text-secondary">Step {currentStepIndex + 1} of {WIZARD_STEPS.length}</span>
+                <span className="font-semibold text-v-light-text-primary dark:text-v-text-primary">{progressPercentage}%</span>
               </div>
               <div className="h-2 bg-v-light-border dark:bg-v-border rounded-full overflow-hidden">
                 <motion.div
                   className="h-full bg-gradient-to-r from-v-accent to-v-accent-hover rounded-full"
                   initial={{ width: 0 }}
-                  animate={{ width: `${completionPercentage}%` }}
+                  animate={{ width: `${progressPercentage}%` }}
                   transition={{ duration: 0.3, ease: 'easeOut' }}
                 />
               </div>

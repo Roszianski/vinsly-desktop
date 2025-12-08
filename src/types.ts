@@ -81,6 +81,7 @@ export interface SlashCommand {
 // Scan Settings Types
 export interface ScanSettings {
   autoScanGlobalOnStartup: boolean;
+  autoScanWatchedOnStartup: boolean;
   autoScanHomeDirectoryOnStartup: boolean;
   fullDiskAccessEnabled: boolean;
   watchedDirectories: string[];

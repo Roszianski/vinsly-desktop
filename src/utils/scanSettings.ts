@@ -6,6 +6,7 @@ const SCAN_SETTINGS_KEY = 'vinsly-scan-settings';
 // Default scan settings
 const DEFAULT_SCAN_SETTINGS: ScanSettings = {
   autoScanGlobalOnStartup: false,
+  autoScanWatchedOnStartup: false,
   autoScanHomeDirectoryOnStartup: false,
   fullDiskAccessEnabled: false,
   watchedDirectories: [],
@@ -31,6 +32,10 @@ const normalizeSettings = (settings?: RawScanSettings): ScanSettings => {
       typeof settings.autoScanGlobalOnStartup === 'boolean'
         ? settings.autoScanGlobalOnStartup
         : legacyAutoScan ?? DEFAULT_SCAN_SETTINGS.autoScanGlobalOnStartup,
+    autoScanWatchedOnStartup:
+      typeof settings.autoScanWatchedOnStartup === 'boolean'
+        ? settings.autoScanWatchedOnStartup
+        : legacyAutoScan ?? DEFAULT_SCAN_SETTINGS.autoScanWatchedOnStartup,
     autoScanHomeDirectoryOnStartup:
       typeof settings.autoScanHomeDirectoryOnStartup === 'boolean'
         ? settings.autoScanHomeDirectoryOnStartup

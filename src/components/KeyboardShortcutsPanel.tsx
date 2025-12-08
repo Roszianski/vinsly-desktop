@@ -63,7 +63,7 @@ export function KeyboardShortcutsPanel({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+          className="absolute inset-0 bg-black/30 dark:bg-black/50"
         />
 
         {/* Panel */}

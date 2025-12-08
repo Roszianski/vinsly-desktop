@@ -126,6 +126,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onScanSettingsChange?.(newSettings);
   };
 
+  const handleAutoScanWatchedToggle = async (enabled: boolean) => {
+    const newSettings = { ...localScanSettings, autoScanWatchedOnStartup: enabled };
+    setLocalScanSettings(newSettings);
+    await saveScanSettings(newSettings);
+    onScanSettingsChange?.(newSettings);
+  };
+
   const handleAddDirectory = async () => {
     const selectedPath = await open({
       directory: true,
@@ -637,29 +644,85 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                       {/* Auto-scan on Startup */}
                       <div className="space-y-4 mb-8">
-                        <div className="flex items-center justify-between p-4 bg-v-light-bg dark:bg-v-dark rounded-lg border border-v-light-border dark:border-v-border">
-                          <div className="flex-1 mr-4">
-                            <label className="block text-sm font-medium text-v-light-text-primary dark:text-v-text-primary mb-1">
-                              Auto-scan on startup
-                            </label>
-                            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                              Automatically scan for Claude Code resources when Vinsly launches
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => handleAutoScanGlobalToggle(!localScanSettings.autoScanGlobalOnStartup)}
-                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-v-accent focus:ring-offset-2 ${
-                              localScanSettings.autoScanGlobalOnStartup ? 'bg-v-accent' : 'bg-v-light-border dark:bg-v-border'
-                            }`}
-                            role="switch"
-                            aria-checked={localScanSettings.autoScanGlobalOnStartup}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                localScanSettings.autoScanGlobalOnStartup ? 'translate-x-5' : 'translate-x-0'
-                              }`}
+                        <label className="block text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                          Auto-scan on startup
+                        </label>
+                        <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary -mt-2">
+                          Choose which resources to scan when Vinsly launches
+                        </p>
+
+                        <div className="space-y-3">
+                          {/* Global resources */}
+                          <label className="flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-lg border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent/50 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={localScanSettings.autoScanGlobalOnStartup}
+                              onChange={(e) => handleAutoScanGlobalToggle(e.target.checked)}
+                              className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
                             />
-                          </button>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                                Global resources
+                              </p>
+                              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                                ~/.claude
+                              </p>
+                            </div>
+                          </label>
+
+                          {/* Watched folders */}
+                          <label className="flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-lg border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent/50 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={localScanSettings.autoScanWatchedOnStartup}
+                              onChange={(e) => handleAutoScanWatchedToggle(e.target.checked)}
+                              className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
+                            />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                                Watched folders
+                              </p>
+                              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                                Configured below
+                              </p>
+                            </div>
+                          </label>
+
+                          {/* Home directory */}
+                          {isMacPlatform && !localScanSettings.fullDiskAccessEnabled ? (
+                            <div className="flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-lg border border-v-light-border dark:border-v-border">
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                                  Home directory
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleOpenFullDiskSettings()}
+                                  className="text-xs text-v-accent hover:text-v-accent-hover hover:underline transition-colors text-left flex items-center gap-1"
+                                >
+                                  <span>→</span>
+                                  <span>Grant Full Disk Access to enable</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <label className="flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-lg border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent/50 transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={localScanSettings.autoScanHomeDirectoryOnStartup}
+                                onChange={(e) => handleAutoScanHomeToggle(e.target.checked)}
+                                className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
+                              />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                                  Home directory
+                                </p>
+                                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                                  Scan entire home folder
+                                </p>
+                              </div>
+                            </label>
+                          )}
                         </div>
                       </div>
 
@@ -845,44 +908,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </p>
                       </div>
                       <div className="space-y-5">
-                        <div className="border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark">
-                          <div className="flex items-center justify-between mb-4">
-                            <div>
-                              <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                                Licence status
-                              </p>
-                              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                                {licenseInfo ? `Last checked ${new Date(licenseInfo.lastChecked).toLocaleDateString()}` : 'Not activated'}
-                              </p>
-                            </div>
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${licenseInfo ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-200'}`}>
-                              {licenseInfo ? licenseInfo.status.toUpperCase() : 'PENDING'}
-                            </span>
-                          </div>
-                          <div className="space-y-2 text-sm">
-                            <div className="flex items-center justify-between">
-                              <span className="text-v-light-text-secondary dark:text-v-text-secondary">Licence key</span>
-                              <span className="font-mono text-v-light-text-primary dark:text-v-text-primary">
-                                {licenseInfo ? `•••• ${licenseInfo.licenseKey.slice(-4)}` : 'Not set'}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-v-light-text-secondary dark:text-v-text-secondary">Email</span>
-                              <span className="text-v-light-text-primary dark:text-v-text-primary">
-                                {licenseInfo?.email || '—'}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="mt-4 flex flex-wrap gap-3">
-                            <button
-                              onClick={onResetLicense}
-                              className="px-4 py-2 text-sm font-semibold border border-v-light-border dark:border-v-border rounded-md text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent transition-colors"
-                            >
-                              Change licence
-                            </button>
-                          </div>
-                        </div>
-
                         <div className="border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark space-y-3">
                           <div>
                             <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
@@ -949,6 +974,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           </div>
                         </div>
 
+                        <div className="border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                                Licence status
+                              </p>
+                              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                                {licenseInfo ? `Last checked ${new Date(licenseInfo.lastChecked).toLocaleDateString()}` : 'Not activated'}
+                              </p>
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${licenseInfo ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-200'}`}>
+                              {licenseInfo ? licenseInfo.status.toUpperCase() : 'PENDING'}
+                            </span>
+                          </div>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="text-v-light-text-secondary dark:text-v-text-secondary">Licence key</span>
+                              <span className="font-mono text-v-light-text-primary dark:text-v-text-primary">
+                                {licenseInfo ? `•••• ${licenseInfo.licenseKey.slice(-4)}` : 'Not set'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-v-light-text-secondary dark:text-v-text-secondary">Email</span>
+                              <span className="text-v-light-text-primary dark:text-v-text-primary">
+                                {licenseInfo?.email || '—'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex flex-wrap gap-3">
+                            <button
+                              onClick={onResetLicense}
+                              className="px-4 py-2 text-sm font-semibold border border-v-light-border dark:border-v-border rounded-md text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent transition-colors"
+                            >
+                              Change licence
+                            </button>
+                          </div>
+                        </div>
+
                         <div className="border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark space-y-4">
                           <div className="flex items-center justify-between">
                             <div>
@@ -956,7 +1019,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 Updates
                               </p>
                               <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                                Check for and install new versions of Vinsly
+                                Install new versions when available
                               </p>
                             </div>
                             {pendingUpdate && (
@@ -971,30 +1034,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               <span className="text-v-light-text-secondary dark:text-v-text-secondary">Current version</span>
                               <span className="font-mono text-v-light-text-primary dark:text-v-text-primary">{appVersion || '—'}</span>
                             </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-v-light-text-secondary dark:text-v-text-secondary">Last checked</span>
-                              <span className="text-v-light-text-primary dark:text-v-text-primary">{lastCheckedLabel}</span>
-                            </div>
+                            {!pendingUpdate && (
+                              <p className="text-v-light-text-secondary dark:text-v-text-secondary">
+                                You're up to date
+                              </p>
+                            )}
                           </div>
 
-                          <div className="mt-4 flex flex-wrap gap-3 text-sm">
-                            <button
-                              onClick={() => void onCheckForUpdates()}
-                              disabled={isCheckingUpdate}
-                              className="px-4 py-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent/50 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                            >
-                              {isCheckingUpdate ? 'Checking…' : 'Check for updates'}
-                            </button>
-                            {pendingUpdate && (
+                          {pendingUpdate && (
+                            <div className="mt-4">
                               <button
                                 onClick={() => void onInstallUpdate()}
                                 disabled={isInstallingUpdate}
-                                className="px-4 py-2 rounded-lg bg-v-accent text-white font-semibold hover:bg-v-accent-hover disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                                className="px-4 py-2 rounded-lg bg-v-accent text-white font-semibold hover:bg-v-accent-hover disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-sm"
                               >
                                 {isInstallingUpdate ? 'Installing…' : `Install ${pendingUpdate.version}`}
                               </button>
-                            )}
-                          </div>
+                            </div>
+                          )}
 
                           {pendingUpdate?.notes && (
                             <div className="mt-4 p-3 rounded-lg border border-dashed border-v-light-border dark:border-v-border bg-v-light-surface dark:bg-v-mid-dark text-xs text-v-light-text-secondary dark:text-v-text-secondary whitespace-pre-line">
