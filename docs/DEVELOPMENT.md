@@ -14,7 +14,7 @@ This guide will help you set up your development environment and understand the 
 
 ## Prerequisites
 
-- **Node.js** 18 or higher
+- **Node.js** 22 or higher
 - **Rust** (latest stable)
 - **Platform-specific dependencies:**
   - **macOS:** Xcode Command Line Tools
@@ -107,15 +107,12 @@ npm run tauri build
 
 ### Code Style
 
-We use ESLint and Prettier for code formatting:
+We use TypeScript for type safety. The codebase follows consistent formatting conventions:
 
-```bash
-# Lint code
-npm run lint
-
-# Fix linting issues
-npm run lint:fix
-```
+- Use 2-space indentation
+- Use single quotes for strings
+- Add trailing commas in multi-line arrays/objects
+- Keep lines under 100 characters where practical
 
 ### Git Workflow
 

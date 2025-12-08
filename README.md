@@ -18,7 +18,7 @@ A Tauri-powered desktop application for designing, organising, and analysing Cla
 - 💾 **Persistent Storage** – Settings, layout preferences, and local account details are stored using Tauri Store.
 - 🎨 **Light/Dark Themes** – System-aware theming with a dedicated appearance section in Settings.
 - 📥 **Import/Export** – Import agents from `.md` and `.zip` bundles, export individual agents or curated sets.
-- 🔐 **Licensing & Account (beta)** – In-app licence key + email activation flow (backed by Lemon Squeezy), plus a local display name used across the UI (e.g. "[Name] Organisation").
+- 🔐 **Licensing & Account** – In-app licence key + email activation flow (backed by Lemon Squeezy), plus a local display name used across the UI (e.g. "[Name] Organisation").
 
 ## UI/UX Design System
 
@@ -57,7 +57,7 @@ When designing the landing page or related marketing materials, match this warm-
 
 Before running the Vinsly Desktop application, ensure you have:
 
-- **Node.js** (v18 or higher)
+- **Node.js** (v22 or higher)
 - **Rust** (latest stable version) - Install from [rustup.rs](https://rustup.rs/)
 - **Claude CLI** (optional, for future test console features) - Install following [Claude Code documentation](https://github.com/anthropics/claude-code)
 
@@ -201,9 +201,9 @@ Vinsly Desktop includes an update notification system:
 **Update Endpoint**: `https://raw.githubusercontent.com/Roszianski/vinsly-updates/main/latest.json`
 
 **How It Works**:
-1. Private repo builds installers (signing coming soon)
-2. GitHub Actions creates a release with binaries
-3. (When enabled) workflow generates `latest.json` with download URLs and signatures
+1. GitHub Actions builds signed installers for all platforms (macOS is notarized)
+2. CI creates a GitHub release with signed binaries
+3. Workflow generates `latest.json` with download URLs and signatures
 4. Manifest is pushed to [public updates repo](https://github.com/Roszianski/vinsly-updates)
 5. Vinsly Desktop checks for updates on app launch and shows a badge in Settings when an update is available
 
@@ -283,15 +283,14 @@ This removes all compiled artifacts. They'll rebuild automatically on your next 
 - Verify permissions in capabilities configuration
 - Check Tauri console for Rust backend errors
 
-## Pricing & Licensing (Planned)
+## Pricing & Licensing
 
-Vinsly Desktop is intended to be sold as a **pay‑to‑own** product using Lemon Squeezy for billing and licence key distribution.
+Vinsly Desktop is a **pay‑to‑own** product using Lemon Squeezy for billing and licence key distribution.
 
-- **Launch pricing (planned)** – Initial target is **USD 49–59** one‑time, including at least 12 months of updates.
-- **Future pricing** – As deeper Claude Skills / automation features are added, the standard one‑time price may move towards **USD 79–89**, with optional “supporter” or “Pro” tiers for users who want to support development more directly.
-- **No subscription required** – The goal is a simple, developer‑friendly one‑off purchase rather than a recurring subscription for the core desktop app.
+- **Pricing** – One-time purchase, including updates.
+- **No subscription required** – A simple, developer‑friendly one‑off purchase rather than a recurring subscription.
 
-Details may evolve as the product and licensing integration mature, but the intent is to keep activation straightforward: buy on the landing page, receive a Lemon Squeezy licence key, and activate inside the app using the built‑in licence + email flow.
+**Activation**: Purchase on the landing page, receive a Lemon Squeezy licence key, and activate inside the app using the built‑in licence + email flow.
 
 ### Lemon Squeezy API Notes
 

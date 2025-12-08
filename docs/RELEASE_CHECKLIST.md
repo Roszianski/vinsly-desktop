@@ -51,7 +51,7 @@ Use this checklist to ensure all steps are completed when releasing a new versio
   - [ ] Download `linux-app` artifact
 - [ ] **Extract and verify artifacts:**
   - [ ] macOS: `.dmg` file
-  - [ ] Windows: `.msi` and/or `.exe` file
+  - [ ] Windows: `.exe` installer (NSIS)
   - [ ] Linux: `.deb` and `.AppImage` files
 
 ## Updater Preparation
@@ -94,7 +94,7 @@ Use this checklist to ensure all steps are completed when releasing a new versio
   - Copy release notes from CHANGELOG.md
 - [ ] **Upload installers to GitHub release:**
   - [ ] macOS: `Vinsly-{version}.dmg`
-  - [ ] Windows: `Vinsly-{version}.msi` and/or `Vinsly-{version}.exe`
+  - [ ] Windows: `Vinsly-{version}.exe`
   - [ ] Linux: `Vinsly-{version}.deb` and `Vinsly-{version}.AppImage`
 - [ ] **Publish release notes**
   - Ensure release notes are clear and user-friendly
