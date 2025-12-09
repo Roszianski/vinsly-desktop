@@ -23,7 +23,7 @@ interface ActivationModalProps {
   onClose: () => void;
 }
 
-type Step = 'license' | 'profile' | 'scanning' | 'permissions';
+type Step = 'license' | 'profile' | 'scanning';
 
 export const ActivationModal: React.FC<ActivationModalProps> = ({
   isOpen,
@@ -56,8 +56,6 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
   const validationSuccessTimer = useRef<number | null>(null);
   const wasOpenRef = useRef(false);
   const postGrantCheckTimeoutRef = useRef<number | null>(null);
-  const [showSequoiaTip, setShowSequoiaTip] = useState(false);
-  const isSequoiaOrNewer = isMacPlatform && typeof macOSVersionMajor === 'number' && macOSVersionMajor >= 15;
 
   const resetFormState = useCallback(() => {
     setStep('license');
@@ -252,11 +250,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
 
   const handleScanningSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (isMacPlatform) {
-      setStep('permissions');
-    } else {
-      void handleCompletionSubmit();
-    }
+    void handleCompletionSubmit();
   };
 
   const handleCompletionSubmit = async (event?: React.FormEvent) => {
@@ -285,30 +279,9 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
 
   if (!isOpen) return null;
 
-  const steps: Step[] = isMacPlatform
-    ? ['license', 'profile', 'scanning', 'permissions']
-    : ['license', 'profile', 'scanning'];
+  const steps: Step[] = ['license', 'profile', 'scanning'];
   const currentIndex = steps.indexOf(step);
   const isLicenseButtonBusy = validationState === 'validating' || validationState === 'success';
-  const fullDiskStatusLabel =
-    fullDiskStatus === 'granted'
-      ? 'Granted'
-      : fullDiskStatus === 'checking'
-        ? 'Checking…'
-        : fullDiskStatus === 'denied'
-          ? 'Not granted'
-          : 'Not checked';
-  const fullDiskStatusTone =
-    fullDiskStatus === 'granted'
-      ? 'bg-green-500/10 text-green-500 dark:text-green-400'
-      : fullDiskStatus === 'checking'
-        ? 'bg-v-light-border/60 dark:bg-v-border/40 text-v-light-text-secondary dark:text-v-text-secondary'
-        : 'bg-amber-500/10 text-amber-600 dark:text-amber-300';
-  const isFullDiskToggleDisabled = isMacPlatform && fullDiskStatus !== 'granted';
-  const fullDiskMessageClass =
-    fullDiskStatusMessage?.tone === 'warn'
-      ? 'text-amber-600 dark:text-amber-300'
-      : 'text-v-light-text-secondary dark:text-v-text-secondary';
 
   return (
     <AnimatePresence>
@@ -448,8 +421,11 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
             ) : step === 'scanning' ? (
               <form className="space-y-5" onSubmit={handleScanningSubmit}>
                 <div>
-                  <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary mb-3">
+                  <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary mb-1">
                     Auto-scan on startup
+                  </p>
+                  <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mb-3">
+                    These are optional. You can always scan manually once you're in the app.
                   </p>
                   <div className="space-y-3">
                     {/* Global resources */}
@@ -482,26 +458,57 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                       </div>
                     </label>
 
-                    {/* Home directory */}
-                    <label className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent transition-colors ${isSubmitting ? 'opacity-70 pointer-events-none' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={autoScanHome}
-                        onChange={(e) => setAutoScanHome(e.target.checked)}
-                        disabled={isSubmitting}
-                        className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Home directory</p>
-                        <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                          {isMacPlatform ? 'Requires Full Disk Access' : 'Scan entire home folder'}
-                        </p>
+                    {/* Home directory - with inline FDA for macOS */}
+                    {isMacPlatform && fullDiskStatus !== 'granted' ? (
+                      <div className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border ${isSubmitting ? 'opacity-70' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={false}
+                          disabled
+                          className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent opacity-50"
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Home directory</p>
+                          <button
+                            type="button"
+                            onClick={() => void handleOpenFullDiskSettings()}
+                            disabled={isOpeningFullDiskSettings || isSubmitting}
+                            className="text-xs text-v-accent hover:text-v-accent-hover hover:underline transition-colors text-left flex items-center gap-1 disabled:opacity-60"
+                          >
+                            <span>→</span>
+                            <span>{isOpeningFullDiskSettings ? 'Opening…' : 'Enable Full Disk Access to unlock'}</span>
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void refreshFullDiskStatus()}
+                          disabled={fullDiskStatus === 'checking' || isSubmitting}
+                          className="text-xs text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent transition-colors disabled:opacity-60"
+                        >
+                          {fullDiskStatus === 'checking' ? 'Checking…' : 'Check again'}
+                        </button>
                       </div>
-                    </label>
+                    ) : (
+                      <label className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent transition-colors ${isSubmitting ? 'opacity-70 pointer-events-none' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={autoScanHome}
+                          onChange={(e) => setAutoScanHome(e.target.checked)}
+                          disabled={isSubmitting}
+                          className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Home directory</p>
+                          <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                            {isMacPlatform ? 'Full Disk Access enabled' : 'Scan entire home folder'}
+                          </p>
+                        </div>
+                      </label>
+                    )}
                   </div>
                 </div>
 
-                {!isMacPlatform && submitError && (
+                {submitError && (
                   <p className="text-sm text-red-500" role="alert">
                     {submitError}
                   </p>
@@ -521,137 +528,11 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                     disabled={isSubmitting}
                     className="flex-1 py-3 rounded-xl bg-v-accent text-white font-semibold hover:bg-v-accent-hover transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
                   >
-                    {isMacPlatform ? 'Continue' : isSubmitting ? 'Setting up…' : 'Enter Vinsly'}
+                    {isSubmitting ? 'Setting up…' : 'Enter Vinsly'}
                   </button>
                 </div>
               </form>
-            ) : (
-              <form className="space-y-5" onSubmit={handleCompletionSubmit}>
-                <div className="space-y-4">
-                  <div className={`p-4 border border-v-light-border dark:border-v-border rounded-xl bg-v-light-bg/60 dark:bg-v-dark/60 space-y-3 ${isSubmitting ? 'opacity-70' : ''}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                          Full Disk Access (recommended)
-                        </p>
-                        <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                          Enables scanning Desktop, Documents, and other protected folders.
-                        </p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${fullDiskStatusTone}`}>
-                        {fullDiskStatusLabel}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void handleOpenFullDiskSettings()}
-                        disabled={isOpeningFullDiskSettings || isSubmitting}
-                        className="px-4 py-2 rounded-lg text-sm font-medium bg-v-accent text-white hover:bg-v-accent-hover disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {isOpeningFullDiskSettings ? 'Opening…' : 'Grant Access'}
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 border-t border-dashed border-v-light-border dark:border-v-border pt-3">
-                      <p className="text-xs font-medium text-v-light-text-primary dark:text-v-text-primary">
-                        Use Full Disk Access for home scans
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!isFullDiskToggleDisabled && !isSubmitting) {
-                            setFullDiskAccessEnabled(prev => !prev);
-                          }
-                        }}
-                        disabled={isSubmitting || isFullDiskToggleDisabled}
-                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-v-accent ${
-                          fullDiskAccessEnabled && !isFullDiskToggleDisabled ? 'bg-v-accent' : 'bg-v-light-border dark:bg-v-border'
-                        } ${isSubmitting || isFullDiskToggleDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        role="switch"
-                        aria-checked={fullDiskAccessEnabled && !isFullDiskToggleDisabled}
-                        aria-disabled={isSubmitting || isFullDiskToggleDisabled}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
-                            fullDiskAccessEnabled && !isFullDiskToggleDisabled ? 'translate-x-5' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                    {fullDiskStatus !== 'granted' && (
-                      <p className="text-xs text-amber-600 dark:text-amber-300">
-                        System Settings → Privacy &amp; Security → Full Disk Access
-                      </p>
-                    )}
-                    {fullDiskStatusMessage && (
-                      <p className={`text-xs ${fullDiskMessageClass}`}>
-                        {fullDiskStatusMessage.text}
-                      </p>
-                    )}
-                    {isSequoiaOrNewer && (
-                      <div className="text-xs text-v-light-text-secondary dark:text-v-text-secondary border border-dashed border-v-light-border dark:border-v-border rounded-lg p-3 bg-v-light-bg/40 dark:bg-v-dark/40">
-                        <button
-                          type="button"
-                          onClick={() => setShowSequoiaTip(prev => !prev)}
-                          className="font-semibold text-v-accent hover:text-v-accent-hover"
-                        >
-                          Having trouble on macOS 15 (Sequoia)?
-                        </button>
-                        {showSequoiaTip && (
-                          <p className="mt-2">
-                            Apple’s beta can hide helper binaries in the Full Disk Access list. Even if Vinsly isn’t visible, the entitlement still works once granted. Click “Check status” here to confirm.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {submitError && (
-                  <p className="text-sm text-red-500" role="alert">
-                    {submitError}
-                  </p>
-                )}
-
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => !isSubmitting && setStep('scanning')}
-                    disabled={isSubmitting}
-                    className="px-4 py-3 rounded-xl border border-v-light-border dark:border-v-border text-sm font-medium text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-light-text-primary dark:hover:text-v-text-primary transition-colors disabled:opacity-60"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="flex-1 py-3 rounded-xl bg-v-accent text-white font-semibold hover:bg-v-accent-hover transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-                    aria-busy={isSubmitting}
-                  >
-                    {isSubmitting && (
-                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                          strokeDasharray="60"
-                          strokeDashoffset="20"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                    )}
-                    {isSubmitting ? 'Finalising…' : 'Enter Vinsly'}
-                  </button>
-                </div>
-                {isSubmitting && (
-                  <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary text-center">
-                    Setting up your workspace. This can take a few seconds while we scan for agents.
-                  </p>
-                )}
-              </form>
-            )}
+            ) : null}
           </div>
         </motion.div>
       </motion.div>

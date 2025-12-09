@@ -720,6 +720,13 @@ export const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-v-light-bg dark:bg-v-dark text-v-light-text-primary dark:text-v-text-primary transition-colors duration-200">
+      {/* Draggable title bar region for macOS traffic lights */}
+      {isMacLike && (
+        <div
+          data-tauri-drag-region
+          className="fixed top-0 left-0 right-0 h-8 z-[9999]"
+        />
+      )}
       <Header
         theme={theme}
         onToggleTheme={toggleTheme}

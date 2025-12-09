@@ -166,7 +166,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     try {
       const granted = await checkFullDiskAccess();
       setFullDiskStatus(granted ? 'granted' : 'denied');
-      if (!granted) {
+      if (granted) {
+        // Auto-enable fullDiskAccessEnabled when FDA is granted
+        let pendingSave: ScanSettings | null = null;
+        setLocalScanSettings(prev => {
+          if (prev.fullDiskAccessEnabled) {
+            return prev;
+          }
+          const next = { ...prev, fullDiskAccessEnabled: true };
+          pendingSave = next;
+          return next;
+        });
+        if (pendingSave) {
+          await saveScanSettings(pendingSave);
+          onScanSettingsChange?.(pendingSave);
+        }
+      } else {
         let pendingSave: ScanSettings | null = null;
         setLocalScanSettings(prev => {
           if (!prev.fullDiskAccessEnabled) {
