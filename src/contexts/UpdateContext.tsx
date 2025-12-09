@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
 import { useUpdater } from '../hooks/useUpdater';
 import { useToast } from './ToastContext';
 import { useLicenseContext } from './LicenseContext';
@@ -9,8 +9,10 @@ interface UpdateContextType {
   isInstallingUpdate: boolean;
   pendingUpdate: PendingUpdateDetails | null;
   lastUpdateCheckAt: string | null;
+  initialCheckComplete: boolean;
   handleManualUpdateCheck: () => Promise<void>;
   handleInstallUpdate: () => Promise<void>;
+  dismissPendingUpdate: () => void;
 }
 
 const UpdateContext = createContext<UpdateContextType | undefined>(undefined);
@@ -23,19 +25,25 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
   const { showToast } = useToast();
   const { licenseInfo } = useLicenseContext();
   const hasCheckedRef = useRef(false);
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   const {
     isChecking: isCheckingUpdate,
     isInstalling: isInstallingUpdate,
-    pendingUpdate,
+    pendingUpdate: rawPendingUpdate,
     lastCheckedAt: lastUpdateCheckAt,
     checkForUpdate,
     installUpdate,
+    clearPendingUpdate,
   } = useUpdater();
 
-  // Check for updates once on app start (when license is active)
+  // Dismissed updates should not show as pending
+  const pendingUpdate = dismissed ? null : rawPendingUpdate;
+
+  // Check for updates immediately on app start (before license activation)
   useEffect(() => {
-    if (!licenseInfo || hasCheckedRef.current) {
+    if (hasCheckedRef.current) {
       return;
     }
     hasCheckedRef.current = true;
@@ -43,13 +51,14 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
     const runInitialCheck = async () => {
       try {
         await checkForUpdate();
-        // No toast on startup - just silently check and set pendingUpdate if available
       } catch (error) {
         console.warn('Initial update check failed', error);
+      } finally {
+        setInitialCheckComplete(true);
       }
     };
     runInitialCheck();
-  }, [licenseInfo, checkForUpdate]);
+  }, [checkForUpdate]);
 
   const handleManualUpdateCheck = useCallback(async () => {
     try {
@@ -66,11 +75,6 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
   }, [checkForUpdate, showToast]);
 
   const handleInstallUpdate = useCallback(async () => {
-    if (!licenseInfo || licenseInfo.status !== 'active') {
-      showToast('error', 'Cannot install update: Invalid license');
-      return;
-    }
-
     try {
       showToast('info', 'Installing update...');
       await installUpdate();
@@ -78,15 +82,22 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
       console.error('Update installation failed', error);
       showToast('error', 'Unable to install the update. Please try again.');
     }
-  }, [licenseInfo, installUpdate, showToast]);
+  }, [installUpdate, showToast]);
+
+  const dismissPendingUpdate = useCallback(() => {
+    setDismissed(true);
+    void clearPendingUpdate();
+  }, [clearPendingUpdate]);
 
   const value: UpdateContextType = {
     isCheckingUpdate,
     isInstallingUpdate,
     pendingUpdate,
     lastUpdateCheckAt,
+    initialCheckComplete,
     handleManualUpdateCheck,
     handleInstallUpdate,
+    dismissPendingUpdate,
   };
 
   return (

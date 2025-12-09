@@ -21,6 +21,7 @@ import { pageTransition } from '../animations';
 import { ToastContainer } from './Toast';
 import { ActivationModal } from './ActivationModal';
 import { ChangeLicenseModal } from './ChangeLicenseModal';
+import { UpdateAvailableModal } from './UpdateAvailableModal';
 import { SplashScreen } from './SplashScreen';
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 import { DocsPanel } from './DocsPanel';
@@ -72,8 +73,10 @@ export const AppContent: React.FC = () => {
     isInstallingUpdate,
     pendingUpdate,
     lastUpdateCheckAt,
+    initialCheckComplete,
     handleManualUpdateCheck,
     handleInstallUpdate,
+    dismissPendingUpdate,
   } = useUpdateContext();
 
   // Workspace context
@@ -167,16 +170,23 @@ export const AppContent: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, []);
 
-  // Open activation modal when license bootstrap completes
+  // Determine if we should show the pre-activation update modal
+  const showPreActivationUpdate = !showSplash &&
+    initialCheckComplete &&
+    pendingUpdate !== null &&
+    !licenseInfo;
+
+  // Open activation modal when license bootstrap completes (and no pre-activation update is showing)
   useEffect(() => {
-    if (activationPresented || !licenseBootstrapComplete) return;
-    if (!showSplash && !licenseInfo) {
+    if (activationPresented || !licenseBootstrapComplete || !initialCheckComplete) return;
+    // Don't open activation if we're showing the update modal
+    if (!showSplash && !licenseInfo && !pendingUpdate) {
       setIsActivationOpen(true);
     }
-    if (!showSplash) {
+    if (!showSplash && !pendingUpdate) {
       setActivationPresented(true);
     }
-  }, [licenseInfo, showSplash, activationPresented, licenseBootstrapComplete, setIsActivationOpen, setActivationPresented]);
+  }, [licenseInfo, showSplash, activationPresented, licenseBootstrapComplete, initialCheckComplete, pendingUpdate, setIsActivationOpen, setActivationPresented]);
 
   // Keyboard shortcuts
   useKeyboardShortcuts([
@@ -265,6 +275,12 @@ export const AppContent: React.FC = () => {
   const handleChangeLicense = useCallback(() => {
     setIsChangeLicenseOpen(true);
   }, []);
+
+  // Handle skipping pre-activation update
+  const handleSkipPreActivationUpdate = useCallback(() => {
+    dismissPendingUpdate();
+    // Activation modal will open via the useEffect once pendingUpdate becomes null
+  }, [dismissPendingUpdate]);
 
   // Skill handlers
   const handleRevealSkill = useCallback(async (skill: Skill) => {
@@ -740,6 +756,16 @@ export const AppContent: React.FC = () => {
       </main>
 
       <ToastContainer toasts={toasts} onClose={removeToast} />
+
+      {showPreActivationUpdate && pendingUpdate && (
+        <UpdateAvailableModal
+          isOpen={showPreActivationUpdate}
+          update={pendingUpdate}
+          isInstalling={isInstallingUpdate}
+          onInstall={handleInstallUpdate}
+          onSkip={handleSkipPreActivationUpdate}
+        />
+      )}
 
       <ActivationModal
         isOpen={isActivationOpen}
