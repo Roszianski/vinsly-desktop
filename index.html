@@ -5,6 +5,13 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vinsly - Agent Studio</title>
+    <style>
+      /* Inline critical styles to prevent flash before CSS loads */
+      /* Must match --color-v-dark from index.css: #15171c */
+      html.dark body, html.dark #root { background-color: #15171c; }
+      html:not(.dark) body, html:not(.dark) #root { background-color: #FBFBFA; }
+      #root { min-height: 100vh; }
+    </style>
   </head>
 
   <body class="bg-v-light-bg dark:bg-v-dark font-sans">
