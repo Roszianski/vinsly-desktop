@@ -206,7 +206,9 @@ jobs:
 
             **Windows:** May show SmartScreen warning — click "More info" → "Run anyway"
 
-            **Linux AppImage:** Make executable first: `chmod +x Vinsly_*.AppImage`
+            **Linux .deb:** Requires `libwebkit2gtk-4.1-0`. If you have issues, use the AppImage instead.
+
+            **Linux AppImage:** Make executable first: `chmod +x Vinsly_*.AppImage` (works on any distro)
 
   generate-manifest:
     needs: create-release
