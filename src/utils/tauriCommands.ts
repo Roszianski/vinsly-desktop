@@ -525,3 +525,8 @@ export async function importBinaryFile(path: string): Promise<number[]> {
 export async function setTitleBarTheme(dark: boolean): Promise<void> {
   return await invoke('set_title_bar_theme', { dark });
 }
+
+// Write the theme cache to disk (for instant title bar theme on startup)
+export async function writeThemeCache(dark: boolean): Promise<void> {
+  return await invoke('write_theme_cache', { dark });
+}

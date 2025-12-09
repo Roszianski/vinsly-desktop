@@ -2752,7 +2752,35 @@ async fn import_binary_file(path: String) -> Result<Vec<u8>, String> {
 
 /// Set the window's title bar appearance and background color to match the app's theme
 /// On macOS: Sets NSAppearance and NSWindow background color
-/// On Windows/Linux: Sets the webview background color
+//// Get the path to the theme cache file
+/// This file stores a simple "dark" or "light" string that can be read synchronously on startup
+fn get_theme_cache_path() -> Option<PathBuf> {
+    dirs::data_dir().map(|dir| dir.join("com.vinsly.desktop").join("theme-cache.txt"))
+}
+
+/// Read the cached theme from disk (returns true for dark, false for light)
+fn read_theme_cache() -> Option<bool> {
+    let path = get_theme_cache_path()?;
+    let content = fs::read_to_string(&path).ok()?;
+    match content.trim() {
+        "dark" => Some(true),
+        "light" => Some(false),
+        _ => None,
+    }
+}
+
+/// Write the theme cache to disk
+#[tauri::command]
+fn write_theme_cache(dark: bool) -> Result<(), String> {
+    let path = get_theme_cache_path().ok_or("Could not determine data directory")?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(&path, if dark { "dark" } else { "light" }).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// On Windows/Linux: Sets the webview background color
 #[tauri::command]
 fn set_title_bar_theme(window: tauri::WebviewWindow, dark: bool) {
     // Vinsly theme colors:
@@ -2830,10 +2858,74 @@ pub fn run() {
         // NOTE: fs plugin removed for security - use vetted export_*/import_* commands instead
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .setup(|_app| {
-            // Title bar theme is set by the frontend via set_title_bar_theme command
-            // after reading the user's saved preference from localStorage cache.
-            // This avoids a flash when the saved theme differs from dark (the default).
+        .setup(|app| {
+            // Read the cached theme and set the title bar appearance immediately
+            // This prevents a flash when the app starts with a non-default theme
+            let dark = read_theme_cache().unwrap_or(true); // Default to dark if no cache
+
+            #[cfg(target_os = "macos")]
+            {
+                use cocoa::appkit::{NSColor, NSWindow};
+                use cocoa::base::{id, nil};
+                use cocoa::foundation::NSString;
+                use objc::{class, msg_send, sel, sel_impl};
+
+                if let Some(window) = app.get_webview_window("main") {
+                    if let Ok(ns_win) = window.ns_window() {
+                        unsafe {
+                            let ns_win = ns_win as id;
+
+                            // Set NSAppearance
+                            let appearance_name = if dark {
+                                cocoa::foundation::NSString::alloc(nil)
+                                    .init_str("NSAppearanceNameDarkAqua")
+                            } else {
+                                cocoa::foundation::NSString::alloc(nil)
+                                    .init_str("NSAppearanceNameAqua")
+                            };
+                            let appearance: id = msg_send![
+                                class!(NSAppearance),
+                                appearanceNamed: appearance_name
+                            ];
+                            let _: () = msg_send![ns_win, setAppearance: appearance];
+
+                            // Set background color
+                            let bg_color = if dark {
+                                NSColor::colorWithRed_green_blue_alpha_(
+                                    nil,
+                                    31.0 / 255.0,
+                                    34.0 / 255.0,
+                                    41.0 / 255.0,
+                                    1.0,
+                                )
+                            } else {
+                                NSColor::colorWithRed_green_blue_alpha_(
+                                    nil,
+                                    247.0 / 255.0,
+                                    247.0 / 255.0,
+                                    245.0 / 255.0,
+                                    1.0,
+                                )
+                            };
+                            ns_win.setBackgroundColor_(bg_color);
+                        }
+                    }
+                }
+            }
+
+            #[cfg(not(target_os = "macos"))]
+            {
+                use tauri::Color;
+                if let Some(window) = app.get_webview_window("main") {
+                    let color = if dark {
+                        Color(31, 34, 41, 255)
+                    } else {
+                        Color(247, 247, 245, 255)
+                    };
+                    let _ = window.set_background_color(Some(color));
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -2890,6 +2982,7 @@ pub fn run() {
             import_binary_file,
             // Window appearance
             set_title_bar_theme,
+            write_theme_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
