@@ -15,12 +15,9 @@ export interface UseThemeResult {
   getSystemTheme: () => Theme;
 }
 
-const getInitialTheme = (): Theme => {
-  if (typeof window !== 'undefined' && window.matchMedia) {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  }
-  return 'dark';
-};
+// Always start with 'dark' to match index.html's initial class
+// This prevents flash of wrong theme while loading saved preference
+const getInitialTheme = (): Theme => 'dark';
 
 /**
  * Custom hook for managing theme state with persistence and system preference detection
