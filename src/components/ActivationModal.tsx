@@ -420,7 +420,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                     type="text"
                     value={displayName}
                     onChange={(event) => setDisplayName(event.target.value)}
-                    placeholder="e.g. Lunar Labs"
+                    placeholder="e.g. Alex"
                     className={`w-full px-4 py-3 rounded-xl border bg-transparent text-v-light-text-primary dark:text-v-text-primary focus-visible:outline-none focus:ring-2 focus:ring-v-accent ${
                       errors.displayName ? 'border-red-400' : 'border-v-light-border dark:border-v-border'
                     }`}
