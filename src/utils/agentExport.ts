@@ -3,6 +3,7 @@ import { Agent } from '../types';
 import { save } from '@tauri-apps/plugin-dialog';
 import { exportTextFile, exportBinaryFile } from './tauriCommands';
 import { serializeFrontmatter } from './frontmatter';
+import { devLog } from './devLogger';
 
 /**
  * Convert an agent to markdown format with frontmatter
@@ -35,7 +36,7 @@ export async function exportAgent(agent: Agent): Promise<boolean> {
     }
     return false; // User cancelled
   } catch (error) {
-    console.error('Error exporting agent:', error);
+    devLog.error('Error exporting agent:', error);
     throw error;
   }
 }
@@ -68,7 +69,7 @@ export async function exportAgentsAsZip(agents: Agent[], zipName: string = 'agen
     }
     return false; // User cancelled
   } catch (error) {
-    console.error('Error exporting agents as ZIP:', error);
+    devLog.error('Error exporting agents as ZIP:', error);
     throw error;
   }
 }

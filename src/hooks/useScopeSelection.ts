@@ -6,6 +6,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { AgentScope } from '../types';
+import { devLog } from '../utils/devLogger';
 
 export interface UseScopeSelectionOptions {
   /** Initial scope value */
@@ -105,7 +106,7 @@ export function useScopeSelection(options: UseScopeSelectionOptions): ScopeSelec
           onScopeChange?.(AgentScope.Project);
         }
       } catch (error) {
-        console.error('Failed to select project folder:', error);
+        devLog.error('Failed to select project folder:', error);
         setProjectFolderError('Unable to open the folder picker. Please try again.');
       } finally {
         setIsPickingProjectFolder(false);

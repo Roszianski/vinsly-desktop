@@ -11,6 +11,7 @@ import {
   createAppError,
   StructuredError,
 } from '../types/errors';
+import { devLog } from './devLogger';
 
 // Re-export types and utilities for convenience
 export type { AppError, AppErrorCode } from '../types/errors';
@@ -58,7 +59,7 @@ export function handleAsyncError(
   const appError = toAppError(error);
 
   // Always log to console for debugging (without sensitive data)
-  console.error(`Error ${context}:`, {
+  devLog.error(`Error ${context}:`, {
     code: appError.code,
     message: appError.message,
     details: appError.details,

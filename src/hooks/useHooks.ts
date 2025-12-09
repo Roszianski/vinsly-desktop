@@ -14,6 +14,7 @@ import {
   hookToConfig,
 } from '../types/hooks';
 import { ToastType } from '../components/Toast';
+import { devLog } from '../utils/devLogger';
 
 /**
  * Convert raw hook info from Rust to Hook type
@@ -104,13 +105,13 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
             addHook(rawToHook(raw));
           }
         } catch (error) {
-          console.error(`Error loading hooks from ${projectPath}:`, error);
+          devLog.error(`Error loading hooks from ${projectPath}:`, error);
         }
       }
 
       setHooks(allHooks);
     } catch (error) {
-      console.error('Failed to load hooks:', error);
+      devLog.error('Failed to load hooks:', error);
       showToast('error', `Failed to load hooks: ${error}`);
     } finally {
       setIsLoading(false);
@@ -131,7 +132,7 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
       setHooks(prev => [...prev, newHook]);
       showToast('success', `Added hook "${hook.name}"`);
     } catch (error) {
-      console.error('Failed to add hook:', error);
+      devLog.error('Failed to add hook:', error);
       showToast('error', `Failed to add hook: ${error}`);
       throw error;
     }
@@ -168,7 +169,7 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
 
       showToast('success', `Updated hook "${hook.name}"`);
     } catch (error) {
-      console.error('Failed to update hook:', error);
+      devLog.error('Failed to update hook:', error);
       showToast('error', `Failed to update hook: ${error}`);
       throw error;
     }
@@ -192,7 +193,7 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
       setHooks(prev => prev.filter(h => h.id !== hook.id));
       showToast('success', `Removed hook "${hook.name}"`);
     } catch (error) {
-      console.error('Failed to remove hook:', error);
+      devLog.error('Failed to remove hook:', error);
       showToast('error', `Failed to remove hook: ${error}`);
       throw error;
     }

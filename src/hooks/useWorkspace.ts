@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Agent, AgentScope, LoadAgentsOptions, ScanSettings, Skill } from '../types';
 import { getStorageItem, removeStorageItem, setStorageItem } from '../utils/storage';
+import { devLog } from '../utils/devLogger';
 import {
   listAgents,
   writeAgent,
@@ -150,7 +151,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
           setSkills(cachedSkills);
         }
       } catch (error) {
-        console.error('Failed to hydrate workspace cache', error);
+        devLog.error('Failed to hydrate workspace cache', error);
       } finally {
         workspaceCacheHydrated.current = true;
         setIsCacheReady(true);
@@ -202,7 +203,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
         return [...parsed, ...projectSkills];
       });
     } catch (error) {
-      console.error('Error refreshing global skills:', error);
+      devLog.error('Error refreshing global skills:', error);
     }
   }, []);
 
@@ -397,7 +398,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
                 addSkill(skillFileToSkill(skillFile));
               }
             } catch (error) {
-              console.error(`Error scanning project directory ${projectPath}:`, error);
+              devLog.error(`Error scanning project directory ${projectPath}:`, error);
             }
           }
 
@@ -423,7 +424,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
                 addSkill(skillFileToSkill(skillFile));
               }
             } catch (error) {
-              console.error(`Error scanning directory ${directory}:`, error);
+              devLog.error(`Error scanning directory ${directory}:`, error);
             }
           }
 
@@ -454,7 +455,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
             return { total: 0, newCount: 0 };
           }
 
-          console.error('Error loading workspace:', error);
+          devLog.error('Error loading workspace:', error);
           options.showToast('error', 'Failed to load assets from filesystem');
           throw error;
         } finally {
@@ -511,13 +512,13 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
           try {
             await deleteAgentFile(agentToSave.path);
           } catch (cleanupError) {
-            console.warn('Failed to remove previous agent file:', cleanupError);
+            devLog.warn('Failed to remove previous agent file:', cleanupError);
           }
         }
 
         options.showToast('success', `Agent "${agentToSave.name}" saved successfully`);
       } catch (error) {
-        console.error('Error saving agent:', error);
+        devLog.error('Error saving agent:', error);
         options.showToast(
           'error',
           `Failed to save agent: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -537,7 +538,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
         setAgents(prev => prev.filter(a => a.id !== agentIdToDelete));
         // Toast is shown by WorkspaceContext with Undo button
       } catch (error) {
-        console.error('Error deleting agent:', error);
+        devLog.error('Error deleting agent:', error);
         options.showToast(
           'error',
           `Failed to delete agent: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -559,7 +560,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
         setAgents(prev => prev.filter(agent => !agentIdsToDelete.includes(agent.id)));
         // Toast is shown by WorkspaceContext with Undo button
       } catch (error) {
-        console.error('Error deleting agents:', error);
+        devLog.error('Error deleting agents:', error);
         options.showToast(
           'error',
           `Failed to delete agents: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -608,7 +609,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
               : undefined;
 
           if (scope === 'project' && !projectPathForImport) {
-            console.warn(`Skipping project agent "${agent.name}" import due to missing project path`);
+            devLog.warn(`Skipping project agent "${agent.name}" import due to missing project path`);
             continue;
           }
 
@@ -631,7 +632,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
           options.showToast('success', `Successfully imported ${importedAgents.length} agent(s).`);
         }
       } catch (error) {
-        console.error('Error persisting imported agents:', error);
+        devLog.error('Error persisting imported agents:', error);
         options.showToast(
           'error',
           `Failed to persist imported agents: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -707,7 +708,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
 
         options.showToast('success', `Skill "${skillToSave.name}" saved successfully`);
       } catch (error) {
-        console.error('Error saving skill:', error);
+        devLog.error('Error saving skill:', error);
         options.showToast(
           'error',
           `Failed to save skill: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -732,7 +733,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
         setSkills(prev => prev.filter(s => s.id !== skillIdToDelete));
         // Toast is shown by WorkspaceContext with Undo button
       } catch (error) {
-        console.error('Error deleting skill:', error);
+        devLog.error('Error deleting skill:', error);
         options.showToast(
           'error',
           `Failed to delete skill: ${error instanceof Error ? error.message : 'Unknown error'}`

@@ -5,8 +5,6 @@ use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
 use std::fs;
 use std::io::{Read, Write};
-#[cfg(target_os = "macos")]
-use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -16,6 +14,7 @@ use tokio::sync::Mutex;
 use walkdir::WalkDir;
 use zip::write::FileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
+use tauri::Manager;
 
 const HOME_DISCOVERY_CACHE_TTL_SECS: u64 = 120;
 #[cfg(target_os = "macos")]
@@ -175,8 +174,10 @@ fn ensure_path_in_skills_dir(path: &Path) -> Result<(), String> {
 }
 
 // Security constants for file operations
-const MAX_ARCHIVE_SIZE: u64 = 50 * 1024 * 1024; // 50 MB
+const MAX_ARCHIVE_SIZE: u64 = 50 * 1024 * 1024; // 50 MB compressed archive size
 const MAX_ARCHIVE_FILES: usize = 1000;
+const MAX_SINGLE_FILE_SIZE: u64 = 10 * 1024 * 1024; // 10 MB per extracted file
+const MAX_TOTAL_EXTRACTED_SIZE: u64 = 100 * 1024 * 1024; // 100 MB total extracted size (prevents zip bombs)
 
 /// Validates and canonicalizes an input directory path.
 /// Rejects relative paths, symlinks, and paths that don't exist.
@@ -894,6 +895,9 @@ fn extract_skill_archive(archive_path: &Path, base: &Path) -> Result<PathBuf, St
     fs::create_dir_all(&target_dir)
         .map_err(|e| format!("Failed to create skill directory: {}", e))?;
 
+    // Track cumulative extracted size to prevent zip bombs
+    let mut total_extracted_size: u64 = 0;
+
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
@@ -932,6 +936,28 @@ fn extract_skill_archive(archive_path: &Path, base: &Path) -> Result<PathBuf, St
             fs::create_dir_all(&output_path)
                 .map_err(|e| format!("Failed to create directory: {}", e))?;
         } else {
+            // Check individual file size before extraction
+            let file_size = entry.size();
+            if file_size > MAX_SINGLE_FILE_SIZE {
+                let _ = fs::remove_dir_all(&target_dir);
+                return Err(format!(
+                    "File too large: {} bytes (max {} bytes)",
+                    file_size,
+                    MAX_SINGLE_FILE_SIZE
+                ));
+            }
+
+            // Check cumulative extracted size
+            total_extracted_size += file_size;
+            if total_extracted_size > MAX_TOTAL_EXTRACTED_SIZE {
+                let _ = fs::remove_dir_all(&target_dir);
+                return Err(format!(
+                    "Total extracted size exceeds limit: {} bytes (max {} bytes)",
+                    total_extracted_size,
+                    MAX_TOTAL_EXTRACTED_SIZE
+                ));
+            }
+
             if let Some(parent) = output_path.parent() {
                 fs::create_dir_all(parent)
                     .map_err(|e| format!("Failed to create parent directory: {}", e))?;
@@ -1583,6 +1609,9 @@ async fn import_slash_commands_archive(
 
     let mut imported_paths = Vec::new();
 
+    // Track cumulative extracted size to prevent zip bombs
+    let mut total_extracted_size: u64 = 0;
+
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
@@ -1604,6 +1633,27 @@ async fn import_slash_commands_archive(
 
         if !file_name.ends_with(".md") || file_name.starts_with("__MACOSX") || file_name.starts_with('.') {
             continue;
+        }
+
+        // Check individual file size before extraction
+        let file_size = entry.size();
+        if file_size > MAX_SINGLE_FILE_SIZE {
+            return Err(format!(
+                "File '{}' too large: {} bytes (max {} bytes)",
+                file_name,
+                file_size,
+                MAX_SINGLE_FILE_SIZE
+            ));
+        }
+
+        // Check cumulative extracted size
+        total_extracted_size += file_size;
+        if total_extracted_size > MAX_TOTAL_EXTRACTED_SIZE {
+            return Err(format!(
+                "Total extracted size exceeds limit: {} bytes (max {} bytes)",
+                total_extracted_size,
+                MAX_TOTAL_EXTRACTED_SIZE
+            ));
         }
 
         let output_path = commands_dir.join(file_name);
@@ -2700,6 +2750,77 @@ async fn import_binary_file(path: String) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("Failed to read file: {}", e))
 }
 
+/// Set the window's title bar appearance and background color to match the app's theme
+/// On macOS: Sets NSAppearance and NSWindow background color
+/// On Windows/Linux: Sets the webview background color
+#[tauri::command]
+fn set_title_bar_theme(window: tauri::WebviewWindow, dark: bool) {
+    // Vinsly theme colors:
+    // Dark mode:  #1f2229 = RGB(31, 34, 41)
+    // Light mode: #F7F7F5 = RGB(247, 247, 245)
+
+    #[cfg(target_os = "macos")]
+    {
+        use cocoa::appkit::{NSColor, NSWindow};
+        use cocoa::base::{id, nil};
+        use cocoa::foundation::NSString;
+        use objc::{class, msg_send, sel, sel_impl};
+
+        let ns_window = window.ns_window();
+        if let Ok(ns_win) = ns_window {
+            unsafe {
+                let ns_win = ns_win as id;
+
+                // Set the NSAppearance (affects traffic light buttons and system UI)
+                let appearance_name = if dark {
+                    cocoa::foundation::NSString::alloc(nil).init_str("NSAppearanceNameDarkAqua")
+                } else {
+                    cocoa::foundation::NSString::alloc(nil).init_str("NSAppearanceNameAqua")
+                };
+                let appearance: id =
+                    msg_send![class!(NSAppearance), appearanceNamed: appearance_name];
+                let _: () = msg_send![ns_win, setAppearance: appearance];
+
+                // Set the window background color to match Vinsly's theme
+                let bg_color = if dark {
+                    // Dark mode: #1f2229
+                    NSColor::colorWithRed_green_blue_alpha_(
+                        nil,
+                        31.0 / 255.0,
+                        34.0 / 255.0,
+                        41.0 / 255.0,
+                        1.0,
+                    )
+                } else {
+                    // Light mode: #F7F7F5
+                    NSColor::colorWithRed_green_blue_alpha_(
+                        nil,
+                        247.0 / 255.0,
+                        247.0 / 255.0,
+                        245.0 / 255.0,
+                        1.0,
+                    )
+                };
+                ns_win.setBackgroundColor_(bg_color);
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // On Windows and Linux, set the webview background color
+        use tauri::Color;
+        let color = if dark {
+            // Dark mode: #1f2229
+            Color(31, 34, 41, 255)
+        } else {
+            // Light mode: #F7F7F5
+            Color(247, 247, 245, 255)
+        };
+        let _ = window.set_background_color(Some(color));
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -2709,6 +2830,59 @@ pub fn run() {
         // NOTE: fs plugin removed for security - use vetted export_*/import_* commands instead
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .setup(|app| {
+            // Set the initial title bar appearance and background color to dark (app defaults to dark mode)
+            // Dark mode color: #1f2229 = RGB(31, 34, 41)
+
+            #[cfg(target_os = "macos")]
+            {
+                use cocoa::appkit::{NSColor, NSWindow};
+                use cocoa::base::{id, nil};
+                use cocoa::foundation::NSString;
+                use objc::{class, msg_send, sel, sel_impl};
+
+                if let Some(window) = app.get_webview_window("main") {
+                    if let Ok(ns_win) = window.ns_window() {
+                        unsafe {
+                            let ns_win = ns_win as id;
+
+                            // Set NSAppearance to dark
+                            let appearance_name =
+                                cocoa::foundation::NSString::alloc(nil)
+                                    .init_str("NSAppearanceNameDarkAqua");
+                            let appearance: id = msg_send![
+                                class!(NSAppearance),
+                                appearanceNamed: appearance_name
+                            ];
+                            let _: () = msg_send![ns_win, setAppearance: appearance];
+
+                            // Set background color to Vinsly dark theme: #1f2229
+                            let bg_color = NSColor::colorWithRed_green_blue_alpha_(
+                                nil,
+                                31.0 / 255.0,
+                                34.0 / 255.0,
+                                41.0 / 255.0,
+                                1.0,
+                            );
+                            ns_win.setBackgroundColor_(bg_color);
+                        }
+                    }
+                }
+            }
+
+            #[cfg(not(target_os = "macos"))]
+            {
+                // On Windows and Linux, set the initial background color to dark theme
+                use tauri::Color;
+                if let Some(window) = app.get_webview_window("main") {
+                    // Dark mode: #1f2229
+                    let color = Color(31, 34, 41, 255);
+                    let _ = window.set_background_color(Some(color));
+                }
+            }
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             list_agents,
             read_agent,
@@ -2761,6 +2935,8 @@ pub fn run() {
             export_binary_file,
             import_text_file,
             import_binary_file,
+            // Window appearance
+            set_title_bar_theme,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

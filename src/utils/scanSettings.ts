@@ -1,5 +1,6 @@
 import { ScanSettings } from '../types';
 import { getStorageItem, setStorageItem } from './storage';
+import { devLog } from './devLogger';
 
 const SCAN_SETTINGS_KEY = 'vinsly-scan-settings';
 
@@ -56,7 +57,7 @@ export async function getScanSettings(): Promise<ScanSettings> {
     const settings = await getStorageItem<RawScanSettings>(SCAN_SETTINGS_KEY);
     return normalizeSettings(settings || undefined);
   } catch (error) {
-    console.error('Error loading scan settings:', error);
+    devLog.error('Error loading scan settings:', error);
     return DEFAULT_SCAN_SETTINGS;
   }
 }
@@ -66,7 +67,7 @@ export async function saveScanSettings(settings: ScanSettings): Promise<void> {
   try {
     await setStorageItem(SCAN_SETTINGS_KEY, settings);
   } catch (error) {
-    console.error('Error saving scan settings:', error);
+    devLog.error('Error saving scan settings:', error);
     throw error;
   }
 }

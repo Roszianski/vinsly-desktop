@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { CloseIcon } from './icons/CloseIcon';
+import { devLog } from '../utils/devLogger';
 
 interface DocsPanelProps {
   isOpen: boolean;
@@ -350,7 +351,7 @@ export const DocsPanel: React.FC<DocsPanelProps> = ({ isOpen, onClose }) => {
                     try {
                       await openUrl(url);
                     } catch (error) {
-                      console.error('Failed to open URL with Tauri:', error);
+                      devLog.error('Failed to open URL with Tauri:', error);
                       // Fallback to window.open
                       window.open(url, '_blank');
                     }

@@ -1,6 +1,7 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { detectClaudeSessions, ClaudeSessionRaw } from '../utils/tauriCommands';
 import { ClaudeSession, rawToSession } from '../types/session';
+import { devLog } from '../utils/devLogger';
 
 const DEFAULT_POLL_INTERVAL = 10000; // 10 seconds
 
@@ -40,7 +41,7 @@ export function useClaudeSessions(options?: UseClaudeSessionsOptions): UseClaude
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       setError(errorMessage);
-      console.error('Failed to detect Claude sessions:', err);
+      devLog.error('Failed to detect Claude sessions:', err);
     } finally {
       setIsLoading(false);
     }

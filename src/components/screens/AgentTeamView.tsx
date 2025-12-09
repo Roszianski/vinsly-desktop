@@ -17,6 +17,7 @@ import { FolderIcon } from '../icons/FolderIcon';
 import { InfoIcon } from '../icons/InfoIcon';
 import { useToast } from '../../contexts/ToastContext';
 import { getToolsState } from '../../utils/toolHelpers';
+import { devLog } from '../../utils/devLogger';
 
 interface AgentTeamViewProps {
   agents: Agent[];
@@ -647,7 +648,7 @@ useEffect(() => {
       await exportBinaryFile(filePath, Array.from(binaryData));
       showToast('success', 'Organisation map exported successfully');
     } catch (error) {
-      console.error('Failed to export map:', error);
+      devLog.error('Failed to export map:', error);
       showToast('error', 'Failed to export map. Please try again.');
     } finally {
       setIsExporting(false);

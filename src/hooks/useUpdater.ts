@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { check, Update } from '@tauri-apps/plugin-updater';
 import { PendingUpdateDetails } from '../types/updater';
+import { devLog } from '../utils/devLogger';
 
 // Network configuration for update checks
 const UPDATE_CHECK_TIMEOUT_MS = 30000; // 30 second timeout per attempt
@@ -53,7 +54,7 @@ async function checkWithRetry(): Promise<Update | null> {
       return update;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn(`[Updater] Attempt ${attempt + 1}/${UPDATE_MAX_RETRIES + 1} failed:`, lastError.message);
+      devLog.warn(`[Updater] Attempt ${attempt + 1}/${UPDATE_MAX_RETRIES + 1} failed:`, lastError.message);
 
       // Don't sleep after the last attempt
       if (attempt < UPDATE_MAX_RETRIES) {
@@ -90,7 +91,7 @@ export function useUpdater(): UseUpdaterResult {
       try {
         await updateResourceRef.current.close();
       } catch (error) {
-        console.warn('Failed to release updater resource', error);
+        devLog.warn('Failed to release updater resource', error);
       } finally {
         updateResourceRef.current = null;
       }
@@ -125,7 +126,7 @@ export function useUpdater(): UseUpdaterResult {
         try {
           await updateResourceRef.current.close();
         } catch (error) {
-          console.warn('Failed closing previous update resource', error);
+          devLog.warn('Failed closing previous update resource', error);
         }
       }
       updateResourceRef.current = update;
@@ -139,7 +140,7 @@ export function useUpdater(): UseUpdaterResult {
       return details;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Update check failed';
-      console.error('Update check failed after all retries:', errorMessage);
+      devLog.error('Update check failed after all retries:', errorMessage);
       setLastCheckError(errorMessage);
       // Don't throw - return null to indicate no update available
       // This prevents transient network issues from blocking the app
@@ -161,7 +162,7 @@ export function useUpdater(): UseUpdaterResult {
       setPendingUpdate(null);
       await relaunch();
     } catch (error) {
-      console.error('Failed to install update:', error);
+      devLog.error('Failed to install update:', error);
       throw error;
     } finally {
       setIsInstalling(false);

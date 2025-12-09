@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getStorageItem, setStorageItem } from '../utils/storage';
+import { setTitleBarTheme } from '../utils/tauriCommands';
 
 export type Theme = 'light' | 'dark';
 
@@ -74,11 +75,15 @@ export function useTheme(): UseThemeResult {
     loadTheme();
   }, []);
 
-  // Apply theme to DOM and persist to storage
+  // Apply theme to DOM, update title bar, and persist to storage
   useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove(theme === 'dark' ? 'light' : 'dark');
     root.classList.add(theme);
+    // Update macOS title bar appearance to match theme
+    setTitleBarTheme(theme === 'dark').catch(() => {
+      // Silently ignore errors (e.g., on non-macOS platforms)
+    });
     if (themeLoaded) {
       setStorageItem('vinsly-theme', theme);
     }

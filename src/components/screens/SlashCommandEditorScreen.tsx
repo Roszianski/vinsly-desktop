@@ -6,6 +6,7 @@ import { FolderIcon } from '../icons/FolderIcon';
 import { ArrowLeftIcon } from '../icons/ArrowLeftIcon';
 import { TerminalIcon } from '../icons/TerminalIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
+import { devLog } from '../../utils/devLogger';
 
 interface SlashCommandEditorScreenProps {
   command: SlashCommand;
@@ -93,7 +94,7 @@ export const SlashCommandEditorScreen: React.FC<SlashCommandEditorScreenProps> =
       setProjectFolderError('');
       setScope(AgentScope.Project);
     } catch (error) {
-      console.error('Failed to select project folder:', error);
+      devLog.error('Failed to select project folder:', error);
       setProjectFolderError('Unable to open the folder picker. Please try again.');
     } finally {
       setIsPickingProjectFolder(false);

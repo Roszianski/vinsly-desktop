@@ -2,6 +2,7 @@ import YAML from 'yaml';
 import { AgentScope, Skill } from '../types';
 import { serializeFrontmatter } from './frontmatter';
 import { SkillFile } from './tauriCommands';
+import { devLog } from './devLogger';
 
 const SKILL_FRONTMATTER_REGEX = /^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?([\s\S]*)$/;
 
@@ -24,7 +25,7 @@ function parseSkillMarkdown(content: string): ParsedSkillMarkdown | null {
     }
     return { frontmatter: parsed as Record<string, unknown>, body: body.trim() };
   } catch (error) {
-    console.error('Failed to parse skill frontmatter:', error);
+    devLog.error('Failed to parse skill frontmatter:', error);
     return null;
   }
 }

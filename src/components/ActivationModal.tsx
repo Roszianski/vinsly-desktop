@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { checkFullDiskAccess, openFullDiskAccessSettings } from '../utils/tauriCommands';
+import { devLog } from '../utils/devLogger';
 
 interface ActivationModalProps {
   isOpen: boolean;
@@ -100,7 +101,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
         setFullDiskStatusMessage(null);
       }
     } catch (error) {
-      console.error('Failed to check full disk access:', error);
+      devLog.error('Failed to check full disk access:', error);
       setFullDiskStatus('denied');
       setFullDiskStatusMessage({
         tone: 'warn',
@@ -152,7 +153,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
         postGrantCheckTimeoutRef.current = null;
       }, 2500);
     } catch (error) {
-      console.error('Failed to open Full Disk Access settings:', error);
+      devLog.error('Failed to open Full Disk Access settings:', error);
       const details = error instanceof Error ? error.message : String(error);
       setFullDiskStatusMessage({
         tone: 'warn',
@@ -229,7 +230,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
         setValidationState('success');
         proceedToProfile();
       } catch (error) {
-        console.error('Licence validation failed:', error);
+        devLog.error('Licence validation failed:', error);
         setLicenseStepError('Something went wrong while validating your licence. Please try again.');
         setValidationState('idle');
         return;
@@ -268,7 +269,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
         fullDiskAccessEnabled: isMacPlatform ? (fullDiskAccessEnabled && fullDiskStatus === 'granted') : true,
       });
     } catch (error) {
-      console.error('Activation completion failed:', error);
+      devLog.error('Activation completion failed:', error);
       const message = error instanceof Error && error.message
         ? error.message
         : 'Something went wrong while setting up. Please try again.';

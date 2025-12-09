@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AgentScope, ClaudeMemory, ScanSettings } from '../types';
 import { readClaudeMemory } from '../utils/tauriCommands';
 import { ToastType } from '../components/Toast';
+import { devLog } from '../utils/devLogger';
 
 export interface UseClaudeMemoryListOptions {
   showToast: (type: ToastType, message: string) => void;
@@ -47,7 +48,7 @@ export function useClaudeMemoryList(options: UseClaudeMemoryListOptions): UseCla
             });
           }
         } catch (error) {
-          console.error('Error loading global CLAUDE.md:', error);
+          devLog.error('Error loading global CLAUDE.md:', error);
         }
       }
 
@@ -74,7 +75,7 @@ export function useClaudeMemoryList(options: UseClaudeMemoryListOptions): UseCla
           }
         } catch (error) {
           // Silently skip directories that don't have CLAUDE.md
-          console.debug(`No CLAUDE.md found in ${directory}:`, error);
+          devLog.debug(`No CLAUDE.md found in ${directory}:`, error);
         }
       }
 
@@ -87,7 +88,7 @@ export function useClaudeMemoryList(options: UseClaudeMemoryListOptions): UseCla
         }));
       });
     } catch (error) {
-      console.error('Error discovering CLAUDE.md files:', error);
+      devLog.error('Error discovering CLAUDE.md files:', error);
       showToast('error', 'Failed to load memory files');
     } finally {
       setIsLoading(false);

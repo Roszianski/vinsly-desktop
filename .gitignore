@@ -27,3 +27,6 @@ dist-ssr
 
 # Generated helper binaries
 src-tauri/bin/
+
+# Rust build artifacts
+src-tauri/target/

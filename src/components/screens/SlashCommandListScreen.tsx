@@ -23,6 +23,7 @@ import { ConfirmDialog } from '../ConfirmDialog';
 import { fuzzyMatch } from '../../utils/fuzzyMatch';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { getStorageItem, setStorageItem } from '../../utils/storage';
+import { devLog } from '../../utils/devLogger';
 
 type LayoutMode = 'table' | 'grid';
 type Filter = 'All' | AgentScope;
@@ -79,7 +80,7 @@ const ActionMenu: React.FC<ActionMenuProps> = ({ command, onEdit, onDuplicate, o
     try {
       await revealItemInDir(command.path);
     } catch (error) {
-      console.error('Error revealing file:', error);
+      devLog.error('Error revealing file:', error);
     } finally {
       setIsRevealing(false);
       setIsOpen(false);

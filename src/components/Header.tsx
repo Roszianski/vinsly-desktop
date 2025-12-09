@@ -204,7 +204,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className={`bg-v-light-surface dark:bg-v-mid-dark border-b border-v-light-border dark:border-v-border transition-colors duration-200 ${isMacPlatform ? 'pt-8' : ''}`}>
+    <header className="bg-v-light-surface dark:bg-v-mid-dark border-b border-v-light-border dark:border-v-border transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <button

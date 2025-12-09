@@ -6,6 +6,7 @@ import { FolderIcon } from '../icons/FolderIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
 import { open } from '@tauri-apps/plugin-dialog';
 import { extractProjectRootFromSkillPath } from '../../utils/path';
+import { devLog } from '../../utils/devLogger';
 import { WizardStepHeader } from '../wizard';
 import { wizardStepVariants } from '../../animations';
 import { CheckIcon } from '../icons/CheckIcon';
@@ -398,7 +399,7 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
         setProjectFolderPath(selected);
       }
     } catch (error) {
-      console.error('Failed to select project folder for skill:', error);
+      devLog.error('Failed to select project folder for skill:', error);
     } finally {
       setIsPickingProjectFolder(false);
     }

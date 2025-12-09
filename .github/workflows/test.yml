@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, refactor/custom-hooks]
+    branches: [main]
   pull_request:
-    branches: [main, refactor/custom-hooks]
+    branches: [main]
 
 jobs:
   test:

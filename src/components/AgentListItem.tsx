@@ -14,6 +14,7 @@ import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { useToast } from '../contexts/ToastContext';
 import { resolveAgentPath } from '../utils/pathHelpers';
 import { getToolsState } from '../utils/toolHelpers';
+import { devLog } from '../utils/devLogger';
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -213,7 +214,7 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
             }
             await revealItemInDir(resolvedPath);
         } catch (error) {
-            console.error('Error revealing file:', error);
+            devLog.error('Error revealing file:', error);
             showToast('error', 'Failed to reveal the agent in your file manager.');
         } finally {
             setIsRevealing(false);

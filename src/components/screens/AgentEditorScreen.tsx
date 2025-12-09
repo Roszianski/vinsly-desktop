@@ -14,6 +14,7 @@ import { WarningIcon } from '../icons/WarningIcon';
 import { FolderIcon } from '../icons/FolderIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
 import { extractProjectRootFromAgentPath } from '../../utils/path';
+import { devLog } from '../../utils/devLogger';
 import { serializeFrontmatter } from '../../utils/frontmatter';
 import { emptyToolsValue, toolsSelectionToValue, toolsValueToArray } from '../../utils/toolHelpers';
 
@@ -590,7 +591,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
       setProjectFolderPath(selectedPath);
       setProjectFolderError('');
     } catch (error) {
-      console.error('Failed to select project folder:', error);
+      devLog.error('Failed to select project folder:', error);
       setProjectFolderError('Unable to open the folder picker. Please try again.');
     } finally {
       setIsPickingProjectFolder(false);

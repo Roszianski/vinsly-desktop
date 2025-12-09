@@ -3,6 +3,7 @@ import YAML from 'yaml';
 import { Agent, AgentScope } from '../types';
 import { open } from '@tauri-apps/plugin-dialog';
 import { importTextFile, importBinaryFile } from './tauriCommands';
+import { devLog } from './devLogger';
 
 const FRONTMATTER_REGEX = /^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?([\s\S]*)$/;
 
@@ -52,7 +53,7 @@ function parseMarkdown(content: string): { frontmatter: Record<string, unknown>;
 
     return { frontmatter: parsed as Record<string, unknown>, body: body.trim() };
   } catch (error) {
-    console.error('Failed to parse frontmatter YAML:', error);
+    devLog.error('Failed to parse frontmatter YAML:', error);
     return null;
   }
 }
@@ -136,7 +137,7 @@ export async function importAgentFromFile(
     const agent = markdownToAgent(content, file.name, scope);
     return agent;
   } catch (error) {
-    console.error('Error importing agent from file:', error);
+    devLog.error('Error importing agent from file:', error);
     throw error;
   }
 }
@@ -207,7 +208,7 @@ async function importAgentFromPath(
     const agent = markdownToAgent(content, fileName, scope);
     return agent;
   } catch (error) {
-    console.error('Error importing agent from path:', error);
+    devLog.error('Error importing agent from path:', error);
     throw error;
   }
 }
@@ -313,7 +314,7 @@ export async function openImportDialog(
       onImport([], errors);
     }
   } catch (error) {
-    console.error('Dialog error:', error);
+    devLog.error('Dialog error:', error);
     onImport([], [`Dialog error: ${error instanceof Error ? error.message : 'Unknown error'}`]);
   }
 }

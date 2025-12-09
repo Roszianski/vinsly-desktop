@@ -5,6 +5,7 @@ import { GlobeIcon } from '../icons/GlobeIcon';
 import { FolderIcon } from '../icons/FolderIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
 import { DocumentIcon } from '../icons/DocumentIcon';
+import { devLog } from '../../utils/devLogger';
 
 interface MemoryScreenProps {
   globalMemory: ClaudeMemory | null;
@@ -180,7 +181,7 @@ export const MemoryScreen: React.FC<MemoryScreenProps> = ({
       setProjectFolderPath(selectedPath);
       onScopeChange(AgentScope.Project);
     } catch (error) {
-      console.error('Failed to select project folder:', error);
+      devLog.error('Failed to select project folder:', error);
     } finally {
       setIsPickingProjectFolder(false);
     }

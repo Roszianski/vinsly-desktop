@@ -3,6 +3,7 @@ import { LicenseInfo } from '../types/licensing';
 import { useLicense, UseLicenseResult } from '../hooks/useLicense';
 import { usePlatformInfo } from '../hooks/usePlatformInfo';
 import { useToast } from './ToastContext';
+import { devLog } from '../utils/devLogger';
 
 interface LicenseContextType extends UseLicenseResult {
   isActivationOpen: boolean;
@@ -57,7 +58,7 @@ export const LicenseProvider: React.FC<LicenseProviderProps> = ({ children }) =>
         setAppVersion(version);
       } catch (error) {
         // Expected to fail in browser/non-Tauri environment
-        console.warn('Unable to read application version', error);
+        devLog.warn('Unable to read application version', error);
       }
     };
     loadAppVersion();

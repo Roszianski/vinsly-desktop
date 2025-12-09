@@ -14,6 +14,7 @@ import {
   mcpServerToConfig,
 } from '../types/mcp';
 import { ToastType } from '../components/Toast';
+import { devLog } from '../utils/devLogger';
 
 /**
  * Convert raw server info from Rust to MCPServer type
@@ -108,13 +109,13 @@ export function useMCPServers({ showToast }: UseMCPServersOptions): UseMCPServer
             addServer(rawToMCPServer(raw));
           }
         } catch (error) {
-          console.error(`Error loading MCP servers from ${projectPath}:`, error);
+          devLog.error(`Error loading MCP servers from ${projectPath}:`, error);
         }
       }
 
       setServers(allServers);
     } catch (error) {
-      console.error('Failed to load MCP servers:', error);
+      devLog.error('Failed to load MCP servers:', error);
       showToast('error', `Failed to load MCP servers: ${error}`);
     } finally {
       setIsLoading(false);
@@ -137,7 +138,7 @@ export function useMCPServers({ showToast }: UseMCPServersOptions): UseMCPServer
 
       showToast('success', `Added MCP server "${server.name}"`);
     } catch (error) {
-      console.error('Failed to add MCP server:', error);
+      devLog.error('Failed to add MCP server:', error);
       showToast('error', `Failed to add MCP server: ${error}`);
       throw error;
     }
@@ -150,7 +151,7 @@ export function useMCPServers({ showToast }: UseMCPServersOptions): UseMCPServer
         try {
           await removeMCPServerCmd(oldServer.scope, oldServer.name, projectPath);
         } catch (removeError) {
-          console.warn('Failed to remove old MCP server entry:', removeError);
+          devLog.warn('Failed to remove old MCP server entry:', removeError);
         }
       }
 
@@ -165,7 +166,7 @@ export function useMCPServers({ showToast }: UseMCPServersOptions): UseMCPServer
 
       showToast('success', `Updated MCP server "${server.name}"`);
     } catch (error) {
-      console.error('Failed to update MCP server:', error);
+      devLog.error('Failed to update MCP server:', error);
       showToast('error', `Failed to update MCP server: ${error}`);
       throw error;
     }
@@ -185,7 +186,7 @@ export function useMCPServers({ showToast }: UseMCPServersOptions): UseMCPServer
 
       showToast('success', `Removed MCP server "${name}"`);
     } catch (error) {
-      console.error('Failed to remove MCP server:', error);
+      devLog.error('Failed to remove MCP server:', error);
       showToast('error', `Failed to remove MCP server: ${error}`);
       throw error;
     }

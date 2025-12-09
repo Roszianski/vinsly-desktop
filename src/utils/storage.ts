@@ -1,4 +1,5 @@
 import { Store } from '@tauri-apps/plugin-store';
+import { devLog } from './devLogger';
 
 let store: Store | null = null;
 
@@ -31,7 +32,7 @@ export async function getStorageItem<T>(key: string, defaultValue?: T): Promise<
     const value = await s.get<T>(key);
     return value ?? defaultValue ?? null;
   } catch (error) {
-    console.error(`Error getting storage item ${key}:`, error);
+    devLog.error(`Error getting storage item ${key}:`, error);
     return defaultValue ?? null;
   }
 }
@@ -50,7 +51,7 @@ export async function getStorageItemWithResult<T>(key: string, defaultValue?: T)
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown storage error';
-    console.error(`Error getting storage item ${key}:`, error);
+    devLog.error(`Error getting storage item ${key}:`, error);
     return {
       success: false,
       data: defaultValue ?? null,
@@ -70,7 +71,7 @@ export async function setStorageItem<T>(key: string, value: T): Promise<void> {
     await s.set(key, value);
     await s.save();
   } catch (error) {
-    console.error(`Error setting storage item ${key}:`, error);
+    devLog.error(`Error setting storage item ${key}:`, error);
   }
 }
 
@@ -86,7 +87,7 @@ export async function setStorageItemWithResult<T>(key: string, value: T): Promis
     return { success: true };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown storage error';
-    console.error(`Error setting storage item ${key}:`, error);
+    devLog.error(`Error setting storage item ${key}:`, error);
     return { success: false, error: errorMsg };
   }
 }
@@ -102,7 +103,7 @@ export async function removeStorageItem(key: string): Promise<void> {
     await s.delete(key);
     await s.save();
   } catch (error) {
-    console.error(`Error removing storage item ${key}:`, error);
+    devLog.error(`Error removing storage item ${key}:`, error);
   }
 }
 
@@ -118,7 +119,7 @@ export async function removeStorageItemWithResult(key: string): Promise<StorageR
     return { success: true };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown storage error';
-    console.error(`Error removing storage item ${key}:`, error);
+    devLog.error(`Error removing storage item ${key}:`, error);
     return { success: false, error: errorMsg };
   }
 }
@@ -134,7 +135,7 @@ export async function clearStorage(): Promise<void> {
     await s.clear();
     await s.save();
   } catch (error) {
-    console.error('Error clearing storage:', error);
+    devLog.error('Error clearing storage:', error);
   }
 }
 
@@ -150,7 +151,7 @@ export async function clearStorageWithResult(): Promise<StorageResult> {
     return { success: true };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown storage error';
-    console.error('Error clearing storage:', error);
+    devLog.error('Error clearing storage:', error);
     return { success: false, error: errorMsg };
   }
 }

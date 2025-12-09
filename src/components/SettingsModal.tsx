@@ -7,6 +7,7 @@ import { DeleteIcon } from './icons/DeleteIcon';
 import { LicenseInfo } from '../types/licensing';
 import { PendingUpdateDetails } from '../types/updater';
 import { checkFullDiskAccess, openFullDiskAccessSettings } from '../utils/tauriCommands';
+import { devLog } from '../utils/devLogger';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -201,7 +202,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }
       }
     } catch (error) {
-      console.error('Failed to check full disk access:', error);
+      devLog.error('Failed to check full disk access:', error);
       setFullDiskStatus('denied');
       setFullDiskStatusMessage({
         tone: 'warn',
@@ -234,7 +235,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         postGrantCheckTimeoutRef.current = null;
       }, 2500);
     } catch (error) {
-      console.error('Failed to open Full Disk Access settings:', error);
+      devLog.error('Failed to open Full Disk Access settings:', error);
       const details = error instanceof Error ? error.message : String(error);
       setFullDiskStatusMessage({
         tone: 'warn',
@@ -284,7 +285,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         displayNameSaveTimeoutRef.current = null;
       }, 2000);
     } catch (error) {
-      console.error('Failed to update display name:', error);
+      devLog.error('Failed to update display name:', error);
       setDisplayNameSaveState('idle');
     }
   }, [displayNameInput, onDisplayNameChange, userDisplayName]);

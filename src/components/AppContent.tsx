@@ -41,6 +41,7 @@ import { exportSkillDirectory, importSkillArchive, exportSkillsArchive, exportSl
 import { DEFAULT_HOME_DISCOVERY_DEPTH, discoverHomeDirectories } from '../utils/homeDiscovery';
 import { MCPServer } from '../types/mcp';
 import { Hook } from '../types/hooks';
+import { devLog } from '../utils/devLogger';
 
 const HOME_DISCOVERY_MAX_DEPTH = DEFAULT_HOME_DISCOVERY_DEPTH;
 
@@ -291,7 +292,7 @@ export const AppContent: React.FC = () => {
     try {
       await revealItemInDir(targetPath);
     } catch (error) {
-      console.error('Failed to reveal skill folder:', error);
+      devLog.error('Failed to reveal skill folder:', error);
       showToast('error', 'Failed to reveal the skill folder.');
     }
   }, [showToast]);
@@ -311,7 +312,7 @@ export const AppContent: React.FC = () => {
       await exportSkillDirectory(directoryPath, destination);
       showToast('success', `Exported "${skill.name}"`);
     } catch (error) {
-      console.error('Error exporting skill:', error);
+      devLog.error('Error exporting skill:', error);
       showToast('error', 'Failed to export the skill.');
     }
   }, [showToast]);
@@ -344,7 +345,7 @@ export const AppContent: React.FC = () => {
       await refreshGlobalSkills();
       showToast('success', 'Skill imported into ~/.claude/skills');
     } catch (error) {
-      console.error('Error importing skill:', error);
+      devLog.error('Error importing skill:', error);
       showToast('error', 'Failed to import skill archive.');
     }
   }, [refreshGlobalSkills, showToast]);
@@ -366,7 +367,7 @@ export const AppContent: React.FC = () => {
       await exportSlashCommandsArchive(paths, destination);
       showToast('success', `Exported ${commandsToExport.length} command(s)`);
     } catch (error) {
-      console.error('Error exporting commands:', error);
+      devLog.error('Error exporting commands:', error);
       showToast('error', 'Failed to export commands.');
     }
   }, [showToast]);
@@ -383,7 +384,7 @@ export const AppContent: React.FC = () => {
       await handleFullScan({ includeGlobal: true });
       showToast('success', 'Commands imported into ~/.claude/commands');
     } catch (error) {
-      console.error('Error importing commands:', error);
+      devLog.error('Error importing commands:', error);
       showToast('error', 'Failed to import commands archive.');
     }
   }, [handleFullScan, showToast]);
@@ -405,7 +406,7 @@ export const AppContent: React.FC = () => {
       await exportMemoriesArchive(paths, destination);
       showToast('success', `Exported ${memoriesToExport.length} memory file(s)`);
     } catch (error) {
-      console.error('Error exporting memories:', error);
+      devLog.error('Error exporting memories:', error);
       showToast('error', 'Failed to export memories.');
     }
   }, [showToast]);
@@ -422,7 +423,7 @@ export const AppContent: React.FC = () => {
       await handleFullScan({ includeGlobal: true });
       showToast('success', 'Memory files imported into ~/.claude/');
     } catch (error) {
-      console.error('Error importing memories:', error);
+      devLog.error('Error importing memories:', error);
       showToast('error', 'Failed to import memories archive.');
     }
   }, [handleFullScan, showToast]);
@@ -437,7 +438,7 @@ export const AppContent: React.FC = () => {
       if (!selectedPath || Array.isArray(selectedPath)) return;
       await cloneMemory(memoryToClone, selectedPath);
     } catch (error) {
-      console.error('Error cloning memory:', error);
+      devLog.error('Error cloning memory:', error);
       showToast('error', 'Failed to clone memory.');
     }
   }, [cloneMemory, showToast]);
@@ -801,7 +802,7 @@ export const AppContent: React.FC = () => {
               instanceName
             );
           } catch (error) {
-            console.error('Activation failed:', error);
+            devLog.error('Activation failed:', error);
             throw new Error('Unable to activate your licence right now. Please check your license key and try again.');
           }
 
@@ -848,7 +849,7 @@ export const AppContent: React.FC = () => {
                 force: true,
               });
             } catch (error) {
-              console.error('Error discovering home directories during onboarding:', error);
+              devLog.error('Error discovering home directories during onboarding:', error);
             }
           }
 
@@ -897,7 +898,7 @@ export const AppContent: React.FC = () => {
               await deactivateLicenseWithLemon(licenseInfo.licenseKey, licenseInfo.instanceId);
             } catch (error) {
               // Log but don't fail - the old instance might already be deactivated
-              console.warn('Failed to deactivate old license instance:', error);
+              devLog.warn('Failed to deactivate old license instance:', error);
             }
           }
 

@@ -1,8 +1,8 @@
 [package]
 name = "tauri-app"
-version = "0.1.9"
-description = "A Tauri App"
-authors = ["you"]
+version = "1.0.0"
+description = "Vinsly - Agent Studio for Claude Code"
+authors = ["Vinsly"]
 edition = "2021"
 default-run = "tauri-app"
 
@@ -36,3 +36,8 @@ tokio = { version = "1", features = ["full"] }
 walkdir = "2.5"
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 sysinfo = { version = "0.30", default-features = false }
+window-vibrancy = "0.6"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.26"
+objc = "0.2"

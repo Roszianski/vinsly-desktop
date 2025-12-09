@@ -8,6 +8,7 @@ import {
 } from '../utils/tauriCommands';
 import { ToastType } from '../components/Toast';
 import { getStorageItem, setStorageItem } from '../utils/storage';
+import { devLog } from '../utils/devLogger';
 
 const SLASH_COMMANDS_CACHE_KEY = 'vinsly-slash-commands-cache';
 
@@ -86,7 +87,7 @@ export function useSlashCommands(options: UseSlashCommandsOptions): UseSlashComm
           setCommands(cached);
         }
       } catch (error) {
-        console.error('Failed to hydrate slash commands cache:', error);
+        devLog.error('Failed to hydrate slash commands cache:', error);
       } finally {
         cacheHydratedRef.current = true;
         setIsCacheReady(true);
@@ -144,7 +145,7 @@ export function useSlashCommands(options: UseSlashCommandsOptions): UseSlashComm
               addCommand(parseSlashCommand(file));
             }
           } catch (error) {
-            console.error(`Error loading commands from ${projectPath}:`, error);
+            devLog.error(`Error loading commands from ${projectPath}:`, error);
           }
         }
 
@@ -156,7 +157,7 @@ export function useSlashCommands(options: UseSlashCommandsOptions): UseSlashComm
               addCommand(parseSlashCommand(file));
             }
           } catch (error) {
-            console.error(`Error loading commands from ${directory}:`, error);
+            devLog.error(`Error loading commands from ${directory}:`, error);
           }
         }
 
@@ -178,7 +179,7 @@ export function useSlashCommands(options: UseSlashCommandsOptions): UseSlashComm
 
         return { total: commandsWithFavorites.length, newCount };
       } catch (error) {
-        console.error('Error loading slash commands:', error);
+        devLog.error('Error loading slash commands:', error);
         showToast('error', 'Failed to load slash commands');
         throw error;
       } finally {
@@ -227,13 +228,13 @@ export function useSlashCommands(options: UseSlashCommandsOptions): UseSlashComm
           try {
             await deleteSlashCommandFile(commandToSave.path);
           } catch (cleanupError) {
-            console.warn('Failed to remove previous command file:', cleanupError);
+            devLog.warn('Failed to remove previous command file:', cleanupError);
           }
         }
 
         showToast('success', `Command "/${commandToSave.name}" saved successfully`);
       } catch (error) {
-        console.error('Error saving command:', error);
+        devLog.error('Error saving command:', error);
         showToast(
           'error',
           `Failed to save command: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -253,7 +254,7 @@ export function useSlashCommands(options: UseSlashCommandsOptions): UseSlashComm
         setCommands(prev => prev.filter(c => c.id !== commandId));
         showToast('success', `Command "/${command.name}" deleted successfully`);
       } catch (error) {
-        console.error('Error deleting command:', error);
+        devLog.error('Error deleting command:', error);
         showToast(
           'error',
           `Failed to delete command: ${error instanceof Error ? error.message : 'Unknown error'}`

@@ -16,6 +16,7 @@ import { DEFAULT_HOME_DISCOVERY_DEPTH, discoverHomeDirectories } from '../utils/
 import { saveScanSettings } from '../utils/scanSettings';
 import { AgentCommands, SkillCommands } from '../utils/workspaceCommands';
 import { ScanSettings } from '../types';
+import { devLog } from '../utils/devLogger';
 
 const HOME_DISCOVERY_MAX_DEPTH = DEFAULT_HOME_DISCOVERY_DEPTH;
 
@@ -202,10 +203,10 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
             includeProtectedDirs: false, // Never scan Music/Movies/Pictures - no Claude projects there
           });
         } catch (error) {
-          console.error('Error discovering home directories:', error);
+          devLog.error('Error discovering home directories:', error);
         }
       } else if (storedSettings.autoScanHomeDirectoryOnStartup && !storedSettings.fullDiskAccessEnabled) {
-        console.info('Skipping automatic home scan because Full Disk Access is disabled.');
+        devLog.log('Skipping automatic home scan because Full Disk Access is disabled.');
       }
 
       const homeScanEnabled = storedSettings.autoScanHomeDirectoryOnStartup && storedSettings.fullDiskAccessEnabled;
@@ -409,7 +410,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
       await saveCommandToBackend(duplicatedCommand, { projectPath });
       showToast('success', `Duplicated command as "/${newName}"`);
     } catch (error) {
-      console.error('Error duplicating command:', error);
+      devLog.error('Error duplicating command:', error);
       showToast('error', 'Failed to duplicate command.');
     }
   }, [commands, saveCommandToBackend, showToast]);
@@ -451,7 +452,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
       await loadMemories();
       showToast('success', 'Memory cloned to new project');
     } catch (error) {
-      console.error('Error cloning memory:', error);
+      devLog.error('Error cloning memory:', error);
       showToast('error', 'Failed to clone memory.');
     }
   }, [saveMemoryToBackend, loadMemories, showToast]);
@@ -499,7 +500,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     const loaderNames = ['Commands', 'MCP Servers', 'Hooks', 'Memories'];
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
-        console.error(`Failed to load ${loaderNames[index]}:`, result.reason);
+        devLog.error(`Failed to load ${loaderNames[index]}:`, result.reason);
       }
     });
 

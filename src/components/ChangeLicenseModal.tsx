@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { devLog } from '../utils/devLogger';
 
 interface ChangeLicenseModalProps {
   isOpen: boolean;
@@ -71,7 +72,7 @@ export const ChangeLicenseModal: React.FC<ChangeLicenseModalProps> = ({
         await onValidateLicense({ licenseKey: licenseKey.trim() });
         setValidationState('success');
       } catch (error) {
-        console.error('Licence validation failed:', error);
+        devLog.error('Licence validation failed:', error);
         const message = error instanceof Error && error.message
           ? error.message
           : 'Unable to validate your licence. Please try again.';
@@ -88,7 +89,7 @@ export const ChangeLicenseModal: React.FC<ChangeLicenseModalProps> = ({
     try {
       await onComplete({ licenseKey: licenseKey.trim() });
     } catch (error) {
-      console.error('License change failed:', error);
+      devLog.error('License change failed:', error);
       const message = error instanceof Error && error.message
         ? error.message
         : 'Unable to activate your licence. Please try again.';

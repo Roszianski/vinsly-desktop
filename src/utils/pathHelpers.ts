@@ -1,4 +1,5 @@
 import { homeDir, join, normalize } from '@tauri-apps/api/path';
+import { devLog } from './devLogger';
 
 let cachedHomeDir: string | null = null;
 
@@ -127,7 +128,7 @@ export async function resolveAgentPath(rawPath?: string): Promise<string | null>
 
   // Validate path safety before processing
   if (!isPathSafe(normalized)) {
-    console.warn('Unsafe path detected:', normalized);
+    devLog.warn('Unsafe path detected:', normalized);
     return null;
   }
 

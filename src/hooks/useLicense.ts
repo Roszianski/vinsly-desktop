@@ -3,6 +3,7 @@ import { LicenseInfo } from '../types/licensing';
 import { getStorageItem, removeStorageItem, setStorageItem } from '../utils/storage';
 import { validateLicenseWithLemon } from '../utils/lemonLicensingClient';
 import { ToastType } from '../components/Toast';
+import { devLog } from '../utils/devLogger';
 
 // Grace period constants
 const GRACE_PERIOD_KEY = 'vinsly-license-grace-expires';
@@ -54,7 +55,7 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
 
       // Validate required fields
       if (!storedLicense.licenseKey || !storedLicense.instanceId) {
-        console.warn('Invalid stored license - missing required fields');
+        devLog.warn('Invalid stored license - missing required fields');
         await removeStorageItem('vinsly-license-info');
         if (!cancelled) {
           setLicenseInfo(null);
@@ -94,7 +95,7 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
           setGraceExpiresAt(null);
         }
       } catch (error) {
-        console.error('License validation failed:', error);
+        devLog.error('License validation failed:', error);
 
         // Check if we're within grace period
         const storedGraceExpiry = await getStorageItem<string>(GRACE_PERIOD_KEY);

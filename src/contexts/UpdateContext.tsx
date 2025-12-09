@@ -3,6 +3,7 @@ import { useUpdater } from '../hooks/useUpdater';
 import { useToast } from './ToastContext';
 import { useLicenseContext } from './LicenseContext';
 import { PendingUpdateDetails } from '../types/updater';
+import { devLog } from '../utils/devLogger';
 
 interface UpdateContextType {
   isCheckingUpdate: boolean;
@@ -52,7 +53,7 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
       try {
         await checkForUpdate();
       } catch (error) {
-        console.warn('Initial update check failed', error);
+        devLog.warn('Initial update check failed', error);
       } finally {
         setInitialCheckComplete(true);
       }
@@ -69,7 +70,7 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
         showToast('info', `Vinsly ${update.version} is available.`);
       }
     } catch (error) {
-      console.error('Manual update check failed', error);
+      devLog.error('Manual update check failed', error);
       showToast('error', 'Unable to check for updates right now.');
     }
   }, [checkForUpdate, showToast]);
@@ -79,7 +80,7 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
       showToast('info', 'Installing update...');
       await installUpdate();
     } catch (error) {
-      console.error('Update installation failed', error);
+      devLog.error('Update installation failed', error);
       showToast('error', 'Unable to install the update. Please try again.');
     }
   }, [installUpdate, showToast]);

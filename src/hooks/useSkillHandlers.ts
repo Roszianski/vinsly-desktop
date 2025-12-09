@@ -10,6 +10,7 @@ import {
   exportSkillsArchive,
   importSkillArchive,
 } from '../utils/tauriCommands';
+import { devLog } from '../utils/devLogger';
 
 export interface UseSkillHandlersOptions {
   skills: Skill[];
@@ -93,7 +94,7 @@ export function useSkillHandlers(options: UseSkillHandlersOptions): UseSkillHand
       try {
         await revealItemInDir(targetPath);
       } catch (error) {
-        console.error('Failed to reveal skill folder:', error);
+        devLog.error('Failed to reveal skill folder:', error);
         showToast('error', 'Failed to reveal the skill folder.');
       }
     },
@@ -119,7 +120,7 @@ export function useSkillHandlers(options: UseSkillHandlersOptions): UseSkillHand
         await exportSkillDirectory(directoryPath, destination);
         showToast('success', `Exported "${skill.name}"`);
       } catch (error) {
-        console.error('Error exporting skill:', error);
+        devLog.error('Error exporting skill:', error);
         showToast('error', 'Failed to export the skill.');
       }
     },
@@ -168,7 +169,7 @@ export function useSkillHandlers(options: UseSkillHandlersOptions): UseSkillHand
       await refreshGlobalSkills();
       showToast('success', 'Skill imported into ~/.claude/skills');
     } catch (error) {
-      console.error('Error importing skill:', error);
+      devLog.error('Error importing skill:', error);
       showToast('error', 'Failed to import skill archive.');
     }
   }, [refreshGlobalSkills, showToast]);

@@ -27,6 +27,7 @@ import { openImportDialog } from '../../utils/agentImport';
 import { getStorageItem, setStorageItem } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { devLog } from '../../utils/devLogger';
 
 interface AgentListScreenProps {
   agents: Agent[];
@@ -335,7 +336,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
     try {
       await openImportDialog((importedAgents, errors) => {
         if (errors.length > 0) {
-          console.error('Import errors:', errors);
+          devLog.error('Import errors:', errors);
           alert(`Import completed with errors:\n${errors.join('\n')}`);
         }
         if (importedAgents.length > 0) {

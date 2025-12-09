@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
+import { devLog } from '../utils/devLogger';
 
 /**
  * Command interface - all undoable operations must implement this
@@ -66,7 +67,7 @@ export function useHistory(config: HistoryConfig = {}) {
    */
   const executeCommand = useCallback(async (command: Command): Promise<boolean> => {
     if (isExecutingRef.current) {
-      console.warn('Command already executing, skipping');
+      devLog.warn('Command already executing, skipping');
       return false;
     }
 
@@ -99,7 +100,7 @@ export function useHistory(config: HistoryConfig = {}) {
       notifyChange();
       return true;
     } catch (error) {
-      console.error('Failed to execute command:', error);
+      devLog.error('Failed to execute command:', error);
       return false;
     } finally {
       isExecutingRef.current = false;
@@ -129,7 +130,7 @@ export function useHistory(config: HistoryConfig = {}) {
       notifyChange();
       return command.description;
     } catch (error) {
-      console.error('Failed to undo command:', error);
+      devLog.error('Failed to undo command:', error);
       return null;
     } finally {
       isExecutingRef.current = false;
@@ -159,7 +160,7 @@ export function useHistory(config: HistoryConfig = {}) {
       notifyChange();
       return command.description;
     } catch (error) {
-      console.error('Failed to redo command:', error);
+      devLog.error('Failed to redo command:', error);
       return null;
     } finally {
       isExecutingRef.current = false;

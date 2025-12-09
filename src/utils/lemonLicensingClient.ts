@@ -7,6 +7,8 @@
  * Docs: https://docs.lemonsqueezy.com/api/license-api
  */
 
+import { devLog } from './devLogger';
+
 const LICENSE_API_BASE = 'https://api.lemonsqueezy.com/v1/licenses';
 
 // Network configuration
@@ -161,7 +163,7 @@ export async function validateLicenseWithLemon(
     const payload = await response.json().catch(() => null);
 
     if (!response.ok) {
-      console.error('[Lemon] license validation failed', {
+      devLog.error('[Lemon] license validation failed', {
         status: response.status,
         statusText: response.statusText,
         error: payload?.error,
@@ -183,7 +185,7 @@ export async function validateLicenseWithLemon(
       licenseKey: payload?.license_key,
     };
   } catch (err) {
-    console.error('[Lemon] license validation error', err);
+    devLog.error('[Lemon] license validation error', err);
     const errorMessage = err instanceof Error ? err.message : 'network_error';
     return {
       valid: false,
@@ -219,7 +221,7 @@ export async function activateLicenseWithLemon(
     const payload = await response.json().catch(() => null);
 
     if (!response.ok) {
-      console.error('[Lemon] license activation failed', {
+      devLog.error('[Lemon] license activation failed', {
         status: response.status,
         statusText: response.statusText,
         error: payload?.error,
@@ -240,7 +242,7 @@ export async function activateLicenseWithLemon(
       meta: payload?.meta,
     };
   } catch (err) {
-    console.error('[Lemon] license activation error', err);
+    devLog.error('[Lemon] license activation error', err);
     const errorMessage = err instanceof Error ? err.message : 'network_error';
     return {
       activated: false,
@@ -276,7 +278,7 @@ export async function deactivateLicenseWithLemon(
     const payload = await response.json().catch(() => null);
 
     if (!response.ok) {
-      console.error('[Lemon] license deactivation failed', {
+      devLog.error('[Lemon] license deactivation failed', {
         status: response.status,
         statusText: response.statusText,
         error: payload?.error,
@@ -294,7 +296,7 @@ export async function deactivateLicenseWithLemon(
       error: deactivated ? null : (payload?.error ?? 'deactivation_failed'),
     };
   } catch (err) {
-    console.error('[Lemon] license deactivation error', err);
+    devLog.error('[Lemon] license deactivation error', err);
     const errorMessage = err instanceof Error ? err.message : 'network_error';
     return {
       deactivated: false,

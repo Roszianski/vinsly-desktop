@@ -4,6 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { useToast } from '../contexts/ToastContext';
 import { cancelHomeDiscovery, DEFAULT_HOME_DISCOVERY_DEPTH, discoverHomeDirectories } from '../utils/homeDiscovery';
 import { LoadAgentsOptions, ScanSettings } from '../types';
+import { devLog } from '../utils/devLogger';
 
 type ScanSource = 'home' | 'watched';
 
@@ -132,7 +133,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
         setCustomPaths(prev => [...prev, selected]);
       }
     } catch (error) {
-      console.error('Failed to select directory:', error);
+      devLog.error('Failed to select directory:', error);
       showToast('error', 'Unable to add that folder. Please try again.');
     }
   };
@@ -213,7 +214,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
         }
       } catch (error) {
         if (!(error instanceof Error && error.name === 'AbortError')) {
-          console.error('Home discovery failed:', error);
+          devLog.error('Home discovery failed:', error);
           showToast('error', 'Unable to read your home directory. Try again.');
         }
         setIsScanning(false);
@@ -253,7 +254,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           : `Scan complete — ${result.newCount} new resource${result.newCount === 1 ? '' : 's'} found.`
       );
     } catch (error) {
-      console.error('Scan failed:', error);
+      devLog.error('Scan failed:', error);
       showToast('error', 'Scan failed. Please try again.');
       setScanMessage(null);
     } finally {

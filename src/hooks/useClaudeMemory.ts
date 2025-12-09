@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AgentScope, ClaudeMemory } from '../types';
 import { readClaudeMemory, writeClaudeMemory } from '../utils/tauriCommands';
 import { ToastType } from '../components/Toast';
+import { devLog } from '../utils/devLogger';
 
 export interface UseClaudeMemoryOptions {
   showToast: (type: ToastType, message: string) => void;
@@ -66,7 +67,7 @@ export function useClaudeMemory(options: UseClaudeMemoryOptions): UseClaudeMemor
           setProjectMemory(null);
         }
       } catch (error) {
-        console.error('Error loading CLAUDE.md files:', error);
+        devLog.error('Error loading CLAUDE.md files:', error);
         showToast('error', 'Failed to load memory files');
       } finally {
         setIsLoading(false);
@@ -106,7 +107,7 @@ export function useClaudeMemory(options: UseClaudeMemoryOptions): UseClaudeMemor
         lastSavedContentRef.current.project = projectResult.content;
       }
     } catch (error) {
-      console.error('Error loading CLAUDE.md:', error);
+      devLog.error('Error loading CLAUDE.md:', error);
       showToast('error', 'Failed to load memory file');
     } finally {
       setIsLoading(false);
@@ -151,7 +152,7 @@ export function useClaudeMemory(options: UseClaudeMemoryOptions): UseClaudeMemor
 
       showToast('success', 'Memory saved');
     } catch (error) {
-      console.error('Error saving CLAUDE.md:', error);
+      devLog.error('Error saving CLAUDE.md:', error);
       showToast('error', `Failed to save memory: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }, [projectPath, showToast]);

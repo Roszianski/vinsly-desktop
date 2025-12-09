@@ -12,6 +12,7 @@ import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { resolveAgentPath } from '../utils/pathHelpers';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { getToolsState } from '../utils/toolHelpers';
+import { devLog } from '../utils/devLogger';
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -113,7 +114,7 @@ export const AgentGridCard: React.FC<AgentGridCardProps> = ({
       }
       await revealItemInDir(resolvedPath);
     } catch (error) {
-      console.error('Error revealing file:', error);
+      devLog.error('Error revealing file:', error);
       showToast('error', 'Failed to reveal the agent in your file manager.');
     } finally {
       setIsRevealing(false);

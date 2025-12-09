@@ -516,3 +516,12 @@ export async function importTextFile(path: string): Promise<string> {
 export async function importBinaryFile(path: string): Promise<number[]> {
   return await invoke<number[]>('import_binary_file', { path });
 }
+
+// ============================================================================
+// Window Appearance
+// ============================================================================
+
+// Set the title bar appearance to match the app theme (macOS only)
+export async function setTitleBarTheme(dark: boolean): Promise<void> {
+  return await invoke('set_title_bar_theme', { dark });
+}

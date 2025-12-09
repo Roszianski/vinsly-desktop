@@ -10,6 +10,7 @@ import { Header } from './Header';
 import { Theme } from '../hooks/useTheme';
 import { LicenseInfo } from '../types/licensing';
 import { LoadAgentsOptions, ScanSettings } from '../types';
+import { PendingUpdateDetails } from '../types/updater';
 
 interface AppShellProps {
   // Theme
@@ -35,7 +36,7 @@ interface AppShellProps {
   onCheckForUpdates: () => void;
   isCheckingUpdate: boolean;
   isInstallingUpdate: boolean;
-  pendingUpdate: any;
+  pendingUpdate: PendingUpdateDetails | null;
   appVersion: string;
   lastUpdateCheckAt: string | null;
   onInstallUpdate: () => void;
