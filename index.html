@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
@@ -7,9 +7,10 @@
     <title>Vinsly - Agent Studio</title>
     <style>
       /* Inline critical styles to prevent flash before CSS loads */
-      /* Must match --color-v-dark from index.css: #15171c */
-      html.dark body, html.dark #root { background-color: #15171c; }
-      html:not(.dark) body, html:not(.dark) #root { background-color: #FBFBFA; }
+      /* Must match colors from index.css. Use !important to win over late-loading Tailwind */
+      /* Default (no class yet) and .dark both get dark background */
+      html:not(.light), html:not(.light) body, html:not(.light) #root, html:not(.light) #root > div { background-color: #15171c !important; }
+      html.light, html.light body, html.light #root, html.light #root > div { background-color: #FBFBFA !important; }
       #root { min-height: 100vh; }
     </style>
     <script>
@@ -19,10 +20,12 @@
         var cachedTheme = localStorage.getItem('vinsly-theme-cache');
         if (cachedTheme === 'light') {
           document.documentElement.classList.remove('dark');
-        } else if (cachedTheme === 'dark') {
+          document.documentElement.classList.add('light');
+        } else {
+          // Default to dark if no cache or cache is 'dark'
+          document.documentElement.classList.remove('light');
           document.documentElement.classList.add('dark');
         }
-        // If no cache, default 'dark' class from HTML stays
       })();
     </script>
   </head>

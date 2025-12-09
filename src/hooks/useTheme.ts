@@ -67,6 +67,8 @@ export function useTheme(): UseThemeResult {
         const initialTheme = savedPreference === 'system' ? systemTheme : savedPreference;
         if (themeResolvedRef.current) return;
         themeResolvedRef.current = true;
+        // Write to cache immediately so next load is instant
+        localStorage.setItem(THEME_CACHE_KEY, initialTheme);
         setThemeMode(initialTheme);
         return;
       }
@@ -76,6 +78,8 @@ export function useTheme(): UseThemeResult {
       const fallbackTheme = savedTheme || 'dark';
       if (themeResolvedRef.current) return;
       themeResolvedRef.current = true;
+      // Write to cache immediately so next load is instant
+      localStorage.setItem(THEME_CACHE_KEY, fallbackTheme);
       setThemeMode(fallbackTheme);
     };
 
