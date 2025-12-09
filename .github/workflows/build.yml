@@ -163,6 +163,10 @@ jobs:
           echo "Release files:"
           ls -la release-files/
 
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -171,29 +175,23 @@ jobs:
           files: release-files/*
           generate_release_notes: true
           body: |
-            ## Downloads
+            ## Download Vinsly
 
-            | Platform | File | Notes |
-            |----------|------|-------|
-            | **macOS (M1/M2/M3/M4)** | `Vinsly_*_aarch64.dmg` | Apple Silicon Macs |
-            | **macOS (Intel)** | `Vinsly_*_x64.dmg` | Intel-based Macs |
-            | **Windows** | `Vinsly_*_x64-setup.exe` | 64-bit installer |
-            | **Linux (Debian/Ubuntu)** | `Vinsly_*_amd64.deb` | `sudo dpkg -i Vinsly_*.deb` |
-            | **Linux (Universal)** | `Vinsly_*_amd64.AppImage` | `chmod +x` then run |
+            | Platform | Download |
+            |----------|----------|
+            | **macOS (Apple Silicon)** | [Download for M1/M2/M3/M4](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_aarch64.dmg) |
+            | **macOS (Intel)** | [Download for Intel Mac](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_x64.dmg) |
+            | **Windows** | [Download Installer](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_x64-setup.exe) |
+            | **Linux (deb)** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_amd64.deb) |
+            | **Linux (AppImage)** | [Download AppImage](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_amd64.AppImage) |
 
-            > 💡 **Not sure which Mac you have?** Click  → "About This Mac". If it says "Chip: Apple M1/M2/M3/M4" use the first option. If it says "Processor: Intel" use the second.
-
-            > ℹ️ Other files (`.sig`, `.tar.gz`) are for automatic updates — you can ignore them.
+            > 💡 **Not sure which Mac?** Click  → "About This Mac". If it says "Chip: Apple M1/M2/M3/M4" use the first option.
 
             ---
 
-            ## Notes
+            **Windows:** May show SmartScreen warning — click "More info" → "Run anyway"
 
-            **Windows users:** Windows may show a security warning (SmartScreen). Click "More info" then "Run anyway" to proceed.
-
-            **Linux AppImage users:** Make it executable first: `chmod +x Vinsly_*.AppImage`
-
-            ---
+            **Linux AppImage:** Make executable first: `chmod +x Vinsly_*.AppImage`
 
   generate-manifest:
     needs: create-release
