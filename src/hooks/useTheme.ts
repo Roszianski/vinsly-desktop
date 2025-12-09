@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getStorageItem, setStorageItem } from '../utils/storage';
-import { setTitleBarTheme, writeThemeCache } from '../utils/tauriCommands';
+import { setTitleBarTheme } from '../utils/tauriCommands';
 
 export type Theme = 'light' | 'dark';
 
@@ -67,9 +67,8 @@ export function useTheme(): UseThemeResult {
         const initialTheme = savedPreference === 'system' ? systemTheme : savedPreference;
         if (themeResolvedRef.current) return;
         themeResolvedRef.current = true;
-        // Write to cache immediately so next load is instant
+        // Write to localStorage cache for instant access on next load
         localStorage.setItem(THEME_CACHE_KEY, initialTheme);
-        writeThemeCache(initialTheme === 'dark').catch(() => {});
         setThemeMode(initialTheme);
         return;
       }
@@ -79,9 +78,8 @@ export function useTheme(): UseThemeResult {
       const fallbackTheme = savedTheme || 'dark';
       if (themeResolvedRef.current) return;
       themeResolvedRef.current = true;
-      // Write to cache immediately so next load is instant
+      // Write to localStorage cache for instant access on next load
       localStorage.setItem(THEME_CACHE_KEY, fallbackTheme);
-      writeThemeCache(fallbackTheme === 'dark').catch(() => {});
       setThemeMode(fallbackTheme);
     };
 
@@ -101,10 +99,7 @@ export function useTheme(): UseThemeResult {
       setStorageItem('vinsly-theme', theme);
       // Also save to localStorage cache for instant access on next load
       localStorage.setItem(THEME_CACHE_KEY, theme);
-      // Write to disk cache for Rust to read on startup (title bar theme)
-      writeThemeCache(theme === 'dark').catch(() => {
-        // Silently ignore errors
-      });
+      // Note: Disk cache for Rust is written automatically by setTitleBarTheme
     }
   }, [theme, themeLoaded]);
 

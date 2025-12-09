@@ -2769,9 +2769,8 @@ fn read_theme_cache() -> Option<bool> {
     }
 }
 
-/// Write the theme cache to disk
-#[tauri::command]
-fn write_theme_cache(dark: bool) -> Result<(), String> {
+/// Write the theme cache to disk (internal function)
+fn write_theme_cache_internal(dark: bool) -> Result<(), String> {
     let path = get_theme_cache_path().ok_or("Could not determine data directory")?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -2783,6 +2782,9 @@ fn write_theme_cache(dark: bool) -> Result<(), String> {
 // On Windows/Linux: Sets the webview background color
 #[tauri::command]
 fn set_title_bar_theme(window: tauri::WebviewWindow, dark: bool) {
+    // Also write to cache so the next startup uses this theme
+    let _ = write_theme_cache_internal(dark);
+
     // Vinsly theme colors:
     // Dark mode:  #1f2229 = RGB(31, 34, 41)
     // Light mode: #F7F7F5 = RGB(247, 247, 245)
@@ -2982,7 +2984,6 @@ pub fn run() {
             import_binary_file,
             // Window appearance
             set_title_bar_theme,
-            write_theme_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

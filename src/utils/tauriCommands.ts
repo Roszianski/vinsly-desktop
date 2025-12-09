@@ -521,12 +521,8 @@ export async function importBinaryFile(path: string): Promise<number[]> {
 // Window Appearance
 // ============================================================================
 
-// Set the title bar appearance to match the app theme (macOS only)
+// Set the title bar appearance to match the app theme
+// Also writes to disk cache so Rust can read the theme on next startup
 export async function setTitleBarTheme(dark: boolean): Promise<void> {
   return await invoke('set_title_bar_theme', { dark });
-}
-
-// Write the theme cache to disk (for instant title bar theme on startup)
-export async function writeThemeCache(dark: boolean): Promise<void> {
-  return await invoke('write_theme_cache', { dark });
 }
