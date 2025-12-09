@@ -46,7 +46,7 @@ import { devLog } from '../utils/devLogger';
 const HOME_DISCOVERY_MAX_DEPTH = DEFAULT_HOME_DISCOVERY_DEPTH;
 
 export const AppContent: React.FC = () => {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, themeLoaded, toggleTheme } = useTheme();
   const { userDisplayName, setDisplayName } = useUserProfile();
   const { showToast, toasts, removeToast } = useToast();
 
@@ -702,7 +702,7 @@ export const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-v-light-bg dark:bg-v-dark text-v-light-text-primary dark:text-v-text-primary transition-colors duration-200">
+    <div className={`min-h-screen bg-v-light-bg dark:bg-v-dark text-v-light-text-primary dark:text-v-text-primary ${themeLoaded ? 'transition-colors duration-200' : ''}`}>
       {/* Draggable title bar region for macOS traffic lights */}
       {isMacLike && (
         <div
