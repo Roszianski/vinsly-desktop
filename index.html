@@ -12,6 +12,19 @@
       html:not(.dark) body, html:not(.dark) #root { background-color: #FBFBFA; }
       #root { min-height: 100vh; }
     </style>
+    <script>
+      // Synchronously set theme class from localStorage cache before anything renders
+      // This prevents flash when saved theme differs from default
+      (function() {
+        var cachedTheme = localStorage.getItem('vinsly-theme-cache');
+        if (cachedTheme === 'light') {
+          document.documentElement.classList.remove('dark');
+        } else if (cachedTheme === 'dark') {
+          document.documentElement.classList.add('dark');
+        }
+        // If no cache, default 'dark' class from HTML stays
+      })();
+    </script>
   </head>
 
   <body class="bg-v-light-bg dark:bg-v-dark font-sans">

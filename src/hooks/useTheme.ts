@@ -15,9 +15,19 @@ export interface UseThemeResult {
   getSystemTheme: () => Theme;
 }
 
-// Always start with 'dark' to match index.html's initial class
-// This prevents flash of wrong theme while loading saved preference
-const getInitialTheme = (): Theme => 'dark';
+// localStorage key for theme cache (read synchronously in index.html to prevent flash)
+const THEME_CACHE_KEY = 'vinsly-theme-cache';
+
+// Read from localStorage cache first (set by index.html script), fallback to 'dark'
+const getInitialTheme = (): Theme => {
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem(THEME_CACHE_KEY);
+    if (cached === 'light' || cached === 'dark') {
+      return cached;
+    }
+  }
+  return 'dark';
+};
 
 /**
  * Custom hook for managing theme state with persistence and system preference detection
@@ -83,6 +93,8 @@ export function useTheme(): UseThemeResult {
     });
     if (themeLoaded) {
       setStorageItem('vinsly-theme', theme);
+      // Also save to localStorage cache for instant access on next load
+      localStorage.setItem(THEME_CACHE_KEY, theme);
     }
   }, [theme, themeLoaded]);
 

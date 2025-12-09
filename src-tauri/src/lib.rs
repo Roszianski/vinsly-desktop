@@ -2830,57 +2830,10 @@ pub fn run() {
         // NOTE: fs plugin removed for security - use vetted export_*/import_* commands instead
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .setup(|app| {
-            // Set the initial title bar appearance and background color to dark (app defaults to dark mode)
-            // Dark mode color: #1f2229 = RGB(31, 34, 41)
-
-            #[cfg(target_os = "macos")]
-            {
-                use cocoa::appkit::{NSColor, NSWindow};
-                use cocoa::base::{id, nil};
-                use cocoa::foundation::NSString;
-                use objc::{class, msg_send, sel, sel_impl};
-
-                if let Some(window) = app.get_webview_window("main") {
-                    if let Ok(ns_win) = window.ns_window() {
-                        unsafe {
-                            let ns_win = ns_win as id;
-
-                            // Set NSAppearance to dark
-                            let appearance_name =
-                                cocoa::foundation::NSString::alloc(nil)
-                                    .init_str("NSAppearanceNameDarkAqua");
-                            let appearance: id = msg_send![
-                                class!(NSAppearance),
-                                appearanceNamed: appearance_name
-                            ];
-                            let _: () = msg_send![ns_win, setAppearance: appearance];
-
-                            // Set background color to Vinsly dark theme: #1f2229
-                            let bg_color = NSColor::colorWithRed_green_blue_alpha_(
-                                nil,
-                                31.0 / 255.0,
-                                34.0 / 255.0,
-                                41.0 / 255.0,
-                                1.0,
-                            );
-                            ns_win.setBackgroundColor_(bg_color);
-                        }
-                    }
-                }
-            }
-
-            #[cfg(not(target_os = "macos"))]
-            {
-                // On Windows and Linux, set the initial background color to dark theme
-                use tauri::Color;
-                if let Some(window) = app.get_webview_window("main") {
-                    // Dark mode: #1f2229
-                    let color = Color(31, 34, 41, 255);
-                    let _ = window.set_background_color(Some(color));
-                }
-            }
-
+        .setup(|_app| {
+            // Title bar theme is set by the frontend via set_title_bar_theme command
+            // after reading the user's saved preference from localStorage cache.
+            // This avoids a flash when the saved theme differs from dark (the default).
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
