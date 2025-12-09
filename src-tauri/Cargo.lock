@@ -4042,29 +4042,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tauri-app"
-version = "1.0.0"
-dependencies = [
- "cocoa",
- "dirs 5.0.1",
- "objc",
- "serde",
- "serde_json",
- "sysinfo",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "tauri-plugin-process",
- "tauri-plugin-store",
- "tauri-plugin-updater",
- "tokio",
- "walkdir",
- "window-vibrancy",
- "zip 0.6.6",
-]
-
-[[package]]
 name = "tauri-build"
 version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4878,6 +4855,29 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vinsly"
+version = "1.0.0"
+dependencies = [
+ "cocoa",
+ "dirs 5.0.1",
+ "objc",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "tauri-plugin-process",
+ "tauri-plugin-store",
+ "tauri-plugin-updater",
+ "tokio",
+ "walkdir",
+ "window-vibrancy",
+ "zip 0.6.6",
+]
 
 [[package]]
 name = "vswhom"

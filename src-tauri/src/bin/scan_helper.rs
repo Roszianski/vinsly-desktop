@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use tauri_app_lib::scanner::{scan_project_directories, DEFAULT_DISCOVERY_DEPTH};
+use vinsly_lib::scanner::{scan_project_directories, DEFAULT_DISCOVERY_DEPTH};
 
 fn main() {
     if let Err(err) = run() {

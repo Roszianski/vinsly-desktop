@@ -21,7 +21,7 @@ Scans the home directory for project folders containing Claude configurations.
 **Parameters:**
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `max_depth` | `number` | No | Maximum directory depth to scan (default: 3) |
+| `max_depth` | `number` | No | Maximum directory depth to scan (default: 12) |
 | `include_protected_dirs` | `boolean` | No | Include protected directories on macOS (default: false) |
 | `force` | `boolean` | No | Bypass cache and force fresh scan (default: false) |
 
@@ -32,7 +32,7 @@ Scans the home directory for project folders containing Claude configurations.
 import { invoke } from '@tauri-apps/api/core';
 
 const directories = await invoke<string[]>('discover_project_directories', {
-  maxDepth: 3,
+  maxDepth: 12,
   includeProtectedDirs: false,
 });
 ```
