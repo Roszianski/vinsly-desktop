@@ -104,6 +104,36 @@ export const Header: React.FC<HeaderProps> = ({
   const [showSessionPanel, setShowSessionPanel] = useState(false);
   const [defaultTheme, setDefaultTheme] = useState<'system' | 'light' | 'dark'>('system');
   const [defaultView, setDefaultView] = useState<'table' | 'grid'>('table');
+  const [showScanHighlight, setShowScanHighlight] = useState(false);
+
+  // Check if this is first scan after activation
+  useEffect(() => {
+    const checkFirstScan = async () => {
+      if (licenseInfo?.status !== 'active') {
+        setShowScanHighlight(false);
+        return;
+      }
+      const hasScanned = await getStorageItem<boolean>('vinsly-has-scanned-after-activation');
+      if (!hasScanned) {
+        setShowScanHighlight(true);
+        // Auto-dismiss after 15 seconds
+        const timer = setTimeout(() => {
+          setShowScanHighlight(false);
+        }, 15000);
+        return () => clearTimeout(timer);
+      }
+    };
+    checkFirstScan();
+  }, [licenseInfo?.status]);
+
+  // Clear highlight when scan modal opens
+  const handleScanClick = async () => {
+    if (showScanHighlight) {
+      setShowScanHighlight(false);
+      await setStorageItem('vinsly-has-scanned-after-activation', true);
+    }
+    setShowScanModal(true);
+  };
 
   // Load default view from storage on mount
   useEffect(() => {
@@ -193,8 +223,12 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-3">
             {/* Scan Button */}
             <button
-              onClick={() => setShowScanModal(true)}
-              className="px-4 py-2 rounded-lg border border-v-light-border dark:border-v-border text-sm font-medium text-v-light-text-primary dark:text-v-text-primary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer"
+              onClick={handleScanClick}
+              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 ${
+                showScanHighlight
+                  ? 'border-v-accent bg-v-accent/10 text-v-accent animate-pulse ring-2 ring-v-accent/50 ring-offset-2 ring-offset-v-light-bg dark:ring-offset-v-dark'
+                  : 'border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark'
+              }`}
               aria-label="Scan for agents"
               aria-busy={isScanning}
             >

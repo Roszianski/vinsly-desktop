@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { Skill, AgentScope } from '../../types';
+import { listContainer } from '../../animations';
 import { PlusIcon } from '../icons/PlusIcon';
 import { SearchIcon } from '../icons/SearchIcon';
 import { UploadIcon } from '../icons/UploadIcon';
@@ -371,11 +372,30 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
       </div>
       <div className="p-4">
         {filteredSkills.length === 0 ? (
-          <div className="text-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
-            No skills found.
+          <div className="flex flex-col items-center justify-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
+            <LayersIcon className="w-12 h-12 mb-4 opacity-50" />
+            <p className="text-lg font-medium mb-2">No skills found</p>
+            <p className="text-sm mb-4">
+              {searchQuery ? 'Try adjusting your search' : 'Create your first skill'}
+            </p>
+            {!searchQuery && (
+              <button
+                onClick={onCreateSkill}
+                className="flex items-center gap-2 px-4 py-2 bg-v-accent text-white rounded-lg hover:bg-v-accent-hover transition-colors"
+              >
+                <PlusIcon className="w-4 h-4" />
+                New Skill
+              </button>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <motion.div
+            key={`skill-grid-${filter}`}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+            variants={listContainer}
+            initial="hidden"
+            animate="visible"
+          >
             {filteredSkills.map(skill => (
               <SkillGridCard
                 key={skill.id}
@@ -390,7 +410,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
                 highlightTerm={searchQuery}
               />
             ))}
-          </div>
+          </motion.div>
         )}
       </div>
     </div>
@@ -443,7 +463,12 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
         </div>
       </div>
       {filteredSkills.length > 0 ? (
-        <div>
+        <motion.div
+          key={`skill-table-${filter}`}
+          variants={listContainer}
+          initial="hidden"
+          animate="visible"
+        >
           {filteredSkills.map(skill => (
             <SkillListRow
               key={skill.id}
@@ -458,10 +483,23 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
               highlightTerm={searchQuery}
             />
           ))}
-        </div>
+        </motion.div>
       ) : (
-        <div className="text-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
-          No skills found.
+        <div className="flex flex-col items-center justify-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
+          <LayersIcon className="w-12 h-12 mb-4 opacity-50" />
+          <p className="text-lg font-medium mb-2">No skills found</p>
+          <p className="text-sm mb-4">
+            {searchQuery ? 'Try adjusting your search' : 'Create your first skill'}
+          </p>
+          {!searchQuery && (
+            <button
+              onClick={onCreateSkill}
+              className="flex items-center gap-2 px-4 py-2 bg-v-accent text-white rounded-lg hover:bg-v-accent-hover transition-colors"
+            >
+              <PlusIcon className="w-4 h-4" />
+              New Skill
+            </button>
+          )}
         </div>
       )}
     </div>

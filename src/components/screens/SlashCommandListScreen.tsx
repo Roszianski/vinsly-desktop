@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { SlashCommand, AgentScope } from '../../types';
+import { listContainer } from '../../animations';
 import { PlusIcon } from '../icons/PlusIcon';
 import { SearchIcon } from '../icons/SearchIcon';
 import { GlobeIcon } from '../icons/GlobeIcon';
@@ -588,7 +589,13 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
               </div>
             </div>
             <div className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <motion.div
+                key={`command-grid-${filter}`}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                variants={listContainer}
+                initial="hidden"
+                animate="visible"
+              >
                 {filteredCommands.map(command => {
                   const isSelected = selectedCommandIds.has(command.id);
                   const ScopeIcon = command.scope === AgentScope.Project ? FolderIcon : GlobeIcon;
@@ -654,7 +661,7 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
                     </div>
                   );
                 })}
-              </div>
+              </motion.div>
             </div>
           </>
           )
@@ -727,7 +734,13 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
                 )}
               </div>
             ) : (
-              filteredCommands.map(command => {
+              <motion.div
+                key={`command-table-${filter}`}
+                variants={listContainer}
+                initial="hidden"
+                animate="visible"
+              >
+              {filteredCommands.map(command => {
                 const simplifiedPath = command.path
                   .replace(/^\/Users\/([^/]+)/, '~')
                   .replace(/^C:\\Users\\([^\\]+)/, '~');
@@ -794,10 +807,11 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
                     </div>
                   </div>
                 );
-              })
-            )}
-          </div>
+              })}
+          </motion.div>
         )}
+        </div>
+      )}
       </div>
 
       {/* Delete confirmation dialog */}

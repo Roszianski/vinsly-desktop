@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { MCPServer, MCPScope, getMCPScopeDisplayName } from '../../types/mcp';
+import { listContainer } from '../../animations';
 import { PlusIcon } from '../icons/PlusIcon';
 import { SearchIcon } from '../icons/SearchIcon';
 import { ListIcon } from '../icons/ListIcon';
@@ -375,7 +377,13 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
           )}
         </div>
       ) : (
-        filteredServers.map(server => (
+        <motion.div
+          key={`mcp-table-${filter}`}
+          variants={listContainer}
+          initial="hidden"
+          animate="visible"
+        >
+        {filteredServers.map(server => (
           <div
             key={server.id}
             className="grid gap-4 px-4 py-3 items-center border-b border-v-light-border/50 dark:border-v-border/50 hover:bg-v-light-hover dark:hover:bg-v-light-dark/50 transition-colors group"
@@ -447,7 +455,8 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
               </button>
             </div>
           </div>
-        ))
+        ))}
+        </motion.div>
       )}
     </div>
   );
@@ -492,7 +501,13 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
               <span>Select all</span>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+          <motion.div
+            key={`mcp-grid-${filter}`}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4"
+            variants={listContainer}
+            initial="hidden"
+            animate="visible"
+          >
             {filteredServers.map(server => (
             <div
               key={server.id}
@@ -540,7 +555,7 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
               </p>
             </div>
           ))}
-          </div>
+          </motion.div>
         </>
       )}
     </>

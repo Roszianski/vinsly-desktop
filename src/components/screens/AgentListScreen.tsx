@@ -7,6 +7,7 @@ import { PlusIcon } from '../icons/PlusIcon';
 import { SearchIcon } from '../icons/SearchIcon';
 import { DeleteIcon } from '../icons/DeleteIcon';
 import { LayersIcon } from '../icons/LayersIcon';
+// LayersIcon used for empty state
 import { FolderIcon } from '../icons/FolderIcon';
 import { NetworkIcon } from '../icons/NetworkIcon';
 import { DownloadIcon } from '../icons/DownloadIcon';
@@ -14,7 +15,6 @@ import { UploadIcon } from '../icons/UploadIcon';
 import { ListIcon } from '../icons/ListIcon';
 import { GridIcon } from '../icons/GridIcon';
 import { GlobeIcon } from '../icons/GlobeIcon';
-import { ChartIcon } from '../icons/ChartIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
 import { DocumentIcon } from '../icons/DocumentIcon';
 import { TerminalIcon } from '../icons/TerminalIcon';
@@ -38,12 +38,11 @@ interface AgentListScreenProps {
   onShowTeam: () => void;
   onShowSubagents: () => void;
   onShowSkills: () => void;
-  onShowAnalytics: () => void;
   onShowMemory: () => void;
   onShowCommands: () => void;
   onShowMCP: () => void;
   onShowHooks: () => void;
-  activeView: 'subagents' | 'skills' | 'team' | 'analytics' | 'memory' | 'commands' | 'mcp' | 'hooks';
+  activeView: 'subagents' | 'skills' | 'team' | 'memory' | 'commands' | 'mcp' | 'hooks';
   onToggleFavorite: (agent: Agent) => void;
   onImport?: (agents: Agent[], errors: string[]) => void;
   shortcutHint?: string;
@@ -72,7 +71,6 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
   onShowTeam,
   onShowSubagents,
   onShowSkills,
-  onShowAnalytics,
   onShowMemory,
   onShowCommands,
   onShowMCP,
@@ -451,23 +449,14 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Network and Analytics buttons */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={onShowTeam}
-              className="p-2 rounded-md border border-v-light-border dark:border-v-border hover:border-v-accent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent transition-colors"
-              title="Network View"
-            >
-              <NetworkIcon className="h-4 w-4" />
-            </button>
-            <button
-              onClick={onShowAnalytics}
-              className="p-2 rounded-md border border-v-light-border dark:border-v-border hover:border-v-accent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent transition-colors"
-              title="Analytics"
-            >
-              <ChartIcon className="h-4 w-4" />
-            </button>
-          </div>
+          {/* Network View button */}
+          <button
+            onClick={onShowTeam}
+            className="p-2 rounded-md border border-v-light-border dark:border-v-border hover:border-v-accent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent transition-colors"
+            title="Network View"
+          >
+            <NetworkIcon className="h-4 w-4" />
+          </button>
 
           {layoutLoaded && (
             <div className="flex items-center border border-v-light-border dark:border-v-border rounded-md overflow-hidden">
@@ -670,8 +659,21 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="text-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
-                No agents found.
+              <div className="flex flex-col items-center justify-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
+                <LayersIcon className="w-12 h-12 mb-4 opacity-50" />
+                <p className="text-lg font-medium mb-2">No agents found</p>
+                <p className="text-sm mb-4">
+                  {searchQuery ? 'Try adjusting your search' : 'Create your first agent'}
+                </p>
+                {!searchQuery && (
+                  <button
+                    onClick={onCreate}
+                    className="flex items-center gap-2 px-4 py-2 bg-v-accent text-white rounded-lg hover:bg-v-accent-hover transition-colors"
+                  >
+                    <PlusIcon className="w-4 h-4" />
+                    New Agent
+                  </button>
+                )}
               </div>
             )}
           </>
@@ -733,6 +735,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
                   >
                     <div style={{ height: totalVirtualHeight }} className="relative">
                       <motion.div
+                        key={`virtualized-list-${filter}`}
                         className="divide-y divide-v-light-border dark:divide-v-border absolute left-0 right-0 top-0"
                         style={{ transform: `translateY(${virtualizedOffset}px)` }}
                         variants={listContainer}
@@ -759,6 +762,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
                 </div>
               ) : (
                 <motion.div
+                  key={`list-${filter}`}
                   className="divide-y divide-v-light-border dark:divide-v-border"
                   variants={listContainer}
                   initial="hidden"
@@ -781,8 +785,21 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
                 </motion.div>
               )
             ) : (
-              <div className="text-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
-                No agents found.
+              <div className="flex flex-col items-center justify-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
+                <LayersIcon className="w-12 h-12 mb-4 opacity-50" />
+                <p className="text-lg font-medium mb-2">No agents found</p>
+                <p className="text-sm mb-4">
+                  {searchQuery ? 'Try adjusting your search' : 'Create your first agent'}
+                </p>
+                {!searchQuery && (
+                  <button
+                    onClick={onCreate}
+                    className="flex items-center gap-2 px-4 py-2 bg-v-accent text-white rounded-lg hover:bg-v-accent-hover transition-colors"
+                  >
+                    <PlusIcon className="w-4 h-4" />
+                    New Agent
+                  </button>
+                )}
               </div>
             )}
           </>

@@ -535,7 +535,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
 
         await deleteAgentFile(agent.path);
         setAgents(prev => prev.filter(a => a.id !== agentIdToDelete));
-        options.showToast('success', `Agent "${agent.name}" deleted successfully`);
+        // Toast is shown by WorkspaceContext with Undo button
       } catch (error) {
         console.error('Error deleting agent:', error);
         options.showToast(
@@ -557,7 +557,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
         }
 
         setAgents(prev => prev.filter(agent => !agentIdsToDelete.includes(agent.id)));
-        options.showToast('success', `Deleted ${agentsToDelete.length} agent(s) successfully`);
+        // Toast is shown by WorkspaceContext with Undo button
       } catch (error) {
         console.error('Error deleting agents:', error);
         options.showToast(
@@ -730,7 +730,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
 
         await deleteSkillFile(targetPath);
         setSkills(prev => prev.filter(s => s.id !== skillIdToDelete));
-        options.showToast('success', `Skill "${skill.name}" deleted successfully`);
+        // Toast is shown by WorkspaceContext with Undo button
       } catch (error) {
         console.error('Error deleting skill:', error);
         options.showToast(

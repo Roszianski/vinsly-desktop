@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { Hook, HookScope, getHookScopeDisplayName, getHookEventDisplayName } from '../../types/hooks';
+import { listContainer } from '../../animations';
 import { PlusIcon } from '../icons/PlusIcon';
 import { SearchIcon } from '../icons/SearchIcon';
 import { ListIcon } from '../icons/ListIcon';
@@ -377,7 +379,13 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
           )}
         </div>
       ) : (
-        filteredHooks.map(hook => (
+        <motion.div
+          key={`hooks-table-${filter}`}
+          variants={listContainer}
+          initial="hidden"
+          animate="visible"
+        >
+        {filteredHooks.map(hook => (
           <div
             key={hook.id}
             className="grid gap-4 px-4 py-3 items-center border-b border-v-light-border/50 dark:border-v-border/50 hover:bg-v-light-hover dark:hover:bg-v-light-dark/50 transition-colors group"
@@ -442,7 +450,8 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
               </button>
             </div>
           </div>
-        ))
+        ))}
+        </motion.div>
       )}
     </div>
   );
@@ -487,7 +496,13 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
               <span>Select all</span>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+          <motion.div
+            key={`hooks-grid-${filter}`}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4"
+            variants={listContainer}
+            initial="hidden"
+            animate="visible"
+          >
             {filteredHooks.map(hook => (
             <div
               key={hook.id}
@@ -541,7 +556,7 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
               </p>
             </div>
             ))}
-          </div>
+          </motion.div>
         </>
       )}
     </>

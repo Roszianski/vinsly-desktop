@@ -64,7 +64,8 @@ export function useTheme(): UseThemeResult {
       }
 
       const savedTheme = await getStorageItem<Theme>('vinsly-theme');
-      const fallbackTheme = savedTheme || systemTheme;
+      // Default to dark mode for new users
+      const fallbackTheme = savedTheme || 'dark';
       if (themeResolvedRef.current) return;
       themeResolvedRef.current = true;
       setThemeMode(fallbackTheme);

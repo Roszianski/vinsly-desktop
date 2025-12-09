@@ -958,6 +958,16 @@ useEffect(() => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
+        {/* Back to List - above tabs */}
+        <button
+          onClick={onShowList}
+          className="inline-flex items-center gap-2 text-sm font-medium text-v-accent hover:text-v-accent-hover transition-colors self-start"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to List
+        </button>
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* View Switcher */}
           <div className="flex items-stretch border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark">
@@ -982,16 +992,6 @@ useEffect(() => {
               </React.Fragment>
             ))}
           </div>
-          {/* Back to Subagents button */}
-          <button
-            onClick={onShowList}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-v-accent hover:text-v-accent-hover transition-colors"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to List
-          </button>
           <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-v-light-text-secondary dark:text-v-text-secondary">
             <span>Zoom</span>
             <div className="flex items-center border border-v-light-border dark:border-v-border rounded-md overflow-hidden bg-v-light-bg/60 dark:bg-v-dark/60 h-[34px]">

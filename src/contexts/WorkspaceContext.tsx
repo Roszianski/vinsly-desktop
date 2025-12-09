@@ -258,13 +258,19 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     const agentToDelete = agents.find(a => a.id === agentId);
     if (!agentToDelete) return;
 
+    // Extract project path for PROJECT agents before deletion for proper restoration
+    const projectPath = agentToDelete.scope === AgentScope.Project
+      ? agentToDelete.path?.split('/.claude/agents')[0] || undefined
+      : undefined;
+
     const command = AgentCommands.delete(
       agentToDelete,
       async (agent) => {
         await deleteAgentFromWorkspace(agent.id);
       },
       async (agent) => {
-        await saveAgentToWorkspace(agent);
+        // Pass projectPath for PROJECT agents to ensure proper restoration
+        await saveAgentToWorkspace(agent, { projectPath });
       }
     );
 
@@ -281,6 +287,13 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     const agentsToDelete = agents.filter(a => agentIds.includes(a.id));
     if (agentsToDelete.length === 0) return;
 
+    // Extract project paths for each agent before deletion
+    const agentProjectPaths = new Map(
+      agentsToDelete
+        .filter(a => a.scope === AgentScope.Project)
+        .map(a => [a.id, a.path?.split('/.claude/agents')[0] || undefined])
+    );
+
     const command = AgentCommands.bulkDelete(
       agentsToDelete,
       async (agentsToRemove) => {
@@ -288,7 +301,8 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
       },
       async (agentsToRestore) => {
         for (const agent of agentsToRestore) {
-          await saveAgentToWorkspace(agent);
+          const projectPath = agentProjectPaths.get(agent.id);
+          await saveAgentToWorkspace(agent, { projectPath });
         }
       }
     );
@@ -321,13 +335,19 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     const skillToDelete = skills.find(s => s.id === skillId);
     if (!skillToDelete) return;
 
+    // Extract project path for PROJECT skills before deletion for proper restoration
+    const projectPath = skillToDelete.scope === AgentScope.Project
+      ? skillToDelete.directoryPath?.split('/.claude/skills')[0] || undefined
+      : undefined;
+
     const command = SkillCommands.delete(
       skillToDelete,
       async (skill) => {
         await deleteSkillFromWorkspace(skill.id);
       },
       async (skill) => {
-        await saveSkillToWorkspace(skill);
+        // Pass projectPath for PROJECT skills to ensure proper restoration
+        await saveSkillToWorkspace(skill, { projectPath });
       }
     );
 

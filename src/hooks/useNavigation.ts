@@ -7,7 +7,6 @@ export type View =
   | 'subagents'
   | 'skills'
   | 'team'
-  | 'analytics'
   | 'memory'
   | 'commands'
   | 'mcp'
@@ -51,7 +50,7 @@ export interface UseNavigationResult {
   navigateToMCPCreate: () => void;
   navigateToHookEdit: (hook: Hook) => void;
   navigateToHookCreate: () => void;
-  navigateToView: (view: 'subagents' | 'skills' | 'team' | 'analytics' | 'memory' | 'commands' | 'mcp' | 'hooks') => void;
+  navigateToView: (view: 'subagents' | 'skills' | 'team' | 'memory' | 'commands' | 'mcp' | 'hooks') => void;
   cancelEditing: () => void;
   createAgentTemplate: () => Agent;
   createSkillTemplate: () => Skill;
@@ -248,11 +247,9 @@ export function useNavigation(options?: { agents?: Agent[]; initialView?: View }
   }, [createHookTemplate]);
 
   const navigateToView = useCallback(
-    (view: 'subagents' | 'skills' | 'team' | 'analytics' | 'memory' | 'commands' | 'mcp' | 'hooks') => {
+    (view: 'subagents' | 'skills' | 'team' | 'memory' | 'commands' | 'mcp' | 'hooks') => {
       setCurrentView(view);
-      if (view === 'subagents' || view === 'team' || view === 'skills' || view === 'commands' || view === 'memory' || view === 'mcp' || view === 'hooks') {
-        setReturnDestination(view);
-      }
+      setReturnDestination(view);
     },
     []
   );

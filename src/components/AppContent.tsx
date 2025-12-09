@@ -7,7 +7,6 @@ import { SkillListScreen } from './screens/SkillListScreen';
 import { AgentEditorScreen } from './screens/AgentEditorScreen';
 import { SkillEditorScreen } from './screens/SkillEditorScreen';
 import { AgentTeamView } from './screens/AgentTeamView';
-import { AnalyticsDashboardScreen } from './screens/AnalyticsDashboardScreen';
 import { MemoryScreen } from './screens/MemoryScreen';
 import { MemoryListScreen } from './screens/MemoryListScreen';
 import { SlashCommandListScreen } from './screens/SlashCommandListScreen';
@@ -447,7 +446,6 @@ export const AppContent: React.FC = () => {
   const handleShowTeam = () => navigateToView('team');
   const handleShowSubagents = () => navigateToView('subagents');
   const handleShowSkills = () => navigateToView('skills');
-  const handleShowAnalytics = () => navigateToView('analytics');
   const handleShowMemory = () => navigateToView('memory');
   const handleShowCommands = () => navigateToView('commands');
   const handleShowMCP = () => navigateToView('mcp');
@@ -482,21 +480,6 @@ export const AppContent: React.FC = () => {
               onCancel={cancelEditing}
               mode={currentView}
               existingNames={skills.map(s => s.name).filter(name => name !== selectedSkill.name)}
-            />
-          </motion.div>
-        );
-
-      case 'analytics':
-        return (
-          <motion.div key="analytics" variants={pageTransition} initial="initial" animate="animate" exit="exit">
-            <AnalyticsDashboardScreen
-              agents={agents}
-              onShowList={handleShowSubagents}
-              onShowSkills={handleShowSkills}
-              onShowMemory={handleShowMemory}
-              onShowCommands={handleShowCommands}
-              onShowMCP={handleShowMCP}
-              onShowHooks={handleShowHooks}
             />
           </motion.div>
         );
@@ -703,7 +686,6 @@ export const AppContent: React.FC = () => {
               onShowTeam={handleShowTeam}
               onShowSubagents={handleShowSubagents}
               onShowSkills={handleShowSkills}
-              onShowAnalytics={handleShowAnalytics}
               onShowMemory={handleShowMemory}
               onShowCommands={handleShowCommands}
               onShowMCP={handleShowMCP}

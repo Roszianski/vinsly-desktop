@@ -16,7 +16,7 @@ interface NavigationContextType {
 
   // Navigation actions
   navigateHome: () => void;
-  navigateToView: (view: 'subagents' | 'skills' | 'team' | 'analytics' | 'memory' | 'commands' | 'mcp' | 'hooks') => void;
+  navigateToView: (view: 'subagents' | 'skills' | 'team' | 'memory' | 'commands' | 'mcp' | 'hooks') => void;
   cancelEditing: () => void;
 
   // Agent navigation

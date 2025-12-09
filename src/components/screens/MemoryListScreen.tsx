@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { ClaudeMemory, AgentScope } from '../../types';
+import { listContainer } from '../../animations';
 import { PlusIcon } from '../icons/PlusIcon';
 import { SearchIcon } from '../icons/SearchIcon';
 import { GlobeIcon } from '../icons/GlobeIcon';
@@ -635,7 +636,13 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
               </div>
             </div>
             <div className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <motion.div
+                key={`memory-grid-${filter}`}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                variants={listContainer}
+                initial="hidden"
+                animate="visible"
+              >
                 {filteredMemories.map(memory => {
                   const displayName = getDisplayName(memory);
                   const wordCount = getWordCount(memory.content);
@@ -706,7 +713,7 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
                     </div>
                   );
                 })}
-              </div>
+              </motion.div>
             </div>
           </>
         ) : (
@@ -758,6 +765,12 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
             </div>
 
             {/* Table rows */}
+            <motion.div
+              key={`memory-table-${filter}`}
+              variants={listContainer}
+              initial="hidden"
+              animate="visible"
+            >
             {filteredMemories.map(memory => {
               const displayName = getDisplayName(memory);
               const simplifiedPath = memory.path
@@ -832,6 +845,7 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
                 </div>
               );
             })}
+            </motion.div>
           </div>
         )}
       </div>

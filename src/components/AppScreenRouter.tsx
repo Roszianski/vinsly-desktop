@@ -12,7 +12,6 @@ import { SkillEditorScreen } from './screens/SkillEditorScreen';
 import { AgentListScreen } from './screens/AgentListScreen';
 import { SkillListScreen } from './screens/SkillListScreen';
 import { AgentTeamView } from './screens/AgentTeamView';
-import { AnalyticsDashboardScreen } from './screens/AnalyticsDashboardScreen';
 import { pageTransition } from '../animations';
 
 interface AppScreenRouterProps {
@@ -51,7 +50,6 @@ interface AppScreenRouterProps {
   onShowSubagents: () => void;
   onShowSkills: () => void;
   onShowTeam: () => void;
-  onShowAnalytics: () => void;
   onShowMemory: () => void;
   onShowCommands: () => void;
   onShowMCP: () => void;
@@ -92,7 +90,6 @@ export function AppScreenRouter({
   onShowSubagents,
   onShowSkills,
   onShowTeam,
-  onShowAnalytics,
   onShowMemory,
   onShowCommands,
   onShowMCP,
@@ -140,27 +137,6 @@ export function AppScreenRouter({
             onCancel={onCancel}
             mode={currentView}
             existingNames={skills.map(skill => skill.name).filter(name => name !== selectedSkill.name)}
-          />
-        </motion.div>
-      );
-
-    case 'analytics':
-      return (
-        <motion.div
-          key="analytics"
-          variants={pageTransition}
-          initial="initial"
-          animate="animate"
-          exit="exit"
-        >
-          <AnalyticsDashboardScreen
-            agents={agents}
-            onShowList={onShowSubagents}
-            onShowSkills={onShowSkills}
-            onShowMemory={onShowMemory}
-            onShowCommands={onShowCommands}
-            onShowMCP={onShowMCP}
-            onShowHooks={onShowHooks}
           />
         </motion.div>
       );
@@ -240,7 +216,6 @@ export function AppScreenRouter({
             onShowTeam={onShowTeam}
             onShowSubagents={onShowSubagents}
             onShowSkills={onShowSkills}
-            onShowAnalytics={onShowAnalytics}
             onShowMemory={onShowMemory}
             onShowCommands={onShowCommands}
             onShowMCP={onShowMCP}

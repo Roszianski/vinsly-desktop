@@ -472,9 +472,44 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
     }
   };
 
-  const goToStep = (nextIndex: number) => {
+  // Check if user can navigate to a specific step (all previous required steps must be complete)
+  const canNavigateToStep = useCallback((targetIndex: number): boolean => {
+    const targetStep = WIZARD_STEPS[targetIndex];
+    // Always allow navigating to review step if previous required steps are complete
+    if (targetStep.id === 'review') {
+      for (let i = 0; i < targetIndex; i++) {
+        const step = WIZARD_STEPS[i];
+        if (step.required && !isStepComplete(step.id)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    // For non-review steps, can only go forward if all previous required steps are complete
+    for (let i = 0; i < targetIndex; i++) {
+      const step = WIZARD_STEPS[i];
+      if (step.required && !isStepComplete(step.id)) {
+        return false;
+      }
+    }
+    return true;
+  }, []);
+
+  const goToStep = useCallback((nextIndex: number) => {
     const clamped = Math.max(0, Math.min(nextIndex, WIZARD_STEPS.length - 1));
     if (clamped === currentStepIndex) return;
+
+    // Allow going backwards freely, but check completion for forward navigation
+    const isGoingBack = clamped < currentStepIndex;
+    const isReviewStep = WIZARD_STEPS[clamped].id === 'review';
+
+    if (!isGoingBack && !canNavigateToStep(clamped)) {
+      return;
+    }
+    if (isReviewStep && !canNavigateToStep(clamped)) {
+      return;
+    }
+
     setDirection(clamped > currentStepIndex ? 1 : -1);
     setCurrentStepIndex(clamped);
     setVisitedSteps((prev) => {
@@ -482,7 +517,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
       updated.add(clamped);
       return updated;
     });
-  };
+  }, [currentStepIndex, canNavigateToStep]);
 
   const handleNextStep = () => {
     if (!canProceedFromStep(currentStep.id)) return;
@@ -887,6 +922,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
     isActive: index === currentStepIndex,
     isComplete: isStepComplete(step.id),
     isVisited: visitedSteps.has(index),
+    canNavigate: canNavigateToStep(index),
   }));
 
   return (
@@ -930,14 +966,18 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
           </div>
           <div className="space-y-2">
             {sidebarSteps.map((step) => {
+              const isClickable = step.isActive || step.index < currentStepIndex || step.canNavigate;
               return (
                 <button
                   type="button"
                   key={step.id}
-                  onClick={() => goToStep(step.index)}
+                  onClick={() => isClickable && goToStep(step.index)}
+                  disabled={!isClickable}
                   className={`w-full text-left flex items-start gap-4 rounded-xl border px-4 py-3 transition-all duration-150 ${
                     step.isActive
                       ? 'border-v-accent/80'
+                      : !isClickable
+                      ? 'border-v-light-border/40 dark:border-v-border/40 opacity-50 cursor-not-allowed'
                       : 'border-v-light-border/70 dark:border-v-border/70 hover:border-v-accent/50'
                   }`}
                   aria-current={step.isActive ? 'step' : undefined}
@@ -958,7 +998,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
                     )}
                   </span>
                   <div className="flex-1 pr-2">
-                    <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                    <p className={`text-sm font-semibold ${!isClickable ? 'text-v-light-text-secondary dark:text-v-text-secondary' : 'text-v-light-text-primary dark:text-v-text-primary'}`}>
                       {step.label}
                     </p>
                   </div>

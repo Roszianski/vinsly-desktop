@@ -38,22 +38,22 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
   const getIcon = () => {
     switch (toast.type) {
       case 'success':
-        return <CheckIcon className="w-5 h-5 text-green-500" />;
+        return <CheckIcon className="w-5 h-5 text-v-accent" />;
       case 'error':
         return <WarningIcon className="w-5 h-5 text-red-500" />;
       case 'info':
-        return <InfoIcon className="w-5 h-5 text-blue-500" />;
+        return <InfoIcon className="w-5 h-5 text-v-accent" />;
     }
   };
 
   const getBgColor = () => {
     switch (toast.type) {
       case 'success':
-        return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800';
+        return 'bg-v-light-surface dark:bg-v-mid-dark border-v-accent/30 dark:border-v-accent/40';
       case 'error':
         return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
       case 'info':
-        return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800';
+        return 'bg-v-light-surface dark:bg-v-mid-dark border-v-accent/30 dark:border-v-accent/40';
     }
   };
 
@@ -74,7 +74,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
               toast.action!.onClick();
               onClose(toast.id);
             }}
-            className="mt-2 text-sm font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+            className="mt-2 text-sm font-semibold text-v-accent hover:text-v-accent-hover transition-colors"
           >
             {toast.action.label}
           </button>

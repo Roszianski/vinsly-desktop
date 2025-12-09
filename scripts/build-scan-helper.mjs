@@ -12,10 +12,7 @@ const helperProfile =
     ? 'debug'
     : 'release';
 
-const detectTargetTriple = () => {
-  if (process.env.VINSLY_HELPER_TRIPLE) {
-    return process.env.VINSLY_HELPER_TRIPLE;
-  }
+const detectHostTriple = () => {
   const rustc = spawnSync('rustc', ['-vV'], { encoding: 'utf8' });
   if (rustc.status === 0 && typeof rustc.stdout === 'string') {
     const hostLine = rustc.stdout.split('\n').find((line) => line.startsWith('host:'));
@@ -26,18 +23,26 @@ const detectTargetTriple = () => {
   return null;
 };
 
+// Check for explicit target override (for cross-compilation)
+const targetTriple = process.env.VINSLY_HELPER_TRIPLE || process.env.TAURI_CLI_TARGET_TRIPLE || null;
+const hostTriple = detectHostTriple();
+const effectiveTriple = targetTriple || hostTriple;
+
 const cargoArgs = ['build', '--bin', 'scan-helper'];
 if (helperProfile === 'release') {
   cargoArgs.push('--release');
 }
+// If cross-compiling, pass the target to cargo
+if (targetTriple) {
+  cargoArgs.push('--target', targetTriple);
+}
 
 const extension = process.platform === 'win32' ? '.exe' : '';
-const hostTriple = detectTargetTriple();
 const binDir = path.join(srcTauriDir, 'bin');
 mkdirSync(binDir, { recursive: true });
 
-if (hostTriple) {
-  const placeholderPath = path.join(binDir, `scan-helper-${hostTriple}${extension}`);
+if (effectiveTriple) {
+  const placeholderPath = path.join(binDir, `scan-helper-${effectiveTriple}${extension}`);
   if (!existsSync(placeholderPath)) {
     closeSync(openSync(placeholderPath, 'w'));
     if (process.platform !== 'win32') {
@@ -57,7 +62,10 @@ if (cargoResult.status !== 0) {
   process.exit(cargoResult.status ?? 1);
 }
 
-const builtPath = path.join(srcTauriDir, 'target', helperProfile, `scan-helper${extension}`);
+// When cross-compiling, binary is in target/<triple>/<profile>/, otherwise target/<profile>/
+const builtPath = targetTriple
+  ? path.join(srcTauriDir, 'target', targetTriple, helperProfile, `scan-helper${extension}`)
+  : path.join(srcTauriDir, 'target', helperProfile, `scan-helper${extension}`);
 
 if (!existsSync(builtPath)) {
   console.error(`[scan-helper] Expected binary at ${builtPath}, but it was not found.`);
@@ -65,10 +73,10 @@ if (!existsSync(builtPath)) {
 }
 
 const outputs = [path.join(binDir, `scan-helper${extension}`)];
-if (hostTriple) {
-  outputs.push(path.join(binDir, `scan-helper-${hostTriple}${extension}`));
+if (effectiveTriple) {
+  outputs.push(path.join(binDir, `scan-helper-${effectiveTriple}${extension}`));
 } else {
-  console.warn('[scan-helper] Unable to detect target triple via rustc -vV; only copying generic binary.');
+  console.warn('[scan-helper] Unable to detect target triple; only copying generic binary.');
 }
 
 for (const destPath of outputs) {
@@ -80,8 +88,8 @@ for (const destPath of outputs) {
 }
 
 // Verify the target-triple suffixed binary exists (required by Tauri's externalBin)
-if (hostTriple) {
-  const tauriExpectedPath = path.join(binDir, `scan-helper-${hostTriple}${extension}`);
+if (effectiveTriple) {
+  const tauriExpectedPath = path.join(binDir, `scan-helper-${effectiveTriple}${extension}`);
   if (!existsSync(tauriExpectedPath)) {
     console.error(`[scan-helper] ERROR: Tauri expects ${tauriExpectedPath} but it was not created!`);
     process.exit(1);

@@ -255,12 +255,83 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
     }
   };
 
+  // Step completion check - must be before canNavigateToStep
+  const isStepComplete = useCallback((stepId: WizardStepId): boolean => {
+    switch (stepId) {
+      case 'template':
+        return true; // Optional step
+      case 'type':
+        return Boolean(formData.type);
+      case 'config':
+        if (!formData.name) return false;
+        if (formData.type === 'stdio' && !formData.command) return false;
+        if ((formData.type === 'http' || formData.type === 'sse') && !formData.url) return false;
+        return true;
+      case 'args':
+        return true; // Optional step
+      case 'headers':
+        return true; // Optional step
+      case 'env':
+        return true; // Optional step
+      case 'scope':
+        if (formData.scope === 'project' && !projectFolderPath) return false;
+        return true;
+      case 'review':
+        return Boolean(formData.type) &&
+          Boolean(formData.name) &&
+          (formData.type !== 'stdio' || Boolean(formData.command)) &&
+          ((formData.type !== 'http' && formData.type !== 'sse') || Boolean(formData.url)) &&
+          (formData.scope !== 'project' || Boolean(projectFolderPath));
+      default:
+        return false;
+    }
+  }, [formData.type, formData.name, formData.command, formData.url, formData.scope, projectFolderPath]);
+
+  // Check if all steps up to and including a given index are complete
+  const canNavigateToStep = useCallback((targetIndex: number): boolean => {
+    const targetStep = WIZARD_STEPS[targetIndex];
+    // Always allow navigating to review step if previous required steps are complete
+    if (targetStep.id === 'review') {
+      // Check all required steps before review are complete
+      for (let i = 0; i < targetIndex; i++) {
+        const step = WIZARD_STEPS[i];
+        // Skip steps that aren't visible for this server type
+        if (step.id === 'args' && formData.type !== 'stdio') continue;
+        if (step.id === 'headers' && formData.type === 'stdio') continue;
+        if (step.required && !isStepComplete(step.id)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    // For non-review steps, can only go forward if all previous required steps are complete
+    for (let i = 0; i < targetIndex; i++) {
+      const step = WIZARD_STEPS[i];
+      // Skip steps that aren't visible for this server type
+      if (step.id === 'args' && formData.type !== 'stdio') continue;
+      if (step.id === 'headers' && formData.type === 'stdio') continue;
+      if (step.required && !isStepComplete(step.id)) {
+        return false;
+      }
+    }
+    return true;
+  }, [formData.type, isStepComplete]);
+
   const goToStep = useCallback((nextIndex: number) => {
     if (nextIndex < 0 || nextIndex >= WIZARD_STEPS.length) return;
+    // Allow going backwards freely, but check completion for forward navigation
+    const isGoingBack = nextIndex < currentStepIndex;
+    const isReviewStep = WIZARD_STEPS[nextIndex].id === 'review';
+    if (!isGoingBack && !isReviewStep && !canNavigateToStep(nextIndex)) {
+      return; // Block forward navigation if previous steps incomplete
+    }
+    if (isReviewStep && !canNavigateToStep(nextIndex)) {
+      return; // Block review if required steps incomplete
+    }
     setDirection(nextIndex > currentStepIndex ? 1 : -1);
     setCurrentStepIndex(nextIndex);
     setVisitedSteps(prev => new Set(prev).add(nextIndex));
-  }, [currentStepIndex]);
+  }, [currentStepIndex, canNavigateToStep]);
 
   const handleNextStep = () => {
     const currentStep = WIZARD_STEPS[currentStepIndex];
@@ -353,46 +424,23 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
   // Calculate the visible step index (position within visibleSteps)
   const visibleStepIndex = visibleSteps.findIndex(s => s.id === currentStep.id);
 
-  // Step completion check
-  const isStepComplete = (stepId: WizardStepId): boolean => {
-    switch (stepId) {
-      case 'template':
-        return true; // Optional step
-      case 'type':
-        return Boolean(formData.type);
-      case 'config':
-        if (!formData.name) return false;
-        if (formData.type === 'stdio' && !formData.command) return false;
-        if ((formData.type === 'http' || formData.type === 'sse') && !formData.url) return false;
-        return true;
-      case 'args':
-        return true; // Optional step
-      case 'headers':
-        return true; // Optional step
-      case 'env':
-        return true; // Optional step
-      case 'scope':
-        if (formData.scope === 'project' && !projectFolderPath) return false;
-        return true;
-      case 'review':
-        return isStepComplete('type') && isStepComplete('config') && isStepComplete('scope');
-      default:
-        return false;
-    }
-  };
-
-  // Calculate progress percentage based on current step position
-  const progressPercentage = Math.round(((visibleStepIndex + 1) / visibleSteps.length) * 100);
+  // Calculate progress percentage based on completed steps, not current position
+  const completedSteps = visibleSteps.filter(step => isStepComplete(step.id)).length;
+  const progressPercentage = Math.round((completedSteps / visibleSteps.length) * 100);
 
   // Sidebar steps data
-  const sidebarSteps = visibleSteps.map((step, index) => ({
-    ...step,
-    originalIndex: WIZARD_STEPS.findIndex(s => s.id === step.id),
-    displayIndex: index,
-    isActive: currentStep.id === step.id,
-    isVisited: visitedSteps.has(WIZARD_STEPS.findIndex(s => s.id === step.id)),
-    isComplete: isStepComplete(step.id),
-  }));
+  const sidebarSteps = visibleSteps.map((step, index) => {
+    const originalIndex = WIZARD_STEPS.findIndex(s => s.id === step.id);
+    return {
+      ...step,
+      originalIndex,
+      displayIndex: index,
+      isActive: currentStep.id === step.id,
+      isVisited: visitedSteps.has(originalIndex),
+      isComplete: isStepComplete(step.id),
+      canNavigate: canNavigateToStep(originalIndex),
+    };
+  });
 
   // Add/remove handlers for key-value editors
   const addHeaderEntry = () => setHeaderEntries(prev => [...prev, { key: '', value: '' }]);
@@ -851,36 +899,42 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
             </div>
 
             <div className="space-y-2">
-              {sidebarSteps.map(step => (
-                <button
-                  type="button"
-                  key={step.id}
-                  onClick={() => goToStep(step.originalIndex)}
-                  className={`w-full text-left flex items-start gap-4 rounded-xl border px-4 py-3 transition-all duration-150 ${
-                    step.isActive
-                      ? 'border-v-accent/80'
-                      : 'border-v-light-border/70 dark:border-v-border/70 hover:border-v-accent/50'
-                  }`}
-                  aria-current={step.isActive ? 'step' : undefined}
-                >
-                  <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold transition-colors ${
-                      step.isComplete && step.isVisited
-                        ? 'bg-v-accent text-white border-v-accent'
-                        : step.isActive
-                        ? 'border-v-accent text-v-accent'
-                        : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary'
+              {sidebarSteps.map(step => {
+                const isClickable = step.isActive || step.displayIndex < visibleStepIndex || step.canNavigate;
+                return (
+                  <button
+                    type="button"
+                    key={step.id}
+                    onClick={() => isClickable && goToStep(step.originalIndex)}
+                    disabled={!isClickable}
+                    className={`w-full text-left flex items-start gap-4 rounded-xl border px-4 py-3 transition-all duration-150 ${
+                      step.isActive
+                        ? 'border-v-accent/80'
+                        : !isClickable
+                        ? 'border-v-light-border/40 dark:border-v-border/40 opacity-50 cursor-not-allowed'
+                        : 'border-v-light-border/70 dark:border-v-border/70 hover:border-v-accent/50'
                     }`}
+                    aria-current={step.isActive ? 'step' : undefined}
                   >
-                    {step.isComplete && step.isVisited ? <CheckIcon className="h-4 w-4" /> : step.displayIndex + 1}
-                  </span>
-                  <div className="flex-1 pr-2">
-                    <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                      {step.label}
-                    </p>
-                  </div>
-                </button>
-              ))}
+                    <span
+                      className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold transition-colors ${
+                        step.isComplete
+                          ? 'bg-v-accent text-white border-v-accent'
+                          : step.isActive
+                          ? 'border-v-accent text-v-accent'
+                          : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary'
+                      }`}
+                    >
+                      {step.isComplete ? <CheckIcon className="h-4 w-4" /> : step.displayIndex + 1}
+                    </span>
+                    <div className="flex-1 pr-2">
+                      <p className={`text-sm font-semibold ${!isClickable ? 'text-v-light-text-secondary dark:text-v-text-secondary' : 'text-v-light-text-primary dark:text-v-text-primary'}`}>
+                        {step.label}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </aside>
 

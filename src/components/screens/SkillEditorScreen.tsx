@@ -16,31 +16,36 @@ import { emptyToolsValue, toolsSelectionToValue, toolsValueToArray } from '../..
 
 type SkillWizardStepId = 'scope' | 'identifier' | 'tools' | 'instructions' | 'review';
 
-const WIZARD_STEPS: { id: SkillWizardStepId; label: string; description: string }[] = [
+const WIZARD_STEPS: { id: SkillWizardStepId; label: string; description: string; required: boolean }[] = [
   {
     id: 'scope',
     label: 'Location & Scope',
     description: 'Choose whether this skill lives in your global ~/.claude/skills folder or inside a specific project.',
+    required: true,
   },
   {
     id: 'identifier',
     label: 'Naming & Summary',
     description: 'Give the skill a clear identifier and description so Claude knows when to invoke it.',
+    required: true,
   },
   {
     id: 'tools',
     label: 'Tools',
     description: 'Select allowed tools or leave empty to inherit session defaults.',
+    required: false,
   },
   {
     id: 'instructions',
     label: 'Workflow Instructions',
     description: 'Describe the workflow, rules, and expectations that make this skill valuable.',
+    required: true,
   },
   {
     id: 'review',
     label: 'Review & Save',
     description: 'Double-check everything before writing SKILL.md on disk.',
+    required: false,
   },
 ];
 
@@ -109,9 +114,44 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
   const currentStep = WIZARD_STEPS[currentStepIndex];
   const isLastStep = currentStepIndex === WIZARD_STEPS.length - 1;
 
+  // Check if user can navigate to a specific step (all previous required steps must be complete)
+  const canNavigateToStep = useCallback((targetIndex: number): boolean => {
+    const targetStep = WIZARD_STEPS[targetIndex];
+    // Always allow navigating to review step if previous required steps are complete
+    if (targetStep.id === 'review') {
+      for (let i = 0; i < targetIndex; i++) {
+        const step = WIZARD_STEPS[i];
+        if (step.required && !isStepComplete(step.id)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    // For non-review steps, can only go forward if all previous required steps are complete
+    for (let i = 0; i < targetIndex; i++) {
+      const step = WIZARD_STEPS[i];
+      if (step.required && !isStepComplete(step.id)) {
+        return false;
+      }
+    }
+    return true;
+  }, []);
+
   const goToStep = useCallback(
     (nextIndex: number) => {
       if (nextIndex < 0 || nextIndex >= WIZARD_STEPS.length) return;
+
+      // Allow going backwards freely, but check completion for forward navigation
+      const isGoingBack = nextIndex < currentStepIndex;
+      const isReviewStep = WIZARD_STEPS[nextIndex].id === 'review';
+
+      if (!isGoingBack && !canNavigateToStep(nextIndex)) {
+        return;
+      }
+      if (isReviewStep && !canNavigateToStep(nextIndex)) {
+        return;
+      }
+
       setDirection(nextIndex > currentStepIndex ? 1 : -1);
       setCurrentStepIndex(nextIndex);
       setVisitedSteps(prev => {
@@ -120,7 +160,7 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
         return next;
       });
     },
-    [currentStepIndex]
+    [currentStepIndex, canNavigateToStep]
   );
 
   const handleNextStep = () => {
@@ -419,6 +459,7 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
     isActive: index === currentStepIndex,
     isVisited: visitedSteps.has(index),
     isComplete: isStepComplete(step.id),
+    canNavigate: canNavigateToStep(index),
   }));
 
   const renderStepContent = () => {
@@ -663,36 +704,42 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
           </div>
 
           <div className="space-y-2">
-            {sidebarSteps.map(step => (
-              <button
-                type="button"
-                key={step.id}
-                onClick={() => goToStep(step.index)}
-                className={`w-full text-left flex items-start gap-4 rounded-xl border px-4 py-3 transition-all duration-150 ${
-                  step.isActive
-                    ? 'border-v-accent/80'
-                    : 'border-v-light-border/70 dark:border-v-border/70 hover:border-v-accent/50'
-                }`}
-                aria-current={step.isActive ? 'step' : undefined}
-              >
-                <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold transition-colors ${
-                    step.isComplete && step.isVisited
-                      ? 'bg-v-accent text-white border-v-accent'
-                      : step.isActive
-                      ? 'border-v-accent text-v-accent'
-                      : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary'
+            {sidebarSteps.map(step => {
+              const isClickable = step.isActive || step.index < currentStepIndex || step.canNavigate;
+              return (
+                <button
+                  type="button"
+                  key={step.id}
+                  onClick={() => isClickable && goToStep(step.index)}
+                  disabled={!isClickable}
+                  className={`w-full text-left flex items-start gap-4 rounded-xl border px-4 py-3 transition-all duration-150 ${
+                    step.isActive
+                      ? 'border-v-accent/80'
+                      : !isClickable
+                      ? 'border-v-light-border/40 dark:border-v-border/40 opacity-50 cursor-not-allowed'
+                      : 'border-v-light-border/70 dark:border-v-border/70 hover:border-v-accent/50'
                   }`}
+                  aria-current={step.isActive ? 'step' : undefined}
                 >
-                  {step.isComplete && step.isVisited ? <CheckIcon className="h-4 w-4" /> : step.index + 1}
-                </span>
-                <div className="flex-1 pr-2">
-                  <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                    {step.label}
-                  </p>
-                </div>
-              </button>
-            ))}
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold transition-colors ${
+                      step.isComplete && step.isVisited
+                        ? 'bg-v-accent text-white border-v-accent'
+                        : step.isActive
+                        ? 'border-v-accent text-v-accent'
+                        : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary'
+                    }`}
+                  >
+                    {step.isComplete && step.isVisited ? <CheckIcon className="h-4 w-4" /> : step.index + 1}
+                  </span>
+                  <div className="flex-1 pr-2">
+                    <p className={`text-sm font-semibold ${!isClickable ? 'text-v-light-text-secondary dark:text-v-text-secondary' : 'text-v-light-text-primary dark:text-v-text-primary'}`}>
+                      {step.label}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </aside>
 
