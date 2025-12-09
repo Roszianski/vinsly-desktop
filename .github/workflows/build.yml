@@ -167,6 +167,21 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
+      - name: Rename files to friendly names
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd release-files
+
+          # Rename installer files to friendly names
+          mv "Vinsly_${VERSION}_aarch64.dmg" "Vinsly_${VERSION}_macOS-Apple-Silicon.dmg" 2>/dev/null || true
+          mv "Vinsly_${VERSION}_x64.dmg" "Vinsly_${VERSION}_macOS-Intel.dmg" 2>/dev/null || true
+          mv "Vinsly_${VERSION}_x64-setup.exe" "Vinsly_${VERSION}_Windows-Setup.exe" 2>/dev/null || true
+          mv "Vinsly_${VERSION}_amd64.deb" "Vinsly_${VERSION}_Linux.deb" 2>/dev/null || true
+          mv "Vinsly_${VERSION}_amd64.AppImage" "Vinsly_${VERSION}_Linux.AppImage" 2>/dev/null || true
+
+          echo "Renamed files:"
+          ls -la
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -179,11 +194,11 @@ jobs:
 
             | Platform | Download |
             |----------|----------|
-            | **macOS (Apple Silicon)** | [Download for M1/M2/M3/M4](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_aarch64.dmg) |
-            | **macOS (Intel)** | [Download for Intel Mac](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_x64.dmg) |
-            | **Windows** | [Download Installer](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_x64-setup.exe) |
-            | **Linux (deb)** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_amd64.deb) |
-            | **Linux (AppImage)** | [Download AppImage](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_amd64.AppImage) |
+            | **macOS (Apple Silicon)** | [Download for M1/M2/M3/M4](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_macOS-Apple-Silicon.dmg) |
+            | **macOS (Intel)** | [Download for Intel Mac](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_macOS-Intel.dmg) |
+            | **Windows** | [Download Installer](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_Windows-Setup.exe) |
+            | **Linux (deb)** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_Linux.deb) |
+            | **Linux (AppImage)** | [Download AppImage](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_Linux.AppImage) |
 
             > 💡 **Not sure which Mac?** Click  → "About This Mac". If it says "Chip: Apple M1/M2/M3/M4" use the first option.
 
