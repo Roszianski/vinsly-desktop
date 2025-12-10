@@ -79,6 +79,7 @@ interface HooksListScreenProps {
   onShowHooks: () => void;
   activeView: string;
   onToggleFavorite: (hook: Hook) => void;
+  shortcutHint?: string;
 }
 
 export const HooksListScreen: React.FC<HooksListScreenProps> = ({
@@ -94,6 +95,7 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
   onShowHooks,
   activeView,
   onToggleFavorite,
+  shortcutHint,
 }) => {
   const [filter, setFilter] = useState<Filter>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -308,6 +310,9 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
             >
               <PlusIcon className="h-4 w-4" />
               <span>New Hook</span>
+              {shortcutHint && (
+                <span className="px-2 py-0.5 text-[10px] uppercase tracking-wide rounded bg-white/20 text-white">{shortcutHint}</span>
+              )}
             </button>
           </div>
         </>

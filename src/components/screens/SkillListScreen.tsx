@@ -70,6 +70,7 @@ interface SkillListScreenProps {
   onShowHooks: () => void;
   activeView: 'subagents' | 'skills' | 'memory' | 'commands' | 'mcp' | 'hooks';
   onToggleFavorite: (skill: Skill) => void;
+  shortcutHint?: string;
 }
 
 export const SkillListScreen: React.FC<SkillListScreenProps> = ({
@@ -89,6 +90,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
   onShowHooks,
   activeView,
   onToggleFavorite,
+  shortcutHint,
 }) => {
   const { showToast } = useToast();
   const [filter, setFilter] = useState<Filter>('All');
@@ -341,10 +343,12 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
             <button
               onClick={onCreateSkill}
               className="inline-flex h-10 items-center gap-3 px-4 bg-v-accent text-white font-semibold text-sm transition-all duration-200 ease-out flex-shrink-0 rounded-md shadow-sm hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
-             
             >
               <PlusIcon className="h-4 w-4" />
               <span>New Skill</span>
+              {shortcutHint && (
+                <span className="px-2 py-0.5 text-[10px] uppercase tracking-wide rounded bg-white/20 text-white">{shortcutHint}</span>
+              )}
             </button>
           </div>
         </>

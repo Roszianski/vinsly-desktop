@@ -215,6 +215,7 @@ interface MemoryListScreenProps {
   onShowMCP: () => void;
   onShowHooks: () => void;
   activeView: 'subagents' | 'skills' | 'memory' | 'commands' | 'mcp' | 'hooks';
+  shortcutHint?: string;
 }
 
 export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
@@ -235,6 +236,7 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
   onShowMCP,
   onShowHooks,
   activeView,
+  shortcutHint,
 }) => {
   const [filter, setFilter] = useState<Filter>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -579,12 +581,14 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
                 </button>
               )}
               <button
-               
                 onClick={onCreate}
                 className="inline-flex h-10 items-center gap-3 px-4 bg-v-accent text-white font-semibold text-sm transition-all duration-200 ease-out flex-shrink-0 rounded-md shadow-sm hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
               >
                 <PlusIcon className="h-4 w-4" />
                 <span>New Memory</span>
+                {shortcutHint && (
+                  <span className="px-2 py-0.5 text-[10px] uppercase tracking-wide rounded bg-white/20 text-white">{shortcutHint}</span>
+                )}
               </button>
             </>
           )}

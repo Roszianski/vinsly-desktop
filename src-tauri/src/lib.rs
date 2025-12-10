@@ -3003,6 +3003,7 @@ pub fn run() {
         // NOTE: fs plugin removed for security - use vetted export_*/import_* commands instead
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
             // Read the cached theme and set the title bar appearance immediately
             // This prevents a flash when the app starts with a non-default theme

@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "",
-        "width": 1220,
-        "height": 780,
+        "width": 1025,
+        "height": 720,
         "minWidth": 1025,
         "minHeight": 720,
         "titleBarStyle": "Transparent",

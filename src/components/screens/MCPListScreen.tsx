@@ -76,6 +76,7 @@ interface MCPListScreenProps {
   onShowHooks: () => void;
   activeView: string;
   onToggleFavorite: (server: MCPServer) => void;
+  shortcutHint?: string;
 }
 
 export const MCPListScreen: React.FC<MCPListScreenProps> = ({
@@ -91,6 +92,7 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
   onShowHooks,
   activeView,
   onToggleFavorite,
+  shortcutHint,
 }) => {
   const { showToast } = useToast();
   const [filter, setFilter] = useState<Filter>('All');
@@ -306,6 +308,9 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
             >
               <PlusIcon className="h-4 w-4" />
               <span>New Server</span>
+              {shortcutHint && (
+                <span className="px-2 py-0.5 text-[10px] uppercase tracking-wide rounded bg-white/20 text-white">{shortcutHint}</span>
+              )}
             </button>
           </div>
         </>

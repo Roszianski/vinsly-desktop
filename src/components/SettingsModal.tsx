@@ -332,9 +332,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
-            onClick={(e) => e.stopPropagation()}
+            onClick={onClose}
           >
-            <div className="w-full max-w-4xl h-[600px] bg-v-light-surface dark:bg-v-mid-dark rounded-xl shadow-2xl overflow-hidden flex flex-col">
+            <div
+              className="w-full max-w-4xl h-[600px] bg-v-light-surface dark:bg-v-mid-dark rounded-xl shadow-2xl overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-v-light-border dark:border-v-border">
                 <h2 className="text-xl font-semibold text-v-light-text-primary dark:text-v-text-primary">

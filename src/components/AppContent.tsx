@@ -524,6 +524,7 @@ export const AppContent: React.FC = () => {
               onShowHooks={handleShowHooks}
               activeView="skills"
               onToggleFavorite={toggleSkillFavorite}
+              shortcutHint={isMacLike ? '⌘ N' : 'Ctrl + N'}
             />
           </motion.div>
         );
@@ -547,6 +548,7 @@ export const AppContent: React.FC = () => {
               onShowMCP={handleShowMCP}
               onShowHooks={handleShowHooks}
               activeView="memory"
+              shortcutHint={isMacLike ? '⌘ N' : 'Ctrl + N'}
             />
           </motion.div>
         );
@@ -586,6 +588,7 @@ export const AppContent: React.FC = () => {
               onShowMCP={handleShowMCP}
               onShowHooks={handleShowHooks}
               activeView="commands"
+              shortcutHint={isMacLike ? '⌘ N' : 'Ctrl + N'}
             />
           </motion.div>
         );
@@ -621,6 +624,7 @@ export const AppContent: React.FC = () => {
               onShowMCP={handleShowMCP}
               onShowHooks={handleShowHooks}
               activeView="mcp"
+              shortcutHint={isMacLike ? '⌘ N' : 'Ctrl + N'}
             />
           </motion.div>
         );
@@ -655,6 +659,7 @@ export const AppContent: React.FC = () => {
               onShowMCP={handleShowMCP}
               onShowHooks={handleShowHooks}
               activeView="hooks"
+              shortcutHint={isMacLike ? '⌘ N' : 'Ctrl + N'}
             />
           </motion.div>
         );

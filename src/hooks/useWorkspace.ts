@@ -19,6 +19,8 @@ import { extractProjectRootFromAgentPath, extractProjectRootFromSkillPath } from
 import { skillFileToSkill, skillToMarkdown } from '../utils/skillParser';
 import { DEFAULT_SCAN_SETTINGS } from './useScanSettings';
 import { ToastType } from '../components/Toast';
+import { ResourceType } from '../types/resource';
+import { saveFavorites, getFavorites } from '../utils/resourceOperations';
 
 const AGENT_CACHE_KEY = 'vinsly-agent-cache';
 const SKILL_CACHE_KEY = 'vinsly-skill-cache';
@@ -111,6 +113,36 @@ export interface UseWorkspaceResult {
   clearWorkspaceCache: () => Promise<void>;
 }
 
+// Helper to apply favorites from storage to agents
+async function applyAgentFavorites(agentsList: Agent[]): Promise<Agent[]> {
+  try {
+    const favorites = await getFavorites(ResourceType.Agent);
+    const favoriteSet = new Set(favorites);
+    return agentsList.map(agent => ({
+      ...agent,
+      isFavorite: favoriteSet.has(agent.id) || favoriteSet.has(agent.name),
+    }));
+  } catch (error) {
+    devLog.error('Failed to load agent favorites:', error);
+    return agentsList;
+  }
+}
+
+// Helper to apply favorites from storage to skills
+async function applySkillFavorites(skillsList: Skill[]): Promise<Skill[]> {
+  try {
+    const favorites = await getFavorites(ResourceType.Skill);
+    const favoriteSet = new Set(favorites);
+    return skillsList.map(skill => ({
+      ...skill,
+      isFavorite: favoriteSet.has(skill.id) || favoriteSet.has(skill.name),
+    }));
+  } catch (error) {
+    devLog.error('Failed to load skill favorites:', error);
+    return skillsList;
+  }
+}
+
 export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -158,10 +190,12 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
         ]) as [Agent[] | null, Skill[] | null];
 
         if (cachedAgents && cachedAgents.length > 0 && agentsRef.current.length === 0) {
-          setAgents(cachedAgents);
+          const agentsWithFavorites = await applyAgentFavorites(cachedAgents);
+          setAgents(agentsWithFavorites);
         }
         if (cachedSkills && cachedSkills.length > 0 && skillsRef.current.length === 0) {
-          setSkills(cachedSkills);
+          const skillsWithFavorites = await applySkillFavorites(cachedSkills);
+          setSkills(skillsWithFavorites);
         }
       } catch (error) {
         devLog.error('Failed to hydrate workspace cache', error);
@@ -462,8 +496,12 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
             return { total: 0, newCount: 0 };
           }
 
-          setAgents(allAgents);
-          setSkills(allSkills);
+          // Apply favorites from storage before setting state
+          const agentsWithFavorites = await applyAgentFavorites(allAgents);
+          const skillsWithFavorites = await applySkillFavorites(allSkills);
+
+          setAgents(agentsWithFavorites);
+          setSkills(skillsWithFavorites);
           return {
             total: allAgents.length + allSkills.length,
             newCount: newAgentCount + newSkillCount,
@@ -665,20 +703,41 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
     [options.showToast]
   );
 
-  const toggleAgentFavorite = useCallback((agentToToggle: Agent) => {
+  const toggleAgentFavorite = useCallback(async (agentToToggle: Agent) => {
+    const toggleKey = agentToToggle.id || agentToToggle.name;
+    const newFavoriteState = !agentToToggle.isFavorite;
+
+    // Update local state immediately
     setAgents(prev =>
       prev.map(agent => {
-        const toggleKey = agentToToggle.id || agentToToggle.name;
         const currentKey = agent.id || agent.name;
         if (currentKey === toggleKey) {
           return {
             ...agent,
-            isFavorite: !agent.isFavorite,
+            isFavorite: newFavoriteState,
           };
         }
         return agent;
       })
     );
+
+    // Persist to storage
+    try {
+      const currentFavorites = await getFavorites(ResourceType.Agent);
+      let updatedFavorites: string[];
+      if (newFavoriteState) {
+        // Add to favorites if not already there
+        updatedFavorites = currentFavorites.includes(toggleKey)
+          ? currentFavorites
+          : [...currentFavorites, toggleKey];
+      } else {
+        // Remove from favorites
+        updatedFavorites = currentFavorites.filter(id => id !== toggleKey);
+      }
+      await saveFavorites(ResourceType.Agent, updatedFavorites);
+    } catch (error) {
+      devLog.error('Failed to persist agent favorite:', error);
+    }
   }, []);
 
   const saveSkill = useCallback(
@@ -766,20 +825,39 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
     [options.showToast]
   );
 
-  const toggleSkillFavorite = useCallback((skillToToggle: Skill) => {
+  const toggleSkillFavorite = useCallback(async (skillToToggle: Skill) => {
+    const toggleKey = skillToToggle.id || skillToToggle.name;
+    const newFavoriteState = !skillToToggle.isFavorite;
+
+    // Update local state immediately
     setSkills(prev =>
       prev.map(skill => {
-        const toggleKey = skillToToggle.id || skillToToggle.name;
         const currentKey = skill.id || skill.name;
         if (currentKey === toggleKey) {
           return {
             ...skill,
-            isFavorite: !skill.isFavorite,
+            isFavorite: newFavoriteState,
           };
         }
         return skill;
       })
     );
+
+    // Persist to storage
+    try {
+      const currentFavorites = await getFavorites(ResourceType.Skill);
+      let updatedFavorites: string[];
+      if (newFavoriteState) {
+        updatedFavorites = currentFavorites.includes(toggleKey)
+          ? currentFavorites
+          : [...currentFavorites, toggleKey];
+      } else {
+        updatedFavorites = currentFavorites.filter(id => id !== toggleKey);
+      }
+      await saveFavorites(ResourceType.Skill, updatedFavorites);
+    } catch (error) {
+      devLog.error('Failed to persist skill favorite:', error);
+    }
   }, []);
 
   const clearWorkspaceCache = useCallback(async () => {

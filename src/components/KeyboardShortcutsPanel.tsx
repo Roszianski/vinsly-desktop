@@ -45,6 +45,12 @@ const shortcuts: KeyboardShortcut[] = [
     windows: 'Enter',
     description: 'Advance to the next step while filling the agent creation wizard (outside text areas)',
   },
+  {
+    action: 'Agent wizard — generate or save',
+    mac: '⌘ Enter',
+    windows: 'Ctrl + Enter',
+    description: 'Generate agent (on describe step) or save agent (on review step)',
+  },
 ];
 
 export function KeyboardShortcutsPanel({

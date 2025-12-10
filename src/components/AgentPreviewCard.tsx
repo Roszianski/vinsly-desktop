@@ -37,9 +37,11 @@ const colorBgMap: { [key: string]: string } = {
 
 interface AgentPreviewCardProps {
   agent: Agent;
+  hideSystemPrompt?: boolean;
+  systemPromptSlot?: React.ReactNode;
 }
 
-export const AgentPreviewCard: React.FC<AgentPreviewCardProps> = ({ agent }) => {
+export const AgentPreviewCard: React.FC<AgentPreviewCardProps> = ({ agent, hideSystemPrompt, systemPromptSlot }) => {
   const borderColorClass = 'border-v-accent';
   const badgeColorClass = agent.frontmatter.color ? colorBgMap[agent.frontmatter.color] : '';
 
@@ -102,12 +104,20 @@ export const AgentPreviewCard: React.FC<AgentPreviewCardProps> = ({ agent }) => 
         )}
       </div>
 
-       <div className="border-t border-v-light-border dark:border-v-border px-6 py-4">
-        <h4 className="text-xs font-semibold uppercase text-v-light-text-secondary dark:text-v-text-secondary tracking-wider mb-2">System Prompt</h4>
-        <pre className="font-mono text-xs text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg dark:bg-v-dark p-3 rounded-md custom-scrollbar max-h-32 overflow-y-auto">
-          <code>{agent.body || <span className="italic">No system prompt provided.</span>}</code>
-        </pre>
-      </div>
+      {!hideSystemPrompt && (
+        <div className="border-t border-v-light-border dark:border-v-border px-6 py-4">
+          <h4 className="text-xs font-semibold uppercase text-v-light-text-secondary dark:text-v-text-secondary tracking-wider mb-2">System Prompt</h4>
+          <pre className="font-mono text-xs text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg/50 dark:bg-v-dark/50 p-3 rounded-md custom-scrollbar max-h-32 overflow-y-auto">
+            <code>{agent.body || <span className="italic">No system prompt provided.</span>}</code>
+          </pre>
+        </div>
+      )}
+
+      {systemPromptSlot && (
+        <div className="border-t border-v-light-border dark:border-v-border px-6 py-4">
+          {systemPromptSlot}
+        </div>
+      )}
 
     </div>
   );

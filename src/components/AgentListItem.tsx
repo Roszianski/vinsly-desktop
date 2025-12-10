@@ -242,7 +242,7 @@ export const AgentListItem: React.FC<AgentListItemProps> = ({
             </div>
             <div className="pr-2">
                 <div className="flex items-center gap-2">
-                    <span className={`h-3 w-3 rounded-full ${colorIndicatorClass}`} title={agent.frontmatter.color ? `Colour: ${agent.frontmatter.color}` : 'Automatic colour'} aria-hidden="true"></span>
+                    <span className={`h-3 w-3 flex-shrink-0 rounded-full ${colorIndicatorClass}`} title={agent.frontmatter.color ? `Colour: ${agent.frontmatter.color}` : 'Automatic colour'} aria-hidden="true"></span>
                     <div className="relative group/name flex items-center gap-1.5 min-w-0">
                         <p className="font-mono text-sm text-v-light-text-primary dark:text-v-text-primary truncate">
                             {agent.name

@@ -290,8 +290,12 @@ export const ScanModal: React.FC<ScanModalProps> = ({
           exit={{ opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.2 }}
           className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+          onClick={() => (!isScanning && !isDiscoveringHome) && onClose()}
         >
-          <div className="w-full max-w-3xl bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+          <div
+            className="w-full max-w-3xl bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl shadow-2xl flex flex-col max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between px-6 py-4 border-b border-v-light-border dark:border-v-border">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-v-light-text-secondary dark:text-v-text-secondary">

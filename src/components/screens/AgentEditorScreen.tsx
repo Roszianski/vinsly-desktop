@@ -176,6 +176,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
   const [isPickingProjectFolder, setIsPickingProjectFolder] = useState(false);
   const [showRawFrontmatter, setShowRawFrontmatter] = useState(false);
   const [rawFrontmatterText, setRawFrontmatterText] = useState('');
+  const [showSystemPromptViewer, setShowSystemPromptViewer] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
   const [hasReachedReview, setHasReachedReview] = useState(false);
@@ -204,7 +205,14 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
 
   useEffect(() => {
     setCurrentStepIndex(0);
-    setVisitedSteps(new Set([0]));
+    // In edit mode, mark all steps as visited since the agent already has all data
+    if (mode === 'edit') {
+      setVisitedSteps(new Set(WIZARD_STEPS.map((_, i) => i)));
+      setHasReachedReview(true);
+    } else {
+      setVisitedSteps(new Set([0]));
+      setHasReachedReview(false);
+    }
   }, [agent, mode]);
 
   useEffect(() => {
@@ -609,6 +617,11 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
   // Check if navigation to a specific step is allowed
   // Strictly sequential: can only unlock the next step after completing the current one
   const canNavigateToStep = useCallback((targetIndex: number): boolean => {
+    // In edit mode, allow free navigation to any step since all data is already complete
+    if (!isWizard) {
+      return true;
+    }
+
     // Once review has been reached, allow free navigation to any step
     if (hasReachedReview) {
       return true;
@@ -636,7 +649,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
 
     // Can only navigate to the very next step after the highest completed visited step
     return targetIndex === highestCompletedVisitedIndex + 1;
-  }, [isStepComplete, hasReachedReview, visitedSteps]);
+  }, [isWizard, isStepComplete, hasReachedReview, visitedSteps]);
 
   const goToStep = useCallback((nextIndex: number) => {
     const clamped = Math.max(0, Math.min(nextIndex, WIZARD_STEPS.length - 1));
@@ -1192,9 +1205,37 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
           </div>
         );
       case 'review':
+        // Custom system prompt slot for automatic creation mode
+        const systemPromptSlot = creationMethod === 'automatic' && formData.body.trim() ? (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-semibold uppercase text-v-light-text-secondary dark:text-v-text-secondary tracking-wider">
+                System Prompt
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowSystemPromptViewer(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-v-accent hover:text-v-accent-hover border border-v-accent/30 hover:border-v-accent rounded-lg transition-colors"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+                View full prompt
+              </button>
+            </div>
+            <pre className="font-mono text-xs text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg/50 dark:bg-v-dark/50 p-3 rounded-md custom-scrollbar max-h-32 overflow-y-auto">
+              <code>{formData.body.slice(0, 500)}{formData.body.length > 500 ? '...' : ''}</code>
+            </pre>
+          </div>
+        ) : undefined;
+
         return (
           <div className="space-y-6">
-            <AgentPreviewCard agent={formData} />
+            <AgentPreviewCard
+              agent={formData}
+              hideSystemPrompt={creationMethod === 'automatic'}
+              systemPromptSlot={systemPromptSlot}
+            />
             {reviewWarnings.length > 0 && (
               <div className="bg-yellow-50 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-200 p-3 rounded-md text-sm space-y-1">
                 {reviewWarnings.map((warning) => (
@@ -1205,6 +1246,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
                 ))}
               </div>
             )}
+
             <div className="pt-4 border-t border-v-light-border dark:border-v-border">
               <button
                 type="button"
@@ -1229,6 +1271,63 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
                 </div>
               )}
             </div>
+
+            {/* System Prompt Viewer Modal */}
+            <AnimatePresence>
+              {showSystemPromptViewer && (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setShowSystemPromptViewer(false)}
+                    className="fixed inset-0 bg-black/50 z-[9999]"
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                    className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+                    onClick={() => setShowSystemPromptViewer(false)}
+                  >
+                    <div
+                      className="w-full max-w-4xl max-h-[80vh] bg-v-light-surface dark:bg-v-mid-dark rounded-2xl shadow-2xl border border-v-light-border dark:border-v-border flex flex-col"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between px-6 py-4 border-b border-v-light-border dark:border-v-border">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-v-light-text-secondary dark:text-v-text-secondary">
+                            Generated
+                          </p>
+                          <h3 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                            System Prompt
+                          </h3>
+                        </div>
+                        <button
+                          onClick={() => setShowSystemPromptViewer(false)}
+                          className="p-2 rounded-lg hover:bg-v-light-hover dark:hover:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary"
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-6">
+                        <pre className="whitespace-pre-wrap text-sm text-v-light-text-primary dark:text-v-text-primary font-mono leading-relaxed">
+                          {formData.body}
+                        </pre>
+                      </div>
+                      <div className="px-6 py-4 border-t border-v-light-border dark:border-v-border bg-v-light-bg dark:bg-v-dark">
+                        <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary text-center">
+                          Press <kbd className="px-1.5 py-0.5 text-xs font-mono bg-v-light-hover dark:bg-v-light-dark rounded">Esc</kbd> or click outside to close
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
           </div>
         );
       default:
