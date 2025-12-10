@@ -18,13 +18,13 @@
       // This prevents flash when saved theme differs from default
       (function() {
         var cachedTheme = localStorage.getItem('vinsly-theme-cache');
-        if (cachedTheme === 'light') {
-          document.documentElement.classList.remove('dark');
-          document.documentElement.classList.add('light');
-        } else {
-          // Default to dark if no cache or cache is 'dark'
+        if (cachedTheme === 'dark') {
           document.documentElement.classList.remove('light');
           document.documentElement.classList.add('dark');
+        } else {
+          // Default to light if no cache or cache is 'light'
+          document.documentElement.classList.remove('dark');
+          document.documentElement.classList.add('light');
         }
       })();
     </script>

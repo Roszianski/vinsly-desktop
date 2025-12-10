@@ -18,7 +18,7 @@ export interface UseThemeResult {
 // localStorage key for theme cache (read synchronously in index.html to prevent flash)
 const THEME_CACHE_KEY = 'vinsly-theme-cache';
 
-// Read from localStorage cache first (set by index.html script), fallback to 'dark'
+// Read from localStorage cache first (set by index.html script), fallback to 'light'
 const getInitialTheme = (): Theme => {
   if (typeof window !== 'undefined') {
     const cached = localStorage.getItem(THEME_CACHE_KEY);
@@ -26,7 +26,7 @@ const getInitialTheme = (): Theme => {
       return cached;
     }
   }
-  return 'dark';
+  return 'light';
 };
 
 /**
@@ -74,8 +74,8 @@ export function useTheme(): UseThemeResult {
       }
 
       const savedTheme = await getStorageItem<Theme>('vinsly-theme');
-      // Default to dark mode for new users
-      const fallbackTheme = savedTheme || 'dark';
+      // Default to light mode for new users
+      const fallbackTheme = savedTheme || 'light';
       if (themeResolvedRef.current) return;
       themeResolvedRef.current = true;
       // Write to localStorage cache for instant access on next load

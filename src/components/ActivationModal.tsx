@@ -3,6 +3,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { checkFullDiskAccess, openFullDiskAccessSettings } from '../utils/tauriCommands';
 import { devLog } from '../utils/devLogger';
 
+// Key for saving activation progress (survives app restart)
+const ACTIVATION_PROGRESS_KEY = 'vinsly-activation-progress';
+
+interface SavedActivationProgress {
+  step: Step;
+  licenseKey: string;
+  displayName: string;
+  autoScanGlobal: boolean;
+  autoScanWatched: boolean;
+}
+
 interface ActivationModalProps {
   isOpen: boolean;
   defaultDisplayName?: string;
@@ -54,11 +65,59 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
   const [validationState, setValidationState] = useState<'idle' | 'validating' | 'success'>('idle');
   const [licenseStepError, setLicenseStepError] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ licenseKey?: string; displayName?: string }>({});
+  const [showFdaGuide, setShowFdaGuide] = useState(false);
   const validationSuccessTimer = useRef<number | null>(null);
   const wasOpenRef = useRef(false);
   const postGrantCheckTimeoutRef = useRef<number | null>(null);
+  const progressRestoredRef = useRef(false);
+
+  // Save activation progress to localStorage (survives app restart)
+  const saveProgress = useCallback(() => {
+    const progress: SavedActivationProgress = {
+      step,
+      licenseKey,
+      displayName,
+      autoScanGlobal,
+      autoScanWatched,
+    };
+    localStorage.setItem(ACTIVATION_PROGRESS_KEY, JSON.stringify(progress));
+  }, [step, licenseKey, displayName, autoScanGlobal, autoScanWatched]);
+
+  // Clear saved progress
+  const clearProgress = useCallback(() => {
+    localStorage.removeItem(ACTIVATION_PROGRESS_KEY);
+  }, []);
+
+  // Restore progress from localStorage on mount
+  useEffect(() => {
+    if (isOpen && !progressRestoredRef.current) {
+      progressRestoredRef.current = true;
+      try {
+        const saved = localStorage.getItem(ACTIVATION_PROGRESS_KEY);
+        if (saved) {
+          const progress: SavedActivationProgress = JSON.parse(saved);
+          if (progress.step && progress.licenseKey) {
+            setStep(progress.step);
+            setLicenseKey(progress.licenseKey);
+            setDisplayName(progress.displayName || defaultDisplayName);
+            setAutoScanGlobal(progress.autoScanGlobal ?? defaultScanGlobal);
+            setAutoScanWatched(progress.autoScanWatched ?? defaultScanWatched);
+            // Mark validation as already done since license was saved
+            setValidationState('success');
+            devLog.log('Restored activation progress:', progress.step);
+          }
+        }
+      } catch (err) {
+        devLog.error('Failed to restore activation progress:', err);
+      }
+    }
+  }, [isOpen, defaultDisplayName, defaultScanGlobal, defaultScanWatched]);
 
   const resetFormState = useCallback(() => {
+    // Don't reset if we just restored progress
+    if (progressRestoredRef.current && localStorage.getItem(ACTIVATION_PROGRESS_KEY)) {
+      return;
+    }
     setStep('license');
     setLicenseKey('');
     setDisplayName(defaultDisplayName);
@@ -74,6 +133,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
     setSubmitError(null);
     setValidationState('idle');
     setLicenseStepError(null);
+    setShowFdaGuide(false);
     if (validationSuccessTimer.current) {
       window.clearTimeout(validationSuccessTimer.current);
       validationSuccessTimer.current = null;
@@ -137,32 +197,28 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
       });
       return;
     }
+    // Save progress before showing guide (user may restart app)
+    saveProgress();
+    // Show the two-step guide popup
+    setShowFdaGuide(true);
+  }, [isMacPlatform, saveProgress]);
+
+  const handleFdaGuideOpenSettings = useCallback(async () => {
     setIsOpeningFullDiskSettings(true);
-    setFullDiskStatusMessage(null);
     try {
       await openFullDiskAccessSettings();
-      setFullDiskStatusMessage({
-        tone: 'info',
-        text: 'System Settings opened. In Privacy & Security → Full Disk Access (HT210595), add or enable Vinsly, then click “Check again”.',
-      });
-      if (postGrantCheckTimeoutRef.current) {
-        window.clearTimeout(postGrantCheckTimeoutRef.current);
-      }
-      postGrantCheckTimeoutRef.current = window.setTimeout(() => {
-        void refreshFullDiskStatus();
-        postGrantCheckTimeoutRef.current = null;
-      }, 2500);
     } catch (error) {
       devLog.error('Failed to open Full Disk Access settings:', error);
-      const details = error instanceof Error ? error.message : String(error);
-      setFullDiskStatusMessage({
-        tone: 'warn',
-        text: `Unable to open System Settings automatically (${details}). Please open Privacy & Security → Full Disk Access manually.`,
-      });
     } finally {
       setIsOpeningFullDiskSettings(false);
     }
-  }, [isMacPlatform]);
+  }, []);
+
+  const handleFdaGuideClose = useCallback(() => {
+    setShowFdaGuide(false);
+    // Check FDA status after closing guide
+    void refreshFullDiskStatus();
+  }, [refreshFullDiskStatus]);
 
   useEffect(() => {
     return () => {
@@ -268,6 +324,8 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
         autoScanHome,
         fullDiskAccessEnabled: isMacPlatform ? (fullDiskAccessEnabled && fullDiskStatus === 'granted') : true,
       });
+      // Clear saved progress on successful completion
+      clearProgress();
     } catch (error) {
       devLog.error('Activation completion failed:', error);
       const message = error instanceof Error && error.message
@@ -429,36 +487,6 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                     These are optional. You can always scan manually once you're in the app.
                   </p>
                   <div className="space-y-3">
-                    {/* Global resources */}
-                    <label className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent transition-colors ${isSubmitting ? 'opacity-70 pointer-events-none' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={autoScanGlobal}
-                        onChange={(e) => setAutoScanGlobal(e.target.checked)}
-                        disabled={isSubmitting}
-                        className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Global resources</p>
-                        <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">~/.claude</p>
-                      </div>
-                    </label>
-
-                    {/* Watched folders */}
-                    <label className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent transition-colors ${isSubmitting ? 'opacity-70 pointer-events-none' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={autoScanWatched}
-                        onChange={(e) => setAutoScanWatched(e.target.checked)}
-                        disabled={isSubmitting}
-                        className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Watched folders</p>
-                        <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">Configured in settings</p>
-                      </div>
-                    </label>
-
                     {/* Home directory - with inline FDA for macOS */}
                     {isMacPlatform && fullDiskStatus !== 'granted' ? (
                       <div className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border ${isSubmitting ? 'opacity-70' : ''}`}>
@@ -506,6 +534,36 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                         </div>
                       </label>
                     )}
+
+                    {/* Global resources */}
+                    <label className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent transition-colors ${isSubmitting ? 'opacity-70 pointer-events-none' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={autoScanGlobal}
+                        onChange={(e) => setAutoScanGlobal(e.target.checked)}
+                        disabled={isSubmitting}
+                        className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Global resources</p>
+                        <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">~/.claude</p>
+                      </div>
+                    </label>
+
+                    {/* Watched folders */}
+                    <label className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent transition-colors ${isSubmitting ? 'opacity-70 pointer-events-none' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={autoScanWatched}
+                        onChange={(e) => setAutoScanWatched(e.target.checked)}
+                        disabled={isSubmitting}
+                        className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Watched folders</p>
+                        <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">Configured in settings</p>
+                      </div>
+                    </label>
                   </div>
                 </div>
 
@@ -537,6 +595,77 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
           </div>
         </motion.div>
       </motion.div>
+
+      {/* FDA Guide Popup */}
+      {showFdaGuide && (
+        <motion.div
+          key="fda-guide"
+          className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/60 px-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="w-full max-w-md bg-v-light-surface dark:bg-v-mid-dark rounded-2xl shadow-2xl border border-v-light-border dark:border-v-border overflow-hidden"
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="px-6 py-5 border-b border-v-light-border dark:border-v-border">
+              <h3 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                Enable Full Disk Access
+              </h3>
+            </div>
+
+            <div className="px-6 py-6 space-y-5">
+              {/* Step 1 */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-v-accent text-white text-xs font-bold">1</span>
+                  <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                    Grant Permission
+                  </p>
+                </div>
+                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary ml-8">
+                  Click below to open System Settings. Find <strong>Full Disk Access</strong> and enable Vinsly.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleFdaGuideOpenSettings()}
+                  disabled={isOpeningFullDiskSettings}
+                  className="ml-8 px-4 py-2 rounded-lg bg-v-accent text-white text-sm font-medium hover:bg-v-accent-hover transition-colors disabled:opacity-60"
+                >
+                  {isOpeningFullDiskSettings ? 'Opening…' : 'Open System Settings'}
+                </button>
+              </div>
+
+              {/* Step 2 */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-v-light-border dark:bg-v-border text-v-light-text-secondary dark:text-v-text-secondary text-xs font-bold">2</span>
+                  <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                    Restart Vinsly
+                  </p>
+                </div>
+                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary ml-8">
+                  After granting access, <strong>quit and reopen Vinsly</strong>. Your progress is saved and you&apos;ll continue from here.
+                </p>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-v-light-border dark:border-v-border flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleFdaGuideClose}
+                className="px-4 py-2 rounded-lg border border-v-light-border dark:border-v-border text-sm font-medium text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-light-text-primary dark:hover:text-v-text-primary transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
     </AnimatePresence>
   );
 };

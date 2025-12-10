@@ -5,6 +5,7 @@ import { useToast } from '../contexts/ToastContext';
 import { cancelHomeDiscovery, DEFAULT_HOME_DISCOVERY_DEPTH, discoverHomeDirectories } from '../utils/homeDiscovery';
 import { LoadAgentsOptions, ScanSettings } from '../types';
 import { devLog } from '../utils/devLogger';
+import { checkFullDiskAccess } from '../utils/tauriCommands';
 
 type ScanSource = 'home' | 'watched';
 
@@ -69,13 +70,17 @@ export const ScanModal: React.FC<ScanModalProps> = ({
   const { showToast } = useToast();
   const [selectedSources, setSelectedSources] = useState<Set<ScanSource>>(new Set());
   const [customPaths, setCustomPaths] = useState<string[]>([]);
+  // Track which custom paths should scan subfolders (default: all recursive)
+  const [recursivePaths, setRecursivePaths] = useState<Set<string>>(new Set());
   const [isScanning, setIsScanning] = useState(false);
   const [isDiscoveringHome, setIsDiscoveringHome] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<{ total: number; newCount: number } | null>(null);
   const homeDiscoveryAbortRef = useRef<AbortController | null>(null);
-
-  const canUseHomeSource = !isMacPlatform || scanSettings.fullDiskAccessEnabled;
+  // Track FDA status locally so we can refresh it when modal opens
+  const [canUseHomeSource, setCanUseHomeSource] = useState(
+    !isMacPlatform || scanSettings.fullDiskAccessEnabled
+  );
   const watchedDirectoryCount = scanSettings.watchedDirectories.length;
 
   const defaultSources = useMemo(() => {
@@ -90,6 +95,19 @@ export const ScanModal: React.FC<ScanModalProps> = ({
     return new Set(defaults);
   }, [canUseHomeSource, watchedDirectoryCount]);
 
+  // Refresh FDA status when modal opens (in case user granted it and restarted)
+  useEffect(() => {
+    if (isOpen && isMacPlatform) {
+      checkFullDiskAccess()
+        .then((granted) => {
+          setCanUseHomeSource(granted);
+        })
+        .catch((err) => {
+          devLog.error('Failed to check FDA status:', err);
+        });
+    }
+  }, [isOpen, isMacPlatform]);
+
   useEffect(() => {
     if (isOpen) {
       setSelectedSources(new Set(defaultSources));
@@ -98,6 +116,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       homeDiscoveryAbortRef.current?.abort();
       setIsScanning(false);
       setIsDiscoveringHome(false);
+      setCustomPaths([]);
+      setRecursivePaths(new Set());
       cancelHomeDiscovery();
     }
   }, [isOpen, defaultSources]);
@@ -131,6 +151,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({
 
       if (typeof selected === 'string' && !customPaths.includes(selected)) {
         setCustomPaths(prev => [...prev, selected]);
+        // Default to recursive (include subfolders)
+        setRecursivePaths(prev => new Set(prev).add(selected));
       }
     } catch (error) {
       devLog.error('Failed to select directory:', error);
@@ -140,6 +162,23 @@ export const ScanModal: React.FC<ScanModalProps> = ({
 
   const removeCustomPath = (path: string) => {
     setCustomPaths(prev => prev.filter(entry => entry !== path));
+    setRecursivePaths(prev => {
+      const next = new Set(prev);
+      next.delete(path);
+      return next;
+    });
+  };
+
+  const toggleRecursive = (path: string) => {
+    setRecursivePaths(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
   };
 
   const ensureHomeSource = () => {
@@ -268,7 +307,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
     'Global (~/.claude/)', // Always included
     selectedSources.has('home') ? 'Home directory' : null,
     selectedSources.has('watched') ? `Watched folders (${watchedDirectoryCount || 0})` : null,
-    customPaths.length > 0 ? `${customPaths.length} custom folder${customPaths.length === 1 ? '' : 's'}` : null,
+    customPaths.length > 0 ? `${customPaths.length} specific folder${customPaths.length === 1 ? '' : 's'}` : null,
   ]
     .filter(Boolean)
     .join(' • ');
@@ -353,7 +392,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                     disabled={isScanning || isDiscoveringHome}
                     className="px-4 py-3 rounded-xl border border-dashed border-v-light-border dark:border-v-border bg-v-light-bg/60 dark:bg-v-dark/60 text-left text-v-accent hover:border-v-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <p className="text-sm font-semibold">+ Custom folder</p>
+                    <p className="text-sm font-semibold">+ Specific folder/s</p>
                     <p className="text-xs mt-1 text-v-light-text-secondary dark:text-v-text-secondary">
                       One-time scan without saving.
                     </p>
@@ -366,13 +405,24 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                     {customPaths.map(path => (
                       <div
                         key={path}
-                        className="flex items-center justify-between px-3 py-2 rounded-lg border border-v-light-border dark:border-v-border bg-v-light-bg dark:bg-v-dark text-sm text-v-light-text-primary dark:text-v-text-primary"
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg border border-v-light-border dark:border-v-border bg-v-light-bg dark:bg-v-dark text-sm text-v-light-text-primary dark:text-v-text-primary"
                       >
-                        <span className="truncate">{path}</span>
+                        <span className="truncate flex-1 min-w-0">{path}</span>
+                        <label className="flex items-center gap-1.5 text-xs text-v-light-text-secondary dark:text-v-text-secondary whitespace-nowrap cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={recursivePaths.has(path)}
+                            onChange={() => toggleRecursive(path)}
+                            disabled={isScanning || isDiscoveringHome}
+                            className="w-3.5 h-3.5 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
+                          />
+                          Subfolders
+                        </label>
                         <button
                           type="button"
                           onClick={() => removeCustomPath(path)}
-                          className="ml-3 text-v-danger hover:text-v-danger/80"
+                          disabled={isScanning || isDiscoveringHome}
+                          className="text-v-danger hover:text-v-danger/80 disabled:opacity-50"
                           aria-label={`Remove ${path}`}
                         >
                           ✕
