@@ -30,20 +30,34 @@ export function useClaudeSessions(options?: UseClaudeSessionsOptions): UseClaude
   const [isPolling, setIsPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollTimerRef = useRef<number | null>(null);
+  const isMountedRef = useRef(true);
+
+  // Track mount state to prevent state updates after unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
+    if (!isMountedRef.current) return;
     setIsLoading(true);
     setError(null);
     try {
       const rawSessions = await detectClaudeSessions();
+      if (!isMountedRef.current) return;
       const convertedSessions = rawSessions.map(rawToSession);
       setSessions(convertedSessions);
     } catch (err) {
+      if (!isMountedRef.current) return;
       const errorMessage = err instanceof Error ? err.message : String(err);
       setError(errorMessage);
       devLog.error('Failed to detect Claude sessions:', err);
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 

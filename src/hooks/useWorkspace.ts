@@ -123,6 +123,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   const inFlightScanCount = useRef(0);
   const scanAbortController = useRef<AbortController | null>(null);
   const pendingScanOptions = useRef<LoadAgentsOptions | null>(null);
+  const scanMutexRef = useRef<Promise<{ total: number; newCount: number }> | null>(null);
 
   useEffect(() => {
     agentsRef.current = agents;
@@ -137,12 +138,24 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
       return;
     }
 
+    const CACHE_HYDRATION_TIMEOUT_MS = 5000;
+
     const hydrateWorkspaceFromCache = async () => {
       try {
-        const [cachedAgents, cachedSkills] = await Promise.all([
+        // Add timeout to prevent UI hang if storage is slow
+        const timeoutPromise = new Promise<null>((_, reject) => {
+          setTimeout(() => reject(new Error('Cache hydration timeout')), CACHE_HYDRATION_TIMEOUT_MS);
+        });
+
+        const cachePromise = Promise.all([
           getStorageItem<Agent[]>(AGENT_CACHE_KEY),
           getStorageItem<Skill[]>(SKILL_CACHE_KEY),
         ]);
+
+        const [cachedAgents, cachedSkills] = await Promise.race([
+          cachePromise,
+          timeoutPromise.then(() => [null, null] as [Agent[] | null, Skill[] | null]),
+        ]) as [Agent[] | null, Skill[] | null];
 
         if (cachedAgents && cachedAgents.length > 0 && agentsRef.current.length === 0) {
           setAgents(cachedAgents);
@@ -225,6 +238,12 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
       if (inFlightScanCount.current > 0) {
         pendingScanOptions.current = loadOptions;
         return Promise.resolve({ total: 0, newCount: 0 });
+      }
+
+      // Use mutex to ensure sequential scan execution
+      if (scanMutexRef.current) {
+        pendingScanOptions.current = loadOptions;
+        return scanMutexRef.current;
       }
 
       const executeScan = async (): Promise<{ total: number; newCount: number }> => {
@@ -460,6 +479,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
           throw error;
         } finally {
           endScan();
+          scanMutexRef.current = null;
 
           // Execute pending scan if one was queued during this scan
           const pendingOpts = pendingScanOptions.current;
@@ -473,7 +493,10 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
         }
       };
 
-      return executeScan();
+      // Track the scan promise as a mutex
+      const scanPromise = executeScan();
+      scanMutexRef.current = scanPromise;
+      return scanPromise;
     },
     [beginScan, endScan, makeAgentKey, makeSkillKey, options.scanSettingsRef, options.showToast]
   );

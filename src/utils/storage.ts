@@ -2,6 +2,8 @@ import { Store } from '@tauri-apps/plugin-store';
 import { devLog } from './devLogger';
 
 let store: Store | null = null;
+let storeInitFailed = false;
+let storeInitError: string | null = null;
 
 /**
  * Result type for storage operations.
@@ -13,10 +15,35 @@ export interface StorageResult<T = void> {
   error?: string;
 }
 
-// Initialize the store
+/**
+ * Check if the store failed to initialize.
+ * Useful for showing user feedback about storage issues.
+ */
+export function hasStoreInitializationFailed(): boolean {
+  return storeInitFailed;
+}
+
+/**
+ * Get the store initialization error message if initialization failed.
+ */
+export function getStoreInitializationError(): string | null {
+  return storeInitError;
+}
+
+// Initialize the store with error tracking
 async function getStore(): Promise<Store> {
+  if (storeInitFailed) {
+    throw new Error(storeInitError || 'Store initialization previously failed');
+  }
   if (!store) {
-    store = await Store.load('vinsly-settings.json');
+    try {
+      store = await Store.load('vinsly-settings.json');
+    } catch (error) {
+      storeInitFailed = true;
+      storeInitError = error instanceof Error ? error.message : 'Unknown store initialization error';
+      devLog.error('Store initialization failed:', error);
+      throw error;
+    }
   }
   return store;
 }

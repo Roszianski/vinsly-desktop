@@ -126,7 +126,8 @@ export function duplicateResource<T extends Agent | Skill>(
     newPath = `${basePath}/${uniqueName}${config.fileExtension || ''}`;
   }
 
-  const duplicated: T = {
+  // Build base duplicated object
+  const baseDuplicated = {
     ...item,
     id: newPath,
     name: uniqueName,
@@ -138,12 +139,15 @@ export function duplicateResource<T extends Agent | Skill>(
     isFavorite: false, // Duplicates start as non-favorites
   };
 
-  // Handle skill-specific fields
-  if ('directoryPath' in item) {
-    (duplicated as any).directoryPath = newPath;
+  // Handle skill-specific fields with proper type narrowing
+  if ('directoryPath' in item && typeof (item as Skill).directoryPath === 'string') {
+    return {
+      ...baseDuplicated,
+      directoryPath: newPath,
+    } as T;
   }
 
-  return duplicated;
+  return baseDuplicated as T;
 }
 
 /**
@@ -191,8 +195,9 @@ export function sortResources<T extends Agent | Skill>(
         bValue = b.scope;
         break;
       case 'model':
-        aValue = (a.frontmatter as any).model || '';
-        bValue = (b.frontmatter as any).model || '';
+        // frontmatter.model exists on Agent but not Skill - use optional chaining
+        aValue = (a.frontmatter.model as string | undefined) || '';
+        bValue = (b.frontmatter.model as string | undefined) || '';
         break;
       default:
         return 0;

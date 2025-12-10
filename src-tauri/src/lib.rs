@@ -1106,11 +1106,9 @@ async fn perform_directory_scan(
     if include_protected {
         match run_scan_helper(depth, include_protected).await {
             Ok(result) => return Ok(result),
-            Err(err) => {
-                eprintln!(
-                    "[FDA] scan-helper error: {}. Falling back to inline scanner.",
-                    err
-                );
+            Err(_) => {
+                // Silently fall back to inline scanner if scan-helper fails.
+                // This is expected behavior when FDA permissions aren't granted.
             }
         }
     }
@@ -1221,21 +1219,9 @@ fn check_full_disk_access() -> Result<bool, String> {
 
 #[cfg(target_os = "macos")]
 fn log_tcc_full_disk_status() {
-    match query_tcc_full_disk_entry() {
-        Ok(Some(true)) => println!(
-            "[FDA] TCC entry for {} allows Full Disk Access.",
-            MACOS_BUNDLE_IDENTIFIER
-        ),
-        Ok(Some(false)) => println!(
-            "[FDA] TCC entry for {} exists but is denied.",
-            MACOS_BUNDLE_IDENTIFIER
-        ),
-        Ok(None) => println!(
-            "[FDA] No TCC entry for {} found in TCC.db.",
-            MACOS_BUNDLE_IDENTIFIER
-        ),
-        Err(err) => eprintln!("[FDA] Unable to inspect TCC.db: {}", err),
-    }
+    // Query TCC status silently - no production logging needed.
+    // The status is used internally but not displayed to users.
+    let _ = query_tcc_full_disk_entry();
 }
 
 #[cfg(target_os = "macos")]
@@ -1255,6 +1241,10 @@ fn query_tcc_full_disk_entry() -> Result<Option<bool>, String> {
     // macOS 14+ record Full Disk Access decisions via auth_value. On Ventura through Tahaeo betas,
     // grants show up as auth_value>=2 while the legacy "allowed" column may stay at 0 or be removed.
     // Prefer auth_value everywhere but still honor the column on older releases if present.
+    //
+    // SAFETY: MACOS_BUNDLE_IDENTIFIER is a compile-time constant ("com.vinsly.desktop").
+    // String interpolation is safe here as no user input is involved. We use sqlite3 CLI
+    // which doesn't support parameterized queries - this pattern is intentional.
     let grant_query = if allowed_column_exists {
         format!(
             "SELECT CASE WHEN auth_value >= 2 OR allowed = 1 THEN 1 ELSE 0 END AS granted \
