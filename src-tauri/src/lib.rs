@@ -2982,7 +2982,7 @@ fn set_title_bar_theme(window: tauri::WebviewWindow, dark: bool) {
     #[cfg(not(target_os = "macos"))]
     {
         // On Windows and Linux, set the webview background color
-        use tauri::Color;
+        use tauri::window::Color;
         let color = if dark {
             // Dark mode: #1f2229
             Color(31, 34, 41, 255)
@@ -3061,7 +3061,7 @@ pub fn run() {
 
             #[cfg(not(target_os = "macos"))]
             {
-                use tauri::Color;
+                use tauri::window::Color;
                 if let Some(window) = app.get_webview_window("main") {
                     let color = if dark {
                         Color(31, 34, 41, 255)
