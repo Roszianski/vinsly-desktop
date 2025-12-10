@@ -1,6 +1,6 @@
 [package]
 name = "vinsly"
-version = "1.0.0"
+version = "0.1.11"
 description = "Vinsly - Agent Studio for Claude Code"
 authors = ["Vinsly"]
 edition = "2021"
