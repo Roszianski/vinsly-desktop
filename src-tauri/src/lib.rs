@@ -1226,50 +1226,71 @@ fn log_tcc_full_disk_status() {
 
 #[cfg(target_os = "macos")]
 fn query_tcc_full_disk_entry() -> Result<Option<bool>, String> {
+    // Check both user and system TCC databases. On macOS Sequoia+, FDA permissions
+    // may be stored in the system database rather than the user database.
     let home_dir = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
-    let db_path = home_dir
+    let user_db_path = home_dir
         .join("Library")
         .join("Application Support")
         .join("com.apple.TCC")
         .join("TCC.db");
+    let system_db_path = Path::new("/Library/Application Support/com.apple.TCC/TCC.db");
 
-    if !db_path.exists() {
-        return Ok(None);
+    // Try user database first, then system database
+    for db_path in [&user_db_path, system_db_path] {
+        if !db_path.exists() {
+            continue;
+        }
+
+        let allowed_column_exists = match tcc_access_has_allowed_column(db_path) {
+            Ok(exists) => exists,
+            Err(_) => continue, // Skip this database if we can't read it
+        };
+
+        // macOS 14+ record Full Disk Access decisions via auth_value. On Ventura through Tahoe betas,
+        // grants show up as auth_value>=2 while the legacy "allowed" column may stay at 0 or be removed.
+        // Prefer auth_value everywhere but still honor the column on older releases if present.
+        //
+        // SAFETY: MACOS_BUNDLE_IDENTIFIER is a compile-time constant ("com.vinsly.desktop").
+        // String interpolation is safe here as no user input is involved. We use sqlite3 CLI
+        // which doesn't support parameterized queries - this pattern is intentional.
+        let grant_query = if allowed_column_exists {
+            format!(
+                "SELECT CASE WHEN auth_value >= 2 OR allowed = 1 THEN 1 ELSE 0 END AS granted \
+                FROM access WHERE client='{}' AND service='kTCCServiceSystemPolicyAllFiles' \
+                ORDER BY last_modified DESC LIMIT 1;",
+                MACOS_BUNDLE_IDENTIFIER
+            )
+        } else {
+            format!(
+                "SELECT CASE WHEN auth_value >= 2 THEN 1 ELSE 0 END AS granted \
+                FROM access WHERE client='{}' AND service='kTCCServiceSystemPolicyAllFiles' \
+                ORDER BY last_modified DESC LIMIT 1;",
+                MACOS_BUNDLE_IDENTIFIER
+            )
+        };
+
+        let stdout = match run_sqlite_query(db_path, &grant_query) {
+            Ok(s) => s,
+            Err(_) => continue, // Skip this database if query fails
+        };
+
+        if stdout.is_empty() {
+            continue; // No entry in this database, try next
+        }
+
+        let granted: i64 = match stdout.parse() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        if granted == 1 {
+            return Ok(Some(true)); // Found granted entry
+        }
     }
 
-    let allowed_column_exists = tcc_access_has_allowed_column(&db_path)?;
-    // macOS 14+ record Full Disk Access decisions via auth_value. On Ventura through Tahaeo betas,
-    // grants show up as auth_value>=2 while the legacy "allowed" column may stay at 0 or be removed.
-    // Prefer auth_value everywhere but still honor the column on older releases if present.
-    //
-    // SAFETY: MACOS_BUNDLE_IDENTIFIER is a compile-time constant ("com.vinsly.desktop").
-    // String interpolation is safe here as no user input is involved. We use sqlite3 CLI
-    // which doesn't support parameterized queries - this pattern is intentional.
-    let grant_query = if allowed_column_exists {
-        format!(
-            "SELECT CASE WHEN auth_value >= 2 OR allowed = 1 THEN 1 ELSE 0 END AS granted \
-            FROM access WHERE client='{}' AND service='kTCCServiceSystemPolicyAllFiles' \
-            ORDER BY last_modified DESC LIMIT 1;",
-            MACOS_BUNDLE_IDENTIFIER
-        )
-    } else {
-        format!(
-            "SELECT CASE WHEN auth_value >= 2 THEN 1 ELSE 0 END AS granted \
-            FROM access WHERE client='{}' AND service='kTCCServiceSystemPolicyAllFiles' \
-            ORDER BY last_modified DESC LIMIT 1;",
-            MACOS_BUNDLE_IDENTIFIER
-        )
-    };
-
-    let stdout = run_sqlite_query(&db_path, &grant_query)?;
-    if stdout.is_empty() {
-        return Ok(None);
-    }
-
-    let granted: i64 = stdout
-        .parse()
-        .map_err(|err| format!("Unexpected sqlite3 output '{}': {}", stdout, err))?;
-    Ok(Some(granted == 1))
+    // No granted entry found in either database
+    Ok(None)
 }
 
 #[cfg(target_os = "macos")]
