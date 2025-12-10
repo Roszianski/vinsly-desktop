@@ -110,8 +110,10 @@ describe('useWorkspace', () => {
       result.current.toggleAgentFavorite(savedAgent);
     });
     expect(result.current.agents[0]?.isFavorite).toBe(true);
+    // Get the updated agent after first toggle for the second toggle
+    const updatedAgent = result.current.agents[0]!;
     act(() => {
-      result.current.toggleAgentFavorite(savedAgent);
+      result.current.toggleAgentFavorite(updatedAgent);
     });
     expect(result.current.agents[0]?.isFavorite).toBe(false);
   });
