@@ -9,7 +9,7 @@ A Tauri-powered desktop application for designing, organising, and analysing Cla
 - 🔧 **Agent Management** – Create, edit, duplicate, favourite, and organise your Claude agents with a focused editor.
 - 🧰 **Skill Library** – Inspect and edit Claude Code Skills (folders with `SKILL.md`) alongside your subagents, keeping workflows and personas in sync.
 - 🧠 **Swarm View** – See your “agent organisation” as a mind-map style graph, grouped by scope, with exportable diagrams.
-- 📊 **Analytics Dashboard** – Track agent complexity, model distribution, tool usage, and get data-driven recommendations.
+- 📊 **Agent Insights** – View agent metadata, model distribution, and tool configurations at a glance.
 - 🔍 **Scan & Watch** – Scan global and project directories for agents, and configure watched folders for auto‑discovery.
 - 🧾 **Slash Commands & Memory** – Manage `.claude/commands` and CLAUDE.md memories across global and project scopes, with import/export.
 - 🌐 **MCP Servers** – Configure Model Context Protocol servers at user/project/local scope with favorites and toggles.
@@ -19,6 +19,14 @@ A Tauri-powered desktop application for designing, organising, and analysing Cla
 - 🎨 **Light/Dark Themes** – System-aware theming with a dedicated appearance section in Settings.
 - 📥 **Import/Export** – Import agents from `.md` and `.zip` bundles, export individual agents or curated sets.
 - 🔐 **Licensing & Account** – In-app licence key + email activation flow (backed by Lemon Squeezy), plus a local display name used across the UI (e.g. "[Name] Organisation").
+
+## Platform Support
+
+Vinsly Desktop runs natively on all major desktop platforms:
+
+- **macOS** – Intel and Apple Silicon (signed and notarized)
+- **Windows** – x64 (NSIS installer)
+- **Linux** – x64 (AppImage and .deb packages)
 
 ## UI/UX Design System
 
@@ -89,8 +97,7 @@ Before running the Vinsly Desktop application, ensure you have:
 vinsly-desktop/
 ├── src/                          # React TypeScript frontend
 │   ├── components/               # React components
-│   │   ├── screens/             # Agents, skills, memory, commands, MCP, hooks, analytics, team graph
-│   │   ├── analytics/           # Analytics visualizations
+│   │   ├── screens/             # Agents, skills, memory, commands, MCP, hooks, team graph
 │   │   ├── form/                # Form components
 │   │   ├── icons/               # Icon components
 │   │   ├── tools/               # Tool selector components
@@ -101,7 +108,6 @@ vinsly-desktop/
 │   │   ├── tauriCommands.ts     # Rust command wrappers (agents, skills, memory, commands, MCP, hooks, sessions)
 │   │   ├── agentImport.ts       # Agent import from files / zip
 │   │   ├── agentExport.ts       # Agent export to zip
-│   │   ├── analytics.ts         # Analytics calculations & recommendations
 │   │   ├── lemonLicensingClient.ts # Lemon Squeezy License API client
 │   │   └── fuzzyMatch.ts        # Search functionality
 │   ├── types.ts                 # Core TypeScript type definitions
@@ -294,4 +300,15 @@ Vinsly Desktop is a **pay‑to‑own** product using Lemon Squeezy for billing a
 
 ### Lemon Squeezy API Notes
 
-Vinsly calls Lemon’s License API directly from the client to validate/activate keys. Prefer long‑lived licence keys on the Lemon side so older installers remain functional; rotate via normal app updates if you need to change products or variants.
+Vinsly calls Lemon's License API directly from the client to validate/activate keys. Prefer long‑lived licence keys on the Lemon side so older installers remain functional; rotate via normal app updates if you need to change products or variants.
+
+## Documentation
+
+- [CHANGELOG](./CHANGELOG.md) – Version history and release notes
+- [LICENSE](./LICENSE) – Proprietary software license
+- [PRIVACY](./PRIVACY.md) – Privacy policy
+- [Tauri Commands Reference](./docs/TAURI_COMMANDS.md) – Full IPC command documentation
+
+## Support
+
+For questions, issues, or licensing inquiries: **support@vinsly.com**
