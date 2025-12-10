@@ -160,6 +160,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
   const [rawFrontmatterText, setRawFrontmatterText] = useState('');
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(new Set([0]));
+  const [hasReachedReview, setHasReachedReview] = useState(false);
   const [direction, setDirection] = useState(1);
 
   const isWizard = mode !== 'edit';
@@ -473,28 +474,37 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
     }
   };
 
-  // Check if user can navigate to a specific step (all previous required steps must be complete)
+  // Check if navigation to a specific step is allowed
+  // Strictly sequential: can only unlock the next step after completing the current one
   const canNavigateToStep = useCallback((targetIndex: number): boolean => {
-    const targetStep = WIZARD_STEPS[targetIndex];
-    // Always allow navigating to review step if previous required steps are complete
-    if (targetStep.id === 'review') {
-      for (let i = 0; i < targetIndex; i++) {
-        const step = WIZARD_STEPS[i];
-        if (step.required && !isStepComplete(step.id)) {
-          return false;
-        }
-      }
+    // Once review has been reached, allow free navigation to any step
+    if (hasReachedReview) {
       return true;
     }
-    // For non-review steps, can only go forward if all previous required steps are complete
-    for (let i = 0; i < targetIndex; i++) {
+
+    // Always allow navigating to already visited steps (going back)
+    if (visitedSteps.has(targetIndex)) {
+      return true;
+    }
+
+    // For unvisited steps, can only go to the immediate next step after current
+    // First, find the highest completed step index that's been visited
+    let highestCompletedVisitedIndex = -1;
+    for (let i = 0; i < WIZARD_STEPS.length; i++) {
+      if (!visitedSteps.has(i)) continue;
       const step = WIZARD_STEPS[i];
-      if (step.required && !isStepComplete(step.id)) {
-        return false;
+      // Check if this visited step is complete (required steps must be complete, optional are always ok)
+      if (!step.required || isStepComplete(step.id)) {
+        highestCompletedVisitedIndex = i;
+      } else {
+        // Found an incomplete required step - can't go past this
+        break;
       }
     }
-    return true;
-  }, []);
+
+    // Can only navigate to the very next step after the highest completed visited step
+    return targetIndex === highestCompletedVisitedIndex + 1;
+  }, [isStepComplete, hasReachedReview, visitedSteps]);
 
   const goToStep = useCallback((nextIndex: number) => {
     const clamped = Math.max(0, Math.min(nextIndex, WIZARD_STEPS.length - 1));
@@ -518,6 +528,10 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
       updated.add(clamped);
       return updated;
     });
+    // Mark that user has reached review, enabling free navigation
+    if (isReviewStep) {
+      setHasReachedReview(true);
+    }
   }, [currentStepIndex, canNavigateToStep]);
 
   const handleNextStep = () => {

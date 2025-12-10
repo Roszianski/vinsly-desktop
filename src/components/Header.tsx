@@ -224,7 +224,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Scan Button */}
             <button
               onClick={handleScanClick}
-              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 ${
+              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 shadow-none ${
                 showScanHighlight
                   ? 'border-v-accent bg-v-accent/10 text-v-accent animate-pulse ring-2 ring-v-accent/50 ring-offset-2 ring-offset-v-light-bg dark:ring-offset-v-dark'
                   : 'border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark'
@@ -232,7 +232,7 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label="Scan for agents"
               aria-busy={isScanning}
             >
-              <span className="inline-flex items-center gap-2">
+              <span className="inline-flex items-center gap-2 pointer-events-none">
                 {isScanning && <ScanSpinner />}
                 <span>{isScanning ? 'Scanning…' : 'Scan'}</span>
               </span>
@@ -249,11 +249,11 @@ export const Header: React.FC<HeaderProps> = ({
             {onShowKeyboardShortcuts && (
               <button
                 onClick={onShowKeyboardShortcuts}
-                className="p-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer"
+                className="p-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer shadow-none"
                 aria-label="View keyboard shortcuts"
                 title="Keyboard Shortcuts"
               >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
               </button>
@@ -263,11 +263,11 @@ export const Header: React.FC<HeaderProps> = ({
             {onOpenDocs && (
               <button
                 onClick={onOpenDocs}
-                className="p-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer"
+                className="p-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer shadow-none"
                 aria-label="Open documentation"
                 title="Help & Documentation"
               >
-                <HelpIcon className="h-5 w-5" />
+                <HelpIcon className="h-5 w-5 pointer-events-none" />
               </button>
             )}
 
@@ -275,29 +275,29 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark">
               <button
                 onClick={() => theme === 'dark' && onToggleTheme()}
-                className={`px-3 py-2 text-sm font-medium transition-colors duration-150 flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-2 text-sm font-medium transition-colors duration-150 flex items-center gap-1.5 cursor-pointer shadow-none ${
                   theme === 'light'
                     ? 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-primary dark:text-v-text-primary'
                     : 'text-v-light-text-secondary dark:text-v-text-secondary hover:bg-v-light-hover dark:hover:bg-v-light-dark'
                 }`}
                 aria-label="Light mode"
               >
-                <SunIcon className="h-4 w-4" />
-                <span>Light</span>
+                <SunIcon className="h-4 w-4 pointer-events-none" />
+                <span className="pointer-events-none">Light</span>
               </button>
               <button
                 onClick={() => theme === 'light' && onToggleTheme()}
-                className={`px-3 py-2 text-sm font-medium transition-colors duration-150 flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-2 text-sm font-medium transition-colors duration-150 flex items-center gap-1.5 cursor-pointer shadow-none ${
                   theme === 'dark'
                     ? 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-primary dark:text-v-text-primary'
                     : 'text-v-light-text-secondary dark:text-v-text-secondary hover:bg-v-light-hover dark:hover:bg-v-light-dark'
                 }`}
                 aria-label="Dark mode"
               >
-                <div style={{ transform: 'rotate(35deg)' }}>
+                <div className="pointer-events-none" style={{ transform: 'rotate(35deg)' }}>
                   <MoonIcon className="h-4 w-4" />
                 </div>
-                <span>Dark</span>
+                <span className="pointer-events-none">Dark</span>
               </button>
             </div>
 
@@ -305,10 +305,10 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="relative">
               <button
                 onClick={() => setShowSettingsModal(true)}
-                className="p-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer"
+                className="p-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer shadow-none"
                 aria-label={pendingUpdate ? "Settings (update available)" : "Settings"}
               >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
