@@ -150,7 +150,7 @@ export function useClaudeMemory(options: UseClaudeMemoryOptions): UseClaudeMemor
         setProjectMemory(updatedMemory);
       }
 
-      showToast('success', 'Memory saved');
+      // Note: We don't show a toast here - the UI shows a "Saved" indicator instead
     } catch (error) {
       devLog.error('Error saving CLAUDE.md:', error);
       showToast('error', `Failed to save memory: ${error instanceof Error ? error.message : 'Unknown error'}`);

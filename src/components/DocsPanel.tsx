@@ -260,7 +260,7 @@ export const DocsPanel: React.FC<DocsPanelProps> = ({ isOpen, onClose }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.15 }}
             className="fixed inset-0 bg-black/30 dark:bg-black/50 z-40"
             onClick={onClose}
           />
@@ -270,7 +270,7 @@ export const DocsPanel: React.FC<DocsPanelProps> = ({ isOpen, onClose }) => {
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
-            transition={{ type: 'tween', ease: 'easeOut', duration: 0.25 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 35 }}
             className="fixed top-0 right-0 h-full w-full max-w-lg bg-v-light-surface dark:bg-v-mid-dark border-l border-v-light-border dark:border-v-border shadow-2xl z-50 flex flex-col"
           >
             {/* Header */}

@@ -444,7 +444,9 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
   // Memory operations
   const saveMemory = useCallback(async (scope: AgentScope, content: string, projectPath?: string) => {
     await saveMemoryToBackend(scope, content, projectPath);
-  }, [saveMemoryToBackend]);
+    // Reload the memories list to pick up the newly saved/created memory
+    await loadMemories();
+  }, [saveMemoryToBackend, loadMemories]);
 
   const cloneMemory = useCallback(async (memoryToClone: ClaudeMemory, destinationPath: string) => {
     try {

@@ -117,6 +117,31 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
   const currentStep = WIZARD_STEPS[currentStepIndex];
   const isLastStep = currentStepIndex === WIZARD_STEPS.length - 1;
 
+  // Define isStepComplete first (needed by canNavigateToStep)
+  const isStepComplete = useCallback((stepId: SkillWizardStepId): boolean => {
+    switch (stepId) {
+      case 'scope':
+        if (formData.scope === AgentScope.Project) {
+          return Boolean(projectFolderPath && projectFolderPath.trim().length > 0);
+        }
+        return true;
+      case 'identifier':
+        return Boolean(formData.name.trim() && formData.frontmatter.description?.trim() && !nameError);
+      case 'tools':
+        return true; // Tools are optional
+      case 'instructions':
+        return Boolean(formData.body.trim());
+      case 'review':
+        return (
+          isStepComplete('scope') &&
+          isStepComplete('identifier') &&
+          isStepComplete('instructions')
+        );
+      default:
+        return false;
+    }
+  }, [formData.scope, formData.name, formData.frontmatter.description, formData.body, projectFolderPath, nameError]);
+
   // Check if navigation to a specific step is allowed
   // Strictly sequential: can only unlock the next step after completing the current one
   const canNavigateToStep = useCallback((targetIndex: number): boolean => {
@@ -350,30 +375,6 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
     };
   }, [inheritsAllTools, selectedTools]);
 
-  const isStepComplete = (stepId: SkillWizardStepId): boolean => {
-    switch (stepId) {
-      case 'scope':
-        if (formData.scope === AgentScope.Project) {
-          return Boolean(projectFolderPath && projectFolderPath.trim().length > 0);
-        }
-        return true;
-      case 'identifier':
-        return Boolean(formData.name.trim() && formData.frontmatter.description?.trim() && nameValidation.valid);
-      case 'tools':
-        return true; // Tools are optional
-      case 'instructions':
-        return Boolean(formData.body.trim());
-      case 'review':
-        return (
-          isStepComplete('scope') &&
-          isStepComplete('identifier') &&
-          isStepComplete('instructions')
-        );
-      default:
-        return false;
-    }
-  };
-
   const canProceedFromStep = (stepId: SkillWizardStepId) => {
     if (stepId === 'scope') {
       return isStepComplete(stepId);
@@ -389,16 +390,6 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
 
   const canSave = isStepComplete('review');
 
-  const handleScopeChange = (scope: AgentScope) => {
-    setFormData(current => ({
-      ...current,
-      scope,
-    }));
-    if (scope === AgentScope.Global) {
-      setProjectFolderPath('');
-    }
-  };
-
   const handleChooseProjectFolder = async (event?: React.MouseEvent) => {
     event?.stopPropagation();
     if (isPickingProjectFolder) return;
@@ -412,11 +403,31 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
       });
       if (typeof selected === 'string') {
         setProjectFolderPath(selected);
+        // Set scope to Project after successful folder selection
+        setFormData(current => ({
+          ...current,
+          scope: AgentScope.Project,
+        }));
       }
     } catch (error) {
       devLog.error('Failed to select project folder for skill:', error);
     } finally {
       setIsPickingProjectFolder(false);
+    }
+  };
+
+  const handleScopeChange = (scope: AgentScope) => {
+    if (scope === AgentScope.Project && !projectFolderPath) {
+      // Trigger folder picker when switching to Project without a folder
+      handleChooseProjectFolder();
+    } else {
+      setFormData(current => ({
+        ...current,
+        scope,
+      }));
+      if (scope === AgentScope.Global) {
+        setProjectFolderPath('');
+      }
     }
   };
 
@@ -499,50 +510,48 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
                         : 'border-v-light-border dark:border-v-border hover:border-v-accent'
                     }`}
                   >
-                    {isProjectScope && (
+                    {/* Folder picker button - only shown when project is selected and has a path */}
+                    {isProjectScope && selected && projectFolderPath && (
                       <div className="absolute top-3 right-3">
-                        <button
-                          type="button"
-                          onClick={handleChooseProjectFolder}
-                          disabled={isPickingProjectFolder}
-                          className={`p-1.5 rounded-md transition-colors hover:bg-v-light-border dark:hover:bg-v-border ${isPickingProjectFolder ? 'cursor-wait opacity-80' : ''}`}
-                          aria-label="Choose project folder"
-                          title={projectFolderPath || 'Choose project folder'}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleChooseProjectFolder(e);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleChooseProjectFolder();
+                            }
+                          }}
+                          className={`p-1.5 rounded-md transition-colors hover:bg-v-light-border dark:hover:bg-v-border ${isPickingProjectFolder ? 'cursor-wait opacity-80' : 'cursor-pointer'}`}
+                          aria-label="Change project folder"
+                          title="Change project folder"
                         >
                           {isPickingProjectFolder ? (
                             <SpinnerIcon className="h-4 w-4 text-v-accent" />
                           ) : (
-                            <FolderIcon
-                              className={`h-4 w-4 ${
-                                projectFolderPath
-                                  ? 'text-v-accent'
-                                  : 'text-v-light-text-secondary dark:text-v-text-secondary'
-                              }`}
-                            />
+                            <FolderIcon className="h-4 w-4 text-v-accent" />
                           )}
-                        </button>
+                        </div>
                       </div>
                     )}
                     <p className="text-sm font-bold text-v-light-text-primary dark:text-v-text-primary">{detail.title}</p>
                     <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">{detail.description}</p>
                     <p className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary mt-2">
-                      Location: {detail.path}
+                      {isProjectScope && projectFolderPath
+                        ? `Saved in ${projectFolderPath.replace(/^\/Users\/([^/]+)/, '~').replace(/^C:\\Users\\([^\\]+)/, '~')}/.claude/skills/`
+                        : isProjectScope
+                        ? 'Click to choose a project folder'
+                        : `Location: ${detail.path}`}
                     </p>
                   </button>
                 );
               })}
             </div>
-            {formData.scope === AgentScope.Project && projectFolderPath && (
-              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary font-mono break-all">
-                Saving to: {projectFolderPath}
-              </p>
-            )}
-            {formData.scope === AgentScope.Project && !projectFolderPath && (
-              <p className="text-sm text-v-danger flex items-center gap-2">
-                <WarningIcon className="h-4 w-4" />
-                Select the project root where .claude/skills should live.
-              </p>
-            )}
           </div>
         );
       case 'identifier':

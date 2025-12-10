@@ -34,6 +34,58 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: strin
 }
 
 /**
+ * Preprocess YAML frontmatter to fix common issues like unquoted colons in values.
+ * Claude Code often generates frontmatter like:
+ *   description: Use this agent when you need to: do something
+ * which breaks YAML parsing because the colon creates a nested mapping.
+ */
+function preprocessYamlFrontmatter(yamlText: string): string {
+  const lines = yamlText.split('\n');
+  const processedLines: string[] = [];
+
+  for (const line of lines) {
+    // Skip empty lines or lines that are already quoted
+    if (!line.trim() || line.trim().startsWith('#')) {
+      processedLines.push(line);
+      continue;
+    }
+
+    // Match lines that look like "key: value" where value might contain colons
+    const keyValueMatch = line.match(/^(\s*)([a-zA-Z_][a-zA-Z0-9_-]*)\s*:\s*(.*)$/);
+
+    if (keyValueMatch) {
+      const [, indent, key, value] = keyValueMatch;
+
+      // If value is empty, already quoted, or is a special YAML value, leave it alone
+      if (!value ||
+          value.startsWith('"') ||
+          value.startsWith("'") ||
+          value.startsWith('[') ||
+          value.startsWith('{') ||
+          value === 'true' ||
+          value === 'false' ||
+          value === 'null' ||
+          /^-?\d+(\.\d+)?$/.test(value)) {
+        processedLines.push(line);
+        continue;
+      }
+
+      // If value contains a colon followed by a space (which would create nested mapping),
+      // wrap the entire value in double quotes, escaping any existing quotes
+      if (value.includes(': ') || value.includes(':\t')) {
+        const escapedValue = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        processedLines.push(`${indent}${key}: "${escapedValue}"`);
+        continue;
+      }
+    }
+
+    processedLines.push(line);
+  }
+
+  return processedLines.join('\n');
+}
+
+/**
  * Parse markdown content and extract frontmatter and body
  */
 function parseMarkdown(content: string): { frontmatter: Record<string, unknown>; body: string } | null {
@@ -45,8 +97,20 @@ function parseMarkdown(content: string): { frontmatter: Record<string, unknown>;
 
   const [, frontmatterText, body] = match;
 
+  // First try parsing as-is
   try {
     const parsed = YAML.parse(frontmatterText) ?? {};
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return { frontmatter: parsed as Record<string, unknown>, body: body.trim() };
+    }
+  } catch {
+    // If standard parsing fails, try with preprocessing
+  }
+
+  // Try with preprocessed YAML (fixes unquoted colons in values)
+  try {
+    const preprocessed = preprocessYamlFrontmatter(frontmatterText);
+    const parsed = YAML.parse(preprocessed) ?? {};
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null;
     }

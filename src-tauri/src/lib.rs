@@ -2372,7 +2372,11 @@ async fn detect_claude_sessions() -> Result<Vec<ClaudeSessionInfo>, String> {
             cmd_str.contains("@anthropic/claude") ||
             (name.contains("node") && cmd_str.contains("claude"));
 
-        if is_claude_code {
+        // Exclude headless/print mode processes (automated invocations, not interactive sessions)
+        // These are invoked by Vinsly for agent generation and should not count as user sessions
+        let is_headless = cmd_str.contains(" -p ") || cmd_str.contains(" --print ");
+
+        if is_claude_code && !is_headless {
             let cwd = process.cwd()
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|| "unknown".to_string());
@@ -2503,6 +2507,155 @@ async fn kill_claude_session(app: tauri::AppHandle, pid: u32) -> Result<(), Stri
     {
         Err("kill_claude_session is not supported on this platform".to_string())
     }
+}
+
+// ============================================================================
+// Claude Code CLI Integration
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ClaudeCodeInvocationResult {
+    success: bool,
+    output: String,
+    error: Option<String>,
+}
+
+/// Check if the Claude Code CLI is installed and accessible
+#[tauri::command]
+async fn check_claude_cli_installed() -> Result<bool, String> {
+    use std::process::Command;
+
+    let result = tauri::async_runtime::spawn_blocking(|| {
+        Command::new("claude")
+            .arg("--version")
+            .output()
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?;
+
+    match result {
+        Ok(output) => Ok(output.status.success()),
+        Err(_) => Ok(false), // CLI not found or not executable
+    }
+}
+
+/// Invoke Claude Code in headless mode with the given prompt
+/// Uses --output-format stream-json and parses the JSONL output
+#[tauri::command]
+async fn invoke_claude_code(prompt: String) -> Result<ClaudeCodeInvocationResult, String> {
+    use std::io::{BufRead, BufReader, Read as IoRead};
+    use std::process::{Command, Stdio};
+
+    // Security: Validate prompt length to prevent abuse
+    if prompt.len() > 50000 {
+        return Err("Prompt too long (max 50000 characters)".to_string());
+    }
+
+    let result = tauri::async_runtime::spawn_blocking(move || -> Result<ClaudeCodeInvocationResult, String> {
+        let mut cmd = Command::new("claude");
+        cmd.args(["-p", &prompt, "--output-format", "stream-json", "--verbose"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| format!("Failed to spawn claude: {}", e))?;
+
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "Failed to capture stdout".to_string())?;
+
+        let reader = BufReader::new(stdout);
+        let mut final_result = String::new();
+        let mut last_error: Option<String> = None;
+
+        for line in reader.lines() {
+            match line {
+                Ok(line_str) => {
+                    if line_str.trim().is_empty() {
+                        continue;
+                    }
+
+                    // Parse each JSONL line
+                    if let Ok(msg) = serde_json::from_str::<serde_json::Value>(&line_str) {
+                        let msg_type = msg.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                        match msg_type {
+                            "result" => {
+                                // The final result message contains the output
+                                if let Some(result_text) = msg.get("result").and_then(|v| v.as_str())
+                                {
+                                    final_result = result_text.to_string();
+                                }
+                            }
+                            "error" => {
+                                if let Some(error_msg) = msg.get("error").and_then(|v| v.as_str()) {
+                                    last_error = Some(error_msg.to_string());
+                                }
+                            }
+                            // Other message types (init, assistant, user, etc.) are progress
+                            // We could emit events for these if we want real-time progress
+                            _ => {}
+                        }
+                    }
+                }
+                Err(e) => {
+                    last_error = Some(format!("Read error: {}", e));
+                    break;
+                }
+            }
+        }
+
+        // Capture stderr for error reporting
+        let stderr_output = child
+            .stderr
+            .take()
+            .map(|mut stderr| {
+                let mut stderr_content = String::new();
+                let _ = IoRead::read_to_string(&mut stderr, &mut stderr_content);
+                stderr_content
+            })
+            .unwrap_or_default();
+
+        let status = child
+            .wait()
+            .map_err(|e| format!("Failed to wait for process: {}", e))?;
+
+        if !status.success() {
+            // Build error message from available sources
+            let error_message = if !stderr_output.trim().is_empty() {
+                stderr_output.trim().to_string()
+            } else if let Some(ref err) = last_error {
+                err.clone()
+            } else {
+                format!("Claude Code exited with status {}. Make sure you are logged in (run 'claude login' in terminal).", status)
+            };
+
+            return Ok(ClaudeCodeInvocationResult {
+                success: false,
+                output: String::new(),
+                error: Some(error_message),
+            });
+        }
+
+        let has_output = !final_result.is_empty();
+        let error_msg = if !has_output && last_error.is_none() {
+            Some("No output received from Claude Code".to_string())
+        } else {
+            last_error
+        };
+
+        Ok(ClaudeCodeInvocationResult {
+            success: has_output,
+            output: final_result,
+            error: error_msg,
+        })
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))??;
+
+    Ok(result)
 }
 
 #[tauri::command]
@@ -2967,6 +3120,9 @@ pub fn run() {
             // Session detection and actions
             detect_claude_sessions,
             kill_claude_session,
+            // Claude Code CLI integration
+            check_claude_cli_installed,
+            invoke_claude_code,
             // Safe file export/import (replaces fs plugin)
             export_text_file,
             export_binary_file,

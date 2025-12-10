@@ -87,9 +87,14 @@ export function ResourceListItem<T extends Agent | Skill>({
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <h3 className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary truncate">
-            {item.name}
-          </h3>
+          <div className="relative group/name min-w-0">
+            <h3 className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary truncate">
+              {item.name}
+            </h3>
+            <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/name:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+              {item.name}
+            </span>
+          </div>
           <span
             className={`
               px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap

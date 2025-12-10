@@ -652,12 +652,22 @@ const SkillGridCard: React.FC<SkillGridCardProps> = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <div className="min-w-0">
-              <p className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary truncate" title={skill.name}>
-                {highlightText(skill.name, highlightTerm)}
-              </p>
-              <p className="text-[11px] font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate" title={fullPath}>
-                {fullPath}
-              </p>
+              <div className="relative group/name">
+                <p className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary truncate">
+                  {highlightText(skill.name, highlightTerm)}
+                </p>
+                <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/name:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                  {skill.name}
+                </span>
+              </div>
+              <div className="relative group/path">
+                <p className="text-[11px] font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate">
+                  {fullPath}
+                </p>
+                <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/path:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                  {fullPath}
+                </span>
+              </div>
             </div>
             <span
               className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold ${
@@ -828,9 +838,14 @@ const SkillListRow: React.FC<SkillListRowProps> = ({
       <div className="pr-2 space-y-0.5 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="min-w-0">
-            <p className="font-semibold text-v-light-text-primary dark:text-v-text-primary truncate">
-              {highlightText(skill.name, highlightTerm)}
-            </p>
+            <div className="relative group/name">
+              <p className="font-semibold text-v-light-text-primary dark:text-v-text-primary truncate">
+                {highlightText(skill.name, highlightTerm)}
+              </p>
+              <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/name:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                {skill.name}
+              </span>
+            </div>
             <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary truncate">
               {highlightText(skill.frontmatter.description || '—', highlightTerm)}
             </p>

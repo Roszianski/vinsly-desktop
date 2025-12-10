@@ -494,6 +494,27 @@ export async function killClaudeSession(pid: number): Promise<void> {
 }
 
 // ============================================================================
+// Claude Code CLI Integration (Headless Mode)
+// ============================================================================
+
+export interface ClaudeCodeInvocationResult {
+  success: boolean;
+  output: string;
+  error?: string;
+}
+
+// Check if Claude Code CLI is installed and accessible
+export async function checkClaudeCliInstalled(): Promise<boolean> {
+  return await invoke<boolean>('check_claude_cli_installed');
+}
+
+// Invoke Claude Code in headless mode with a prompt
+// Returns the final result from stream-json output
+export async function invokeClaudeCode(prompt: string): Promise<ClaudeCodeInvocationResult> {
+  return await invoke<ClaudeCodeInvocationResult>('invoke_claude_code', { prompt });
+}
+
+// ============================================================================
 // Safe File Export/Import (replaces @tauri-apps/plugin-fs)
 // ============================================================================
 

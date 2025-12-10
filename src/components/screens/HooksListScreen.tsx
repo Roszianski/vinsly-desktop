@@ -411,12 +411,17 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
               >
                 <StarIcon className="h-4 w-4" filled={hook.isFavorite} />
               </button>
-              <span
-                className="font-medium text-v-light-text-primary dark:text-v-text-primary truncate cursor-pointer hover:text-v-accent"
-                onClick={() => onEditHook(hook)}
-              >
-                {highlightText(hook.name, searchQuery)}
-              </span>
+              <div className="relative group/name min-w-0">
+                <span
+                  className="font-medium text-v-light-text-primary dark:text-v-text-primary truncate cursor-pointer hover:text-v-accent block"
+                  onClick={() => onEditHook(hook)}
+                >
+                  {highlightText(hook.name, searchQuery)}
+                </span>
+                <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/name:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                  {hook.name}
+                </span>
+              </div>
             </div>
 
             <div>
@@ -510,10 +515,13 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
               onClick={() => onEditHook(hook)}
             >
               <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <LightningIcon className="h-5 w-5 text-v-accent" />
-                  <span className="font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                <div className="relative group/name flex items-center gap-2 min-w-0">
+                  <LightningIcon className="h-5 w-5 text-v-accent flex-shrink-0" />
+                  <span className="font-semibold text-v-light-text-primary dark:text-v-text-primary truncate">
                     {highlightText(hook.name, searchQuery)}
+                  </span>
+                  <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/name:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                    {hook.name}
                   </span>
                 </div>
                 <button

@@ -17,6 +17,8 @@ import { extractProjectRootFromAgentPath } from '../../utils/path';
 import { devLog } from '../../utils/devLogger';
 import { serializeFrontmatter } from '../../utils/frontmatter';
 import { emptyToolsValue, toolsSelectionToValue, toolsValueToArray } from '../../utils/toolHelpers';
+import { checkClaudeCliInstalled } from '../../utils/tauriCommands';
+import { generateAgentWithClaudeCode } from '../../utils/claudeCodeService';
 
 interface AgentEditorScreenProps {
   agent: Agent;
@@ -28,6 +30,8 @@ interface AgentEditorScreenProps {
 
 type WizardStepId =
   | 'scope'
+  | 'creationMethod'
+  | 'agentDescription'
   | 'identifier'
   | 'prompt'
   | 'description'
@@ -36,12 +40,26 @@ type WizardStepId =
   | 'color'
   | 'review';
 
+type CreationMethod = 'manual' | 'automatic';
+
 const WIZARD_STEPS: { id: WizardStepId; label: string; description: string; required: boolean }[] = [
   {
     id: 'scope',
     label: 'Location',
     description: 'Choose whether this agent lives in the project or your personal library.',
     required: true
+  },
+  {
+    id: 'creationMethod',
+    label: 'Creation Method',
+    description: 'Choose how you want to create this agent.',
+    required: true
+  },
+  {
+    id: 'agentDescription',
+    label: 'Describe Your Agent',
+    description: 'Tell Claude what kind of agent you want to create.',
+    required: false // Only shown for automatic mode
   },
   {
     id: 'identifier',
@@ -163,6 +181,13 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
   const [hasReachedReview, setHasReachedReview] = useState(false);
   const [direction, setDirection] = useState(1);
 
+  // Automatic agent generation state
+  const [creationMethod, setCreationMethod] = useState<CreationMethod>('manual');
+  const [claudeCliAvailable, setClaudeCliAvailable] = useState<boolean | null>(null);
+  const [isGeneratingAgent, setIsGeneratingAgent] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [agentDescriptionInput, setAgentDescriptionInput] = useState('');
+
   const isWizard = mode !== 'edit';
 
   useEffect(() => {
@@ -222,6 +247,28 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
     }
   }, [formData.scope, projectFolderPath, visitedSteps]);
 
+  // Check if Claude CLI is installed for automatic agent generation
+  useEffect(() => {
+    let cancelled = false;
+    async function checkCli() {
+      try {
+        const available = await checkClaudeCliInstalled();
+        if (!cancelled) {
+          setClaudeCliAvailable(available);
+        }
+      } catch (error) {
+        devLog.error('Failed to check Claude CLI:', error);
+        if (!cancelled) {
+          setClaudeCliAvailable(false);
+        }
+      }
+    }
+    checkCli();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -267,6 +314,54 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
 
   const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setFormData((prev) => ({ ...prev, body: e.target.value }));
+  };
+
+  // Handler for automatic agent generation with Claude Code
+  const handleAutomaticGeneration = async () => {
+    if (!agentDescriptionInput.trim() || isGeneratingAgent) return;
+
+    setIsGeneratingAgent(true);
+    setGenerationError(null);
+
+    try {
+      const result = await generateAgentWithClaudeCode(agentDescriptionInput, formData.scope);
+
+      if (!result.success || !result.fields) {
+        setGenerationError(result.error || 'Generation failed');
+        return;
+      }
+
+      // Populate form with generated fields
+      setFormData((prev) => ({
+        ...prev,
+        name: result.fields!.name,
+        frontmatter: {
+          ...prev.frontmatter,
+          name: result.fields!.name,
+          description: result.fields!.description,
+          model: result.fields!.model,
+          tools: result.fields!.tools ? result.fields!.tools.join(',') : undefined,
+          color: result.fields!.color,
+        },
+        body: result.fields!.systemPrompt,
+      }));
+
+      // Mark all steps as visited and jump to review
+      setVisitedSteps(new Set(WIZARD_STEPS.map((_, i) => i)));
+      setHasReachedReview(true);
+
+      // Navigate to review step
+      const reviewIndex = WIZARD_STEPS.findIndex((s) => s.id === 'review');
+      if (reviewIndex >= 0) {
+        setDirection(1);
+        setCurrentStepIndex(reviewIndex);
+      }
+    } catch (error) {
+      devLog.error('Error during automatic agent generation:', error);
+      setGenerationError(error instanceof Error ? error.message : 'Unknown error occurred');
+    } finally {
+      setIsGeneratingAgent(false);
+    }
   };
 
   const toolCategories = useMemo(() => {
@@ -408,10 +503,28 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
   const isLastStep = currentStepIndex === WIZARD_STEPS.length - 1;
 
   // Define isStepComplete first (needed by getNextIncompleteStep)
+  // Get visible steps based on creation method
+  const getVisibleSteps = useCallback(() => {
+    if (creationMethod === 'automatic') {
+      // For automatic: scope -> creationMethod -> agentDescription -> review
+      return WIZARD_STEPS.filter((s) =>
+        ['scope', 'creationMethod', 'agentDescription', 'review'].includes(s.id)
+      );
+    }
+    // For manual: all steps except agentDescription
+    return WIZARD_STEPS.filter((s) => s.id !== 'agentDescription');
+  }, [creationMethod]);
+
+  const visibleSteps = useMemo(() => getVisibleSteps(), [getVisibleSteps]);
+
   const isStepComplete = (stepId: WizardStepId) => {
     switch (stepId) {
       case 'scope':
         return Boolean(formData.scope) && (formData.scope === AgentScope.Global || Boolean(projectFolderPath));
+      case 'creationMethod':
+        return Boolean(creationMethod);
+      case 'agentDescription':
+        return Boolean(agentDescriptionInput.trim());
       case 'identifier':
         return !nameError && Boolean(formData.frontmatter.name);
       case 'prompt':
@@ -430,8 +543,19 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
     }
   };
 
-  // Calculate completion percentage for required fields
+  // Calculate completion percentage for required fields (dynamic based on creation method)
   const getCompletionPercentage = () => {
+    if (creationMethod === 'automatic') {
+      // For automatic: scope + folder (if project) + description input
+      const requiredChecks = [
+        Boolean(formData.scope),
+        formData.scope === AgentScope.Global || Boolean(projectFolderPath),
+        Boolean(agentDescriptionInput.trim()),
+      ];
+      const completed = requiredChecks.filter(Boolean).length;
+      return Math.round((completed / requiredChecks.length) * 100);
+    }
+    // For manual: original checks
     const requiredChecks = [
       Boolean(formData.scope), // Scope selected
       formData.scope === AgentScope.Global || Boolean(projectFolderPath), // Folder if project
@@ -446,10 +570,13 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
 
   const completionPercentage = getCompletionPercentage();
 
-  // Get next incomplete step
+  // Get next incomplete step (among visible steps)
   const getNextIncompleteStep = (): number | null => {
     for (let i = 0; i < WIZARD_STEPS.length; i++) {
-      if (!isStepComplete(WIZARD_STEPS[i].id)) {
+      const step = WIZARD_STEPS[i];
+      // Skip steps that aren't visible for current creation method
+      if (!visibleSteps.some((vs) => vs.id === step.id)) continue;
+      if (!isStepComplete(step.id)) {
         return i;
       }
     }
@@ -463,6 +590,11 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
       case 'scope':
         // If project scope is selected, folder must be selected
         return formData.scope === AgentScope.Global || (formData.scope === AgentScope.Project && Boolean(projectFolderPath));
+      case 'creationMethod':
+        return Boolean(creationMethod);
+      case 'agentDescription':
+        // For automatic mode, can't proceed while generating
+        return !isGeneratingAgent && Boolean(agentDescriptionInput.trim());
       case 'identifier':
         return !nameError && Boolean(formData.frontmatter.name);
       case 'description':
@@ -586,9 +718,40 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
     onSave(formData, projectPath ? { projectPath } : undefined);
   };
 
-  const handleProjectFolderPick = async (event: React.MouseEvent) => {
-    event.stopPropagation();
-    if (formData.scope !== AgentScope.Project || isPickingProjectFolder) return;
+  // Keyboard shortcuts: Cmd/Ctrl+Enter to save on review step
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle Cmd/Ctrl+Enter
+      if (!((e.metaKey || e.ctrlKey) && e.key === 'Enter')) return;
+
+      // Don't trigger if focus is in a textarea (unless it's the agent description which has its own handler)
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'TEXTAREA' && target.id !== 'agent-description-input') return;
+
+      e.preventDefault();
+
+      // Get current visible steps
+      const visibleStepsForKeyboard = creationMethod === 'automatic'
+        ? WIZARD_STEPS.filter((s) => ['scope', 'creationMethod', 'agentDescription', 'review'].includes(s.id))
+        : WIZARD_STEPS.filter((s) => s.id !== 'agentDescription');
+
+      const currentVisibleIndex = visibleStepsForKeyboard.findIndex(s => s.id === WIZARD_STEPS[currentStepIndex]?.id);
+      const currentVisibleStep = visibleStepsForKeyboard[currentVisibleIndex];
+
+      // On review step, trigger save
+      if (currentVisibleStep?.id === 'review' && canSave) {
+        const projectPath = resolveProjectPathForSave();
+        onSave(formData, projectPath ? { projectPath } : undefined);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [currentStepIndex, creationMethod, canSave, formData, onSave, projectFolderPath]);
+
+  const handleProjectFolderPick = async (event?: React.MouseEvent) => {
+    if (event) event.stopPropagation();
+    if (isPickingProjectFolder) return;
 
     setIsPickingProjectFolder(true);
     try {
@@ -604,11 +767,22 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
 
       setProjectFolderPath(selectedPath);
       setProjectFolderError('');
+      // Set scope to Project after successful folder selection
+      setFormData((prev) => ({ ...prev, scope: AgentScope.Project }));
     } catch (error) {
       devLog.error('Failed to select project folder:', error);
       setProjectFolderError('Unable to open the folder picker. Please try again.');
     } finally {
       setIsPickingProjectFolder(false);
+    }
+  };
+
+  const handleScopeChange = (scope: AgentScope) => {
+    if (scope === AgentScope.Project && !projectFolderPath) {
+      // Trigger folder picker when switching to Project without a folder
+      handleProjectFolderPick();
+    } else {
+      setFormData((prev) => ({ ...prev, scope }));
     }
   };
 
@@ -648,9 +822,9 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
                 const isProjectScope = scope === AgentScope.Project;
                 return (
                   <button
-                    type="button"
                     key={scope}
-                    onClick={() => setFormData((prev) => ({ ...prev, scope }))}
+                    type="button"
+                    onClick={() => handleScopeChange(scope)}
                     className={`relative text-left border rounded-lg p-4 transition-colors duration-150 ${
                       selected
                         ? isProjectScope && projectFolderError
@@ -659,56 +833,192 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
                         : 'border-v-light-border dark:border-v-border hover:border-v-accent'
                     }`}
                   >
-                    {isProjectScope && (
+                    {/* Folder picker button - only shown when project is selected and has a path */}
+                    {isProjectScope && selected && projectFolderPath && (
                       <div className="absolute top-3 right-3">
-                        <button
-                          type="button"
-                          onClick={handleProjectFolderPick}
-                          disabled={isPickingProjectFolder}
-                          className={`p-1.5 rounded-md transition-colors ${
-                            projectFolderError
-                              ? 'bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/30'
-                              : 'hover:bg-v-light-border dark:hover:bg-v-border'
-                          } ${isPickingProjectFolder ? 'cursor-wait opacity-80' : ''}`}
-                          aria-label="Choose project folder"
-                          title={projectFolderPath || 'Choose project folder'}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleProjectFolderPick(e);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleProjectFolderPick();
+                            }
+                          }}
+                          className={`p-1.5 rounded-md transition-colors hover:bg-v-light-border dark:hover:bg-v-border ${isPickingProjectFolder ? 'cursor-wait opacity-80' : 'cursor-pointer'}`}
+                          aria-label="Change project folder"
+                          title="Change project folder"
                         >
                           {isPickingProjectFolder ? (
                             <SpinnerIcon className="h-4 w-4 text-v-accent" />
                           ) : (
-                            <FolderIcon
-                              className={`h-4 w-4 ${
-                                projectFolderError
-                                  ? 'text-red-600 dark:text-red-400'
-                                  : projectFolderPath
-                                  ? 'text-v-accent'
-                                  : 'text-v-light-text-secondary dark:text-v-text-secondary'
-                              }`}
-                            />
+                            <FolderIcon className="h-4 w-4 text-v-accent" />
                           )}
-                        </button>
+                        </div>
                       </div>
                     )}
                     <p className="text-sm font-bold text-v-light-text-primary dark:text-v-text-primary">{detail.title}</p>
                     <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">{detail.description}</p>
                     <p className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary mt-2">
-                      Location: {detail.path}
+                      {isProjectScope && projectFolderPath
+                        ? `Saved in ${projectFolderPath.replace(/^\/Users\/([^/]+)/, '~').replace(/^C:\\Users\\([^\\]+)/, '~')}/.claude/agents/`
+                        : isProjectScope
+                        ? 'Click to choose a project folder'
+                        : `Location: ${detail.path}`}
                     </p>
                   </button>
                 );
               })}
             </div>
-            {formData.scope === AgentScope.Project && projectFolderPath && (
-              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary font-mono break-all">
-                Saving to: {projectFolderPath}
-              </p>
-            )}
             {projectFolderError && formData.scope === AgentScope.Project && (
               <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
                 <WarningIcon className="h-4 w-4" />
                 {projectFolderError}
               </p>
             )}
+          </div>
+        );
+      case 'creationMethod':
+        return (
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Manual Option */}
+              <button
+                type="button"
+                onClick={() => setCreationMethod('manual')}
+                className={`text-left border rounded-lg p-4 transition-colors duration-150 ${
+                  creationMethod === 'manual'
+                    ? 'border-v-accent bg-v-light-hover dark:bg-v-light-dark'
+                    : 'border-v-light-border dark:border-v-border hover:border-v-accent'
+                }`}
+              >
+                <p className="text-sm font-bold text-v-light-text-primary dark:text-v-text-primary">
+                  Manual
+                </p>
+                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                  Configure each field step-by-step with full control over the agent definition.
+                </p>
+              </button>
+
+              {/* Automatic Option */}
+              <button
+                type="button"
+                onClick={() => claudeCliAvailable && setCreationMethod('automatic')}
+                disabled={!claudeCliAvailable}
+                className={`text-left border rounded-lg p-4 transition-colors duration-150 ${
+                  creationMethod === 'automatic'
+                    ? 'border-v-accent bg-v-light-hover dark:bg-v-light-dark'
+                    : claudeCliAvailable
+                      ? 'border-v-light-border dark:border-v-border hover:border-v-accent'
+                      : 'border-v-light-border dark:border-v-border opacity-50 cursor-not-allowed'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold text-v-light-text-primary dark:text-v-text-primary">
+                    Automatic
+                  </p>
+                  {claudeCliAvailable === null && (
+                    <SpinnerIcon className="h-3 w-3 text-v-light-text-secondary dark:text-v-text-secondary" />
+                  )}
+                  {claudeCliAvailable === false && (
+                    <span className="text-[10px] px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full">
+                      CLI not found
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                  Describe what you want and let Claude Code generate the agent for you.
+                </p>
+              </button>
+            </div>
+
+            {/* CLI Not Installed Warning */}
+            {claudeCliAvailable === false && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <WarningIcon className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                      Claude Code CLI not installed
+                    </p>
+                    <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                      To use automatic agent generation, install Claude Code CLI.
+                    </p>
+                    <a
+                      href="https://docs.anthropic.com/en/docs/claude-code/getting-started"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-v-accent hover:underline mt-2 inline-block"
+                    >
+                      View installation instructions →
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      case 'agentDescription':
+        return (
+          <div className="space-y-4">
+            <TextareaField
+              label="Describe your agent"
+              id="agent-description-input"
+              name="agentDescriptionInput"
+              value={agentDescriptionInput}
+              onChange={(e) => setAgentDescriptionInput(e.target.value)}
+              onKeyDown={(e) => {
+                // Cmd/Ctrl+Enter to generate
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && agentDescriptionInput.trim() && !isGeneratingAgent) {
+                  e.preventDefault();
+                  handleAutomaticGeneration();
+                }
+              }}
+              rows={6}
+              placeholder="e.g., I need an agent that reviews Python code for security vulnerabilities, focusing on common issues like SQL injection, XSS, and improper input validation. It should be thorough but friendly in its feedback."
+              hint="Be specific about what the agent should do, its expertise area, and any special behaviors. Press ⌘Enter to generate."
+            />
+
+            {generationError && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <WarningIcon className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                      Generation failed
+                    </p>
+                    <p className="text-xs text-red-700 dark:text-red-300 mt-1">
+                      {generationError}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleAutomaticGeneration}
+              disabled={!agentDescriptionInput.trim() || isGeneratingAgent}
+              className="w-full px-4 py-3 bg-v-accent hover:bg-v-accent-hover text-white font-semibold text-sm transition-all duration-150 disabled:bg-v-light-border dark:disabled:bg-v-border disabled:text-v-light-text-secondary dark:disabled:text-v-text-secondary disabled:cursor-not-allowed rounded-lg flex items-center justify-center gap-2"
+            >
+              {isGeneratingAgent ? (
+                <>
+                  <SpinnerIcon className="h-4 w-4 animate-spin" />
+                  Generating with Claude Code...
+                </>
+              ) : (
+                'Generate Agent'
+              )}
+            </button>
+
+            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary text-center">
+              Claude Code will create an agent based on your description. You can review and edit it before saving.
+            </p>
           </div>
         );
       case 'identifier':
@@ -931,14 +1241,18 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
   const breadcrumbLabel =
     mode === 'create' ? 'Create New Agent' : mode === 'duplicate' ? 'Duplicate Agent' : `Edit ${agent.name}`;
   const saveLabel = mode === 'edit' ? 'Save Changes' : 'Save Agent';
-  const sidebarSteps = WIZARD_STEPS.map((step, index) => ({
-    ...step,
-    index,
-    isActive: index === currentStepIndex,
-    isComplete: isStepComplete(step.id),
-    isVisited: visitedSteps.has(index),
-    canNavigate: canNavigateToStep(index),
-  }));
+  // Filter sidebar steps to only show visible ones based on creation method
+  const visibleStepIds = new Set(visibleSteps.map((s) => s.id));
+  const sidebarSteps = WIZARD_STEPS
+    .map((step, index) => ({
+      ...step,
+      index,
+      isActive: index === currentStepIndex,
+      isComplete: isStepComplete(step.id),
+      isVisited: visitedSteps.has(index),
+      canNavigate: canNavigateToStep(index),
+    }))
+    .filter((step) => visibleStepIds.has(step.id));
 
   return (
     <div className="space-y-8" onKeyDownCapture={handleWizardKeyDown}>
@@ -957,8 +1271,8 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
         </h1>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[260px,1fr]" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.5rem' }}>
-        <aside className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-5 space-y-4">
+      <div className="grid gap-6 md:grid-cols-[260px,1fr] overflow-hidden" style={{ display: 'grid', gridTemplateColumns: '260px minmax(0, 1fr)', gap: '1.5rem' }}>
+        <aside className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-5 space-y-4 min-w-0">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-v-light-text-secondary dark:text-v-text-secondary">Steps</p>
             <p className="text-base font-semibold text-v-light-text-primary dark:text-v-text-primary">Agent build overview</p>
@@ -1023,7 +1337,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
           </div>
         </aside>
 
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0 overflow-hidden">
           <WizardStepHeader currentStepIndex={currentStepIndex} wizardSteps={WIZARD_STEPS} />
           <AnimatePresence mode="wait" custom={direction}>
             <motion.div

@@ -409,12 +409,17 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
               >
                 <StarIcon className="h-4 w-4" filled={server.isFavorite} />
               </button>
-              <span
-                className="font-medium text-v-light-text-primary dark:text-v-text-primary truncate cursor-pointer hover:text-v-accent"
-                onClick={() => onEditServer(server)}
-              >
-                {highlightText(server.name, searchQuery)}
-              </span>
+              <div className="relative group/name min-w-0">
+                <span
+                  className="font-medium text-v-light-text-primary dark:text-v-text-primary truncate cursor-pointer hover:text-v-accent block"
+                  onClick={() => onEditServer(server)}
+                >
+                  {highlightText(server.name, searchQuery)}
+                </span>
+                <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/name:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                  {server.name}
+                </span>
+              </div>
             </div>
 
             <div>
@@ -515,10 +520,13 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
               onClick={() => onEditServer(server)}
             >
               <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <ServerIcon className="h-5 w-5 text-v-accent" />
-                  <span className="font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                <div className="relative group/name flex items-center gap-2 min-w-0">
+                  <ServerIcon className="h-5 w-5 text-v-accent flex-shrink-0" />
+                  <span className="font-semibold text-v-light-text-primary dark:text-v-text-primary truncate">
                     {highlightText(server.name, searchQuery)}
+                  </span>
+                  <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/name:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                    {server.name}
                   </span>
                 </div>
                 <button

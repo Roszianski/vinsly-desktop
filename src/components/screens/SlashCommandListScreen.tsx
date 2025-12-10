@@ -618,10 +618,13 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
                             className="h-4 w-4 mt-1 bg-v-light-surface dark:bg-v-mid-dark border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent rounded"
                           />
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-semibold font-mono text-v-light-text-primary dark:text-v-text-primary truncate" title={`/${command.name}`}>
+                            <div className="relative group/name">
+                              <p className="text-sm font-semibold font-mono text-v-light-text-primary dark:text-v-text-primary truncate">
                                 /{highlightText(command.name, searchQuery)}
                               </p>
+                              <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/name:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                                /{command.name}
+                              </span>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
                               <ScopeIcon className="h-3.5 w-3.5" />
@@ -764,8 +767,13 @@ export const SlashCommandListScreen: React.FC<SlashCommandListScreenProps> = ({
                         aria-label={`Select ${command.name}`}
                       />
                     </div>
-                    <div className="font-semibold font-mono truncate">
-                      /{highlightText(command.name, searchQuery)}
+                    <div className="relative group/name min-w-0">
+                      <div className="font-semibold font-mono truncate">
+                        /{highlightText(command.name, searchQuery)}
+                      </div>
+                      <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/name:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                        /{command.name}
+                      </span>
                     </div>
                     <div className="relative group/path">
                       <span className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary truncate block">

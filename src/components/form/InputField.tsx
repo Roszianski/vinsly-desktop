@@ -6,6 +6,7 @@ interface InputFieldProps {
   id: string;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   required?: boolean;
   hint?: string;
   error?: string;
@@ -20,6 +21,7 @@ export const InputField: React.FC<InputFieldProps> = ({
   id,
   value,
   onChange,
+  onKeyDown,
   required,
   hint,
   error,
@@ -39,6 +41,7 @@ export const InputField: React.FC<InputFieldProps> = ({
       value={value}
       placeholder={placeholder}
       onChange={onChange}
+      onKeyDown={onKeyDown}
       required={required}
       className={`w-full bg-v-light-bg dark:bg-v-dark border ${error ? 'border-v-danger' : 'border-v-light-border dark:border-v-border'} text-v-light-text-primary dark:text-v-text-primary px-3 py-2 focus:ring-2 focus:ring-v-accent focus:outline-none focus:border-v-accent transition duration-150 ease-in-out ${mono ? 'font-mono' : 'font-sans'} rounded-md`}
     />

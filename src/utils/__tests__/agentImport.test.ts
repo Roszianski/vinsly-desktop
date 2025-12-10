@@ -93,6 +93,68 @@ describe('agentImport', () => {
       expect(agent?.frontmatter.custom_field).toBe('custom_value');
       expect(agent?.frontmatter.tools).toEqual(['read', 'write']);
     });
+
+    it('should handle descriptions with unquoted colons (Claude Code format)', () => {
+      // Claude Code often generates frontmatter with unquoted colons in descriptions
+      const markdown = `---
+name: test-agent
+description: Use this agent when you need to: understand user personas
+model: sonnet
+---
+
+This is the agent body.`;
+
+      const agent = markdownToAgent(markdown, 'test.md');
+
+      expect(agent).not.toBeNull();
+      expect(agent?.name).toBe('test-agent');
+      expect(agent?.frontmatter.description).toBe('Use this agent when you need to: understand user personas');
+    });
+
+    it('should handle multiple colons in description', () => {
+      const markdown = `---
+name: multi-colon-agent
+description: Step 1: Do this. Step 2: Do that. Step 3: Done!
+model: opus
+---
+
+Agent body here.`;
+
+      const agent = markdownToAgent(markdown, 'test.md');
+
+      expect(agent).not.toBeNull();
+      expect(agent?.frontmatter.description).toBe('Step 1: Do this. Step 2: Do that. Step 3: Done!');
+    });
+
+    it('should not break already-quoted values', () => {
+      const markdown = `---
+name: quoted-agent
+description: "This value is already: quoted properly"
+model: sonnet
+---
+
+Body.`;
+
+      const agent = markdownToAgent(markdown, 'test.md');
+
+      expect(agent).not.toBeNull();
+      expect(agent?.frontmatter.description).toBe('This value is already: quoted properly');
+    });
+
+    it('should handle descriptions with quotes and colons', () => {
+      const markdown = `---
+name: complex-agent
+description: Use this when users say: "help me with something"
+model: opus
+---
+
+Body.`;
+
+      const agent = markdownToAgent(markdown, 'test.md');
+
+      expect(agent).not.toBeNull();
+      expect(agent?.frontmatter.description).toBe('Use this when users say: "help me with something"');
+    });
   });
 
   describe('importAgentFromFile', () => {

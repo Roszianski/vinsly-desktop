@@ -140,12 +140,15 @@ export const AgentGridCard: React.FC<AgentGridCardProps> = ({
             disabled={!agent.id}
             aria-label={`Select agent ${agent.name}`}
           />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${colorIndicatorClass}`} aria-hidden="true"></span>
-              <h3 className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary break-words">
+          <div className="min-w-0">
+            <div className="relative group/name flex items-center gap-2 min-w-0">
+              <span className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${colorIndicatorClass}`} aria-hidden="true"></span>
+              <h3 className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary truncate">
                 {highlightText(agent.frontmatter.name || agent.name)}
               </h3>
+              <span className="pointer-events-none absolute -top-8 left-0 z-10 hidden group-hover/name:block bg-black text-white text-[11px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                {agent.frontmatter.name || agent.name}
+              </span>
             </div>
             <div className="flex items-center gap-2 text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
               <ScopeIcon className="h-3.5 w-3.5" aria-hidden="true" />

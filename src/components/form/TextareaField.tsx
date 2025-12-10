@@ -6,6 +6,7 @@ interface TextareaFieldProps {
   id: string;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   hint?: string;
   error?: string;
   warning?: string;
@@ -20,6 +21,7 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
   id,
   value,
   onChange,
+  onKeyDown,
   hint,
   error,
   warning,
@@ -37,6 +39,7 @@ export const TextareaField: React.FC<TextareaFieldProps> = ({
       name={name}
       value={value}
       onChange={onChange}
+      onKeyDown={onKeyDown}
       rows={rows}
       placeholder={placeholder}
       required={required}
