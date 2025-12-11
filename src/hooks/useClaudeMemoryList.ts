@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { AgentScope, ClaudeMemory, ScanSettings } from '../types';
 import { readClaudeMemory } from '../utils/tauriCommands';
 import { ToastType } from '../components/Toast';
 import { devLog } from '../utils/devLogger';
+import { getStorageItem, setStorageItem } from '../utils/storage';
+
+const MEMORIES_CACHE_KEY = 'vinsly-memories-cache';
+const MEMORIES_SEEN_KEY = 'vinsly-seen-memory-ids';
 
 export interface UseClaudeMemoryListOptions {
   showToast: (type: ToastType, message: string) => void;
@@ -17,7 +21,7 @@ export interface LoadMemoriesOptions {
 export interface UseClaudeMemoryListResult {
   memories: ClaudeMemory[];
   isLoading: boolean;
-  loadMemories: (options?: LoadMemoriesOptions) => Promise<void>;
+  loadMemories: (options?: LoadMemoriesOptions) => Promise<{ total: number; newCount: number }>;
   toggleFavorite: (memory: ClaudeMemory) => void;
 }
 
@@ -25,20 +29,53 @@ export function useClaudeMemoryList(options: UseClaudeMemoryListOptions): UseCla
   const { showToast, scanSettingsRef } = options;
   const [memories, setMemories] = useState<ClaudeMemory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCacheReady, setIsCacheReady] = useState(false);
+  const cacheHydrated = useRef(false);
+  const memoriesRef = useRef<ClaudeMemory[]>([]);
 
-  const loadMemories = useCallback(async (loadOptions: LoadMemoriesOptions = {}) => {
+  // Keep ref in sync with state
+  memoriesRef.current = memories;
+
+  // Hydrate from cache on mount
+  useEffect(() => {
+    if (cacheHydrated.current) return;
+
+    const hydrateCache = async () => {
+      try {
+        const cached = await getStorageItem<ClaudeMemory[]>(MEMORIES_CACHE_KEY);
+        if (cached && cached.length > 0 && memoriesRef.current.length === 0) {
+          setMemories(cached);
+        }
+      } catch (error) {
+        devLog.error('Failed to hydrate memories cache:', error);
+      } finally {
+        cacheHydrated.current = true;
+        setIsCacheReady(true);
+      }
+    };
+
+    void hydrateCache();
+  }, []);
+
+  // Persist to cache when memories change
+  useEffect(() => {
+    if (!isCacheReady) return;
+    setStorageItem(MEMORIES_CACHE_KEY, memories);
+  }, [memories, isCacheReady]);
+
+  const loadMemories = useCallback(async (loadOptions: LoadMemoriesOptions = {}): Promise<{ total: number; newCount: number }> => {
     const { projectPaths = [], includeGlobal = true } = loadOptions;
     setIsLoading(true);
     const discovered: ClaudeMemory[] = [];
-    const seenPaths = new Set<string>();
+    const currentPaths = new Set<string>();
 
     try {
       // 1. Load global CLAUDE.md
       if (includeGlobal) {
         try {
           const globalResult = await readClaudeMemory('global');
-          if (globalResult.exists && !seenPaths.has(globalResult.path)) {
-            seenPaths.add(globalResult.path);
+          if (globalResult.exists && !currentPaths.has(globalResult.path)) {
+            currentPaths.add(globalResult.path);
             discovered.push({
               id: globalResult.path,
               scope: AgentScope.Global,
@@ -63,8 +100,8 @@ export function useClaudeMemoryList(options: UseClaudeMemoryListOptions): UseCla
       for (const directory of allProjectPaths) {
         try {
           const projectResult = await readClaudeMemory('project', directory);
-          if (projectResult.exists && !seenPaths.has(projectResult.path)) {
-            seenPaths.add(projectResult.path);
+          if (projectResult.exists && !currentPaths.has(projectResult.path)) {
+            currentPaths.add(projectResult.path);
             discovered.push({
               id: projectResult.path,
               scope: AgentScope.Project,
@@ -79,6 +116,20 @@ export function useClaudeMemoryList(options: UseClaudeMemoryListOptions): UseCla
         }
       }
 
+      // Track new items by comparing with previously seen IDs
+      let seenIds: string[] = [];
+      try {
+        seenIds = await getStorageItem<string[]>(MEMORIES_SEEN_KEY) || [];
+      } catch {
+        seenIds = [];
+      }
+      const seenSet = new Set(seenIds);
+      const newCount = discovered.filter(m => !seenSet.has(m.id)).length;
+
+      // Update seen IDs with all current memory IDs
+      const updatedSeenIds = Array.from(new Set([...seenIds, ...discovered.map(m => m.id)]));
+      await setStorageItem(MEMORIES_SEEN_KEY, updatedSeenIds);
+
       // Preserve favorite status from previous state
       setMemories(prev => {
         const prevFavorites = new Map(prev.map(m => [m.path, m.isFavorite]));
@@ -87,15 +138,18 @@ export function useClaudeMemoryList(options: UseClaudeMemoryListOptions): UseCla
           isFavorite: prevFavorites.get(memory.path) || false,
         }));
       });
+
+      return { total: discovered.length, newCount };
     } catch (error) {
       devLog.error('Error discovering CLAUDE.md files:', error);
       showToast('error', 'Failed to load memory files');
+      return { total: 0, newCount: 0 };
     } finally {
       setIsLoading(false);
     }
   }, [scanSettingsRef, showToast]);
 
-  // Load on mount
+  // Load on mount (but don't block on it - cache provides instant data)
   useEffect(() => {
     void loadMemories();
   }, [loadMemories]);

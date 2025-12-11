@@ -9,9 +9,14 @@ import { PendingUpdateDetails } from '../types/updater';
 import { checkFullDiskAccess, openFullDiskAccessSettings } from '../utils/tauriCommands';
 import { devLog } from '../utils/devLogger';
 
+// Keys for return-to-settings flow after FDA grant
+export const FDA_RETURN_TO_SETTINGS_KEY = 'vinsly-fda-return-to-settings';
+export const FDA_RETURN_SECTION_KEY = 'vinsly-fda-return-section';
+
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialSection?: SettingsSection;
   defaultTheme: 'system' | 'light' | 'dark';
   onThemeChange: (theme: 'system' | 'light' | 'dark') => Promise<void> | void;
   defaultView: 'table' | 'grid';
@@ -34,11 +39,12 @@ interface SettingsModalProps {
   macOSVersionMajor?: number | null;
 }
 
-type SettingsSection = 'appearance' | 'scanning' | 'account' | 'permissions';
+export type SettingsSection = 'appearance' | 'scanning' | 'account' | 'permissions';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
+  initialSection,
   defaultTheme,
   onThemeChange,
   defaultView,
@@ -60,7 +66,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   isMacPlatform = false,
   macOSVersionMajor = null,
 }) => {
-  const [activeSection, setActiveSection] = useState<SettingsSection>('account');
+  const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection || 'account');
   const [localScanSettings, setLocalScanSettings] = useState<ScanSettings>(scanSettings);
   const [displayNameInput, setDisplayNameInput] = useState(userDisplayName);
   const [displayNameSaveState, setDisplayNameSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
@@ -68,6 +74,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isOpeningFullDiskSettings, setIsOpeningFullDiskSettings] = useState(false);
   const [fullDiskStatusMessage, setFullDiskStatusMessage] = useState<{ tone: 'info' | 'warn'; text: string } | null>(null);
   const [showSequoiaTip, setShowSequoiaTip] = useState(false);
+  const [showFdaGuide, setShowFdaGuide] = useState(false);
   const displayNameSaveTimeoutRef = useRef<number | null>(null);
   const postGrantCheckTimeoutRef = useRef<number | null>(null);
   const lastCheckedLabel = lastUpdateCheckAt
@@ -219,32 +226,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       });
       return;
     }
+    // Save flag and section so we can return to permissions after app restart
+    localStorage.setItem(FDA_RETURN_TO_SETTINGS_KEY, 'true');
+    localStorage.setItem(FDA_RETURN_SECTION_KEY, 'permissions');
+    // Show the two-step guide popup
+    setShowFdaGuide(true);
+  }, [isMacPlatform]);
+
+  const handleFdaGuideOpenSettings = useCallback(async () => {
     setIsOpeningFullDiskSettings(true);
-    setFullDiskStatusMessage(null);
     try {
       await openFullDiskAccessSettings();
-      setFullDiskStatusMessage({
-        tone: 'info',
-        text: 'System Settings opened. In Privacy & Security → Full Disk Access (HT210595), add or enable Vinsly, then choose “Check again”.',
-      });
-      if (postGrantCheckTimeoutRef.current) {
-        window.clearTimeout(postGrantCheckTimeoutRef.current);
-      }
-      postGrantCheckTimeoutRef.current = window.setTimeout(() => {
-        void refreshFullDiskStatus();
-        postGrantCheckTimeoutRef.current = null;
-      }, 2500);
     } catch (error) {
       devLog.error('Failed to open Full Disk Access settings:', error);
-      const details = error instanceof Error ? error.message : String(error);
-      setFullDiskStatusMessage({
-        tone: 'warn',
-        text: `Unable to open System Settings automatically (${details}). Please open Privacy & Security → Full Disk Access manually.`,
-      });
     } finally {
       setIsOpeningFullDiskSettings(false);
     }
-  }, [isMacPlatform]);
+  }, []);
+
+  const handleFdaGuideClose = useCallback(() => {
+    setShowFdaGuide(false);
+    // Remove the return flags if user cancels
+    localStorage.removeItem(FDA_RETURN_TO_SETTINGS_KEY);
+    localStorage.removeItem(FDA_RETURN_SECTION_KEY);
+    // Check FDA status after closing guide
+    void refreshFullDiskStatus();
+  }, [refreshFullDiskStatus]);
 
   const handleFullDiskAccessToggle = useCallback(async (enabled: boolean) => {
     if (enabled && isMacPlatform && fullDiskStatus !== 'granted') {
@@ -1086,6 +1093,77 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </motion.div>
         </>
+      )}
+
+      {/* FDA Guide Popup */}
+      {showFdaGuide && (
+        <motion.div
+          key="fda-guide"
+          className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/60 px-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="w-full max-w-md bg-v-light-surface dark:bg-v-mid-dark rounded-2xl shadow-2xl border border-v-light-border dark:border-v-border overflow-hidden"
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="px-6 py-5 border-b border-v-light-border dark:border-v-border">
+              <h3 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                Enable Full Disk Access
+              </h3>
+            </div>
+
+            <div className="px-6 py-6 space-y-5">
+              {/* Step 1 */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-v-accent text-white text-xs font-bold">1</span>
+                  <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                    Grant Permission
+                  </p>
+                </div>
+                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary ml-8">
+                  Click below to open System Settings. Find <strong>Full Disk Access</strong> and enable Vinsly.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleFdaGuideOpenSettings()}
+                  disabled={isOpeningFullDiskSettings}
+                  className="ml-8 px-4 py-2 rounded-lg bg-v-accent text-white text-sm font-medium hover:bg-v-accent-hover transition-colors disabled:opacity-60"
+                >
+                  {isOpeningFullDiskSettings ? 'Opening…' : 'Open System Settings'}
+                </button>
+              </div>
+
+              {/* Step 2 */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-v-light-border dark:bg-v-border text-v-light-text-secondary dark:text-v-text-secondary text-xs font-bold">2</span>
+                  <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                    Restart Vinsly
+                  </p>
+                </div>
+                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary ml-8">
+                  After granting access, <strong>quit and reopen Vinsly</strong>. You&apos;ll be returned to Settings automatically.
+                </p>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-v-light-border dark:border-v-border flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleFdaGuideClose}
+                className="px-4 py-2 rounded-lg border border-v-light-border dark:border-v-border text-sm font-medium text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-light-text-primary dark:hover:text-v-text-primary transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
       )}
     </AnimatePresence>
   );

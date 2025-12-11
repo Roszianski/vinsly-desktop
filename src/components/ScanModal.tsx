@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useToast } from '../contexts/ToastContext';
 import { cancelHomeDiscovery, DEFAULT_HOME_DISCOVERY_DEPTH, discoverHomeDirectories } from '../utils/homeDiscovery';
-import { LoadAgentsOptions, ScanSettings } from '../types';
+import { LoadAgentsOptions, ScanSettings, DetailedScanResult } from '../types';
 import { devLog } from '../utils/devLogger';
 import { checkFullDiskAccess } from '../utils/tauriCommands';
 
@@ -12,7 +12,7 @@ type ScanSource = 'home' | 'watched';
 interface ScanModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onScan: (options?: LoadAgentsOptions) => Promise<{ total: number; newCount: number }>;
+  onScan: (options?: LoadAgentsOptions) => Promise<DetailedScanResult>;
   scanSettings: ScanSettings;
   isMacPlatform?: boolean;
 }
@@ -69,13 +69,14 @@ export const ScanModal: React.FC<ScanModalProps> = ({
 }) => {
   const { showToast } = useToast();
   const [selectedSources, setSelectedSources] = useState<Set<ScanSource>>(new Set());
+  const [includeGlobalResources, setIncludeGlobalResources] = useState(false);
   const [customPaths, setCustomPaths] = useState<string[]>([]);
   // Track which custom paths should scan subfolders (default: all recursive)
   const [recursivePaths, setRecursivePaths] = useState<Set<string>>(new Set());
   const [isScanning, setIsScanning] = useState(false);
   const [isDiscoveringHome, setIsDiscoveringHome] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
-  const [lastResult, setLastResult] = useState<{ total: number; newCount: number } | null>(null);
+  const [lastResult, setLastResult] = useState<DetailedScanResult | null>(null);
   const homeDiscoveryAbortRef = useRef<AbortController | null>(null);
   // Track FDA status locally so we can refresh it when modal opens
   const [canUseHomeSource, setCanUseHomeSource] = useState(
@@ -91,11 +92,11 @@ export const ScanModal: React.FC<ScanModalProps> = ({
     if (watchedDirectoryCount > 0) {
       defaults.push('watched');
     }
-    // Global resources are always included - no need to select explicitly
     return new Set(defaults);
   }, [canUseHomeSource, watchedDirectoryCount]);
 
   // Refresh FDA status when modal opens (in case user granted it and restarted)
+  // Also re-check if the saved fullDiskAccessEnabled setting changes (e.g., from SettingsModal)
   useEffect(() => {
     if (isOpen && isMacPlatform) {
       checkFullDiskAccess()
@@ -104,9 +105,11 @@ export const ScanModal: React.FC<ScanModalProps> = ({
         })
         .catch((err) => {
           devLog.error('Failed to check FDA status:', err);
+          // Fallback to saved setting if TCC query fails
+          setCanUseHomeSource(scanSettings.fullDiskAccessEnabled);
         });
     }
-  }, [isOpen, isMacPlatform]);
+  }, [isOpen, isMacPlatform, scanSettings.fullDiskAccessEnabled]);
 
   useEffect(() => {
     if (isOpen) {
@@ -197,7 +200,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       return;
     }
 
-    if (selectedSources.size === 0 && customPaths.length === 0) {
+    if (selectedSources.size === 0 && customPaths.length === 0 && !includeGlobalResources) {
       showToast('info', 'Select at least one source before scanning.');
       return;
     }
@@ -206,8 +209,8 @@ export const ScanModal: React.FC<ScanModalProps> = ({
     setScanMessage('Preparing sources…');
 
     let directories: string[] = [];
-    // Always include global resources (they're lightweight and always useful)
-    const includeGlobal = true;
+    // Include global resources (~/.claude/) if user selected it
+    const includeGlobal = includeGlobalResources;
 
     if (selectedSources.has('watched') && watchedDirectoryCount > 0) {
       directories = directories.concat(scanSettings.watchedDirectories);
@@ -276,7 +279,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       )
     );
 
-    // Global is always included, so even with no directories we still scan global resources
+    // If global is selected or directories are specified, proceed with scan
 
     try {
       setScanMessage('Scanning selected sources…');
@@ -304,7 +307,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
   if (!isOpen) return null;
 
   const sourcesSummary = [
-    'Global (~/.claude/)', // Always included
+    includeGlobalResources ? 'Global (~/.claude/)' : null,
     selectedSources.has('home') ? 'Home directory' : null,
     selectedSources.has('watched') ? `Watched folders (${watchedDirectoryCount || 0})` : null,
     customPaths.length > 0 ? `${customPaths.length} specific folder${customPaths.length === 1 ? '' : 's'}` : null,
@@ -362,13 +365,17 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                   Sources
                 </p>
                 <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                  Global (~/.claude/) always included.
+                  Select the sources you want to scan for Claude Code resources.
                 </p>
 
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <SourceChip
                     label="Home directory"
-                    description="Requires Full Disk Access."
+                    description={
+                      canUseHomeSource
+                        ? 'Scans for all Claude Code resources.'
+                        : 'Requires Full Disk Access.'
+                    }
                     active={selectedSources.has('home')}
                     disabled={(!canUseHomeSource && isMacPlatform) || isScanning || isDiscoveringHome}
                     onClick={ensureHomeSource}
@@ -384,6 +391,14 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                     active={selectedSources.has('watched')}
                     disabled={watchedDirectoryCount === 0 || isScanning || isDiscoveringHome}
                     onClick={() => toggleSource('watched')}
+                  />
+
+                  <SourceChip
+                    label="Global resources"
+                    description="~/.claude/ directory"
+                    active={includeGlobalResources}
+                    disabled={isScanning || isDiscoveringHome}
+                    onClick={() => setIncludeGlobalResources(prev => !prev)}
                   />
 
                   <button
@@ -463,8 +478,72 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                     Last scan
                   </p>
                   <p className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary mt-1">
-                    {lastResult.newCount} new resource{lastResult.newCount === 1 ? '' : 's'} • {lastResult.total} total files scanned
+                    {lastResult.newCount} new resource{lastResult.newCount === 1 ? '' : 's'} found
                   </p>
+                  <div className="mt-3 max-h-32 overflow-y-auto">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {lastResult.breakdown.agents.total > 0 && (
+                        <div className="text-xs">
+                          <span className="text-v-light-text-secondary dark:text-v-text-secondary">Agents:</span>{' '}
+                          <span className="text-v-light-text-primary dark:text-v-text-primary font-medium">
+                            {lastResult.breakdown.agents.total}
+                            {lastResult.breakdown.agents.new > 0 && (
+                              <span className="text-v-accent ml-1">(+{lastResult.breakdown.agents.new})</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                      {lastResult.breakdown.commands.total > 0 && (
+                        <div className="text-xs">
+                          <span className="text-v-light-text-secondary dark:text-v-text-secondary">Commands:</span>{' '}
+                          <span className="text-v-light-text-primary dark:text-v-text-primary font-medium">
+                            {lastResult.breakdown.commands.total}
+                            {lastResult.breakdown.commands.new > 0 && (
+                              <span className="text-v-accent ml-1">(+{lastResult.breakdown.commands.new})</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                      {lastResult.breakdown.mcpServers.total > 0 && (
+                        <div className="text-xs">
+                          <span className="text-v-light-text-secondary dark:text-v-text-secondary">MCP Servers:</span>{' '}
+                          <span className="text-v-light-text-primary dark:text-v-text-primary font-medium">
+                            {lastResult.breakdown.mcpServers.total}
+                            {lastResult.breakdown.mcpServers.new > 0 && (
+                              <span className="text-v-accent ml-1">(+{lastResult.breakdown.mcpServers.new})</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                      {lastResult.breakdown.hooks.total > 0 && (
+                        <div className="text-xs">
+                          <span className="text-v-light-text-secondary dark:text-v-text-secondary">Hooks:</span>{' '}
+                          <span className="text-v-light-text-primary dark:text-v-text-primary font-medium">
+                            {lastResult.breakdown.hooks.total}
+                            {lastResult.breakdown.hooks.new > 0 && (
+                              <span className="text-v-accent ml-1">(+{lastResult.breakdown.hooks.new})</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                      {lastResult.breakdown.memories.total > 0 && (
+                        <div className="text-xs">
+                          <span className="text-v-light-text-secondary dark:text-v-text-secondary">Memories:</span>{' '}
+                          <span className="text-v-light-text-primary dark:text-v-text-primary font-medium">
+                            {lastResult.breakdown.memories.total}
+                            {lastResult.breakdown.memories.new > 0 && (
+                              <span className="text-v-accent ml-1">(+{lastResult.breakdown.memories.new})</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    {lastResult.total === 0 && (
+                      <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                        No resources found in the selected sources.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 

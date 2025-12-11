@@ -9,7 +9,7 @@ import { AnimatePresence } from 'framer-motion';
 import { Header } from './Header';
 import { Theme } from '../hooks/useTheme';
 import { LicenseInfo } from '../types/licensing';
-import { LoadAgentsOptions, ScanSettings } from '../types';
+import { LoadAgentsOptions, ScanSettings, DetailedScanResult } from '../types';
 import { PendingUpdateDetails } from '../types/updater';
 
 interface AppShellProps {
@@ -19,7 +19,7 @@ interface AppShellProps {
 
   // Header handlers
   onNavigateHome: () => void;
-  onScan: (options?: LoadAgentsOptions) => Promise<{ total: number; newCount: number }>;
+  onScan: (options?: LoadAgentsOptions) => Promise<DetailedScanResult>;
   isScanning: boolean;
 
   // License & Profile

@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import {
   listHooks,
   addHook as addHookCmd,
@@ -15,6 +15,10 @@ import {
 } from '../types/hooks';
 import { ToastType } from '../components/Toast';
 import { devLog } from '../utils/devLogger';
+import { getStorageItem, setStorageItem } from '../utils/storage';
+
+const HOOKS_CACHE_KEY = 'vinsly-hooks-cache';
+const HOOKS_SEEN_KEY = 'vinsly-seen-hook-ids';
 
 /**
  * Convert raw hook info from Rust to Hook type
@@ -59,7 +63,7 @@ export interface UseHooksResult {
   hooks: Hook[];
   hooksRef: React.RefObject<Hook[]>;
   isLoading: boolean;
-  loadHooks: (options?: LoadHooksOptions) => Promise<void>;
+  loadHooks: (options?: LoadHooksOptions) => Promise<{ total: number; newCount: number }>;
   addHook: (hook: Hook, projectPath?: string) => Promise<void>;
   updateHook: (hook: Hook, oldHook: Hook, projectPath?: string) => Promise<void>;
   removeHook: (hook: Hook, projectPath?: string) => Promise<void>;
@@ -71,21 +75,50 @@ export interface UseHooksResult {
 export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCacheReady, setIsCacheReady] = useState(false);
   const hooksRef = useRef<Hook[]>([]);
+  const cacheHydrated = useRef(false);
 
   // Keep ref in sync with state
   hooksRef.current = hooks;
 
-  const loadHooks = useCallback(async (options: LoadHooksOptions = {}) => {
+  // Hydrate from cache on mount
+  useEffect(() => {
+    if (cacheHydrated.current) return;
+
+    const hydrateCache = async () => {
+      try {
+        const cached = await getStorageItem<Hook[]>(HOOKS_CACHE_KEY);
+        if (cached && cached.length > 0 && hooksRef.current.length === 0) {
+          setHooks(cached);
+        }
+      } catch (error) {
+        devLog.error('Failed to hydrate hooks cache:', error);
+      } finally {
+        cacheHydrated.current = true;
+        setIsCacheReady(true);
+      }
+    };
+
+    void hydrateCache();
+  }, []);
+
+  // Persist to cache when hooks change
+  useEffect(() => {
+    if (!isCacheReady) return;
+    setStorageItem(HOOKS_CACHE_KEY, hooks);
+  }, [hooks, isCacheReady]);
+
+  const loadHooks = useCallback(async (options: LoadHooksOptions = {}): Promise<{ total: number; newCount: number }> => {
     const { projectPaths = [], includeGlobal = true } = options;
     setIsLoading(true);
     try {
       const allHooks: Hook[] = [];
-      const seenIds = new Set<string>();
+      const currentIds = new Set<string>();
 
       const addHook = (hook: Hook) => {
-        if (seenIds.has(hook.id)) return;
-        seenIds.add(hook.id);
+        if (currentIds.has(hook.id)) return;
+        currentIds.add(hook.id);
         allHooks.push(hook);
       };
 
@@ -109,10 +142,26 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
         }
       }
 
+      // Track new items by comparing with previously seen IDs
+      let seenIds: string[] = [];
+      try {
+        seenIds = await getStorageItem<string[]>(HOOKS_SEEN_KEY) || [];
+      } catch {
+        seenIds = [];
+      }
+      const seenSet = new Set(seenIds);
+      const newCount = allHooks.filter(h => !seenSet.has(h.id)).length;
+
+      // Update seen IDs with all current hook IDs
+      const updatedSeenIds = Array.from(new Set([...seenIds, ...allHooks.map(h => h.id)]));
+      await setStorageItem(HOOKS_SEEN_KEY, updatedSeenIds);
+
       setHooks(allHooks);
+      return { total: allHooks.length, newCount };
     } catch (error) {
       devLog.error('Failed to load hooks:', error);
       showToast('error', `Failed to load hooks: ${error}`);
+      return { total: 0, newCount: 0 };
     } finally {
       setIsLoading(false);
     }

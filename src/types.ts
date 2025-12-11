@@ -93,3 +93,17 @@ export interface LoadAgentsOptions {
   scanWatchedDirectories?: boolean;
   additionalDirectories?: string[];
 }
+
+// Detailed scan result with counts per resource type
+export interface DetailedScanResult {
+  total: number;
+  newCount: number;
+  breakdown: {
+    agents: { total: number; new: number };
+    skills: { total: number; new: number };
+    commands: { total: number; new: number };
+    mcpServers: { total: number; new: number };
+    hooks: { total: number; new: number };
+    memories: { total: number; new: number };
+  };
+}

@@ -429,57 +429,63 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
             }
           }
 
-          for (const projectPath of projectPathList) {
-            try {
-              const [projectAgents, projectSkills] = await Promise.all([
-                listAgents('project', projectPath),
-                listSkills('project', projectPath),
-              ]);
+          // Scan project paths in parallel
+          await Promise.all(
+            projectPathList.map(async (projectPath) => {
+              try {
+                const [projectAgents, projectSkills] = await Promise.all([
+                  listAgents('project', projectPath),
+                  listSkills('project', projectPath),
+                ]);
 
-              for (const agentFile of projectAgents) {
-                addAgent(
-                  markdownToAgent(
-                    agentFile.content,
-                    agentFile.name,
-                    AgentScope.Project,
-                    agentFile.path
-                  )
-                );
+                for (const agentFile of projectAgents) {
+                  addAgent(
+                    markdownToAgent(
+                      agentFile.content,
+                      agentFile.name,
+                      AgentScope.Project,
+                      agentFile.path
+                    )
+                  );
+                }
+
+                for (const skillFile of projectSkills) {
+                  addSkill(skillFileToSkill(skillFile));
+                }
+              } catch (error) {
+                devLog.error(`Error scanning project directory ${projectPath}:`, error);
               }
+            })
+          );
 
-              for (const skillFile of projectSkills) {
-                addSkill(skillFileToSkill(skillFile));
+          // Scan watched directories in parallel
+          await Promise.all(
+            Array.from(directoriesToScan).map(async (directory) => {
+              try {
+                const [watchedAgents, watchedSkills] = await Promise.all([
+                  listAgentsFromDirectory(directory),
+                  listSkillsFromDirectory(directory),
+                ]);
+
+                for (const agentFile of watchedAgents) {
+                  addAgent(
+                    markdownToAgent(
+                      agentFile.content,
+                      agentFile.name,
+                      AgentScope.Project,
+                      agentFile.path
+                    )
+                  );
+                }
+
+                for (const skillFile of watchedSkills) {
+                  addSkill(skillFileToSkill(skillFile));
+                }
+              } catch (error) {
+                devLog.error(`Error scanning directory ${directory}:`, error);
               }
-            } catch (error) {
-              devLog.error(`Error scanning project directory ${projectPath}:`, error);
-            }
-          }
-
-          for (const directory of directoriesToScan) {
-            try {
-              const [watchedAgents, watchedSkills] = await Promise.all([
-                listAgentsFromDirectory(directory),
-                listSkillsFromDirectory(directory),
-              ]);
-
-              for (const agentFile of watchedAgents) {
-                addAgent(
-                  markdownToAgent(
-                    agentFile.content,
-                    agentFile.name,
-                    AgentScope.Project,
-                    agentFile.path
-                  )
-                );
-              }
-
-              for (const skillFile of watchedSkills) {
-                addSkill(skillFileToSkill(skillFile));
-              }
-            } catch (error) {
-              devLog.error(`Error scanning directory ${directory}:`, error);
-            }
-          }
+            })
+          );
 
           const previousAgentKeys = new Set(previousAgents.map(makeAgentKey));
           const newAgentCount = allAgents.filter(

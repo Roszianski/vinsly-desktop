@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useCallback, useEffect } from 'react';
-import { Agent, AgentScope, Skill, LoadAgentsOptions, SlashCommand, ClaudeMemory } from '../types';
+import { Agent, AgentScope, Skill, LoadAgentsOptions, SlashCommand, ClaudeMemory, DetailedScanResult } from '../types';
 import { MCPServer, MCPScope } from '../types/mcp';
 import { Hook } from '../types/hooks';
 import { useWorkspace } from '../hooks/useWorkspace';
@@ -76,7 +76,7 @@ interface WorkspaceContextType {
   isScanBusy: boolean;
   scanSettings: ScanSettings;
   applyScanSettings: (settings: ScanSettings) => void;
-  handleFullScan: (options?: LoadAgentsOptions) => Promise<{ total: number; newCount: number }>;
+  handleFullScan: (options?: LoadAgentsOptions) => Promise<DetailedScanResult>;
 
   // History (Undo/Redo)
   canUndo: boolean;
@@ -460,7 +460,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
   }, [saveMemoryToBackend, loadMemories, showToast]);
 
   // Full scan operation
-  const handleFullScan = useCallback(async (options?: LoadAgentsOptions) => {
+  const handleFullScan = useCallback(async (options?: LoadAgentsOptions): Promise<DetailedScanResult> => {
     const agentResult = await loadAgents(options);
 
     // Collect all project paths from options
@@ -506,8 +506,52 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
       }
     });
 
-    return agentResult;
-  }, [loadAgents, loadCommands, loadMCPServers, loadHooks, loadMemories, scanSettings.watchedDirectories]);
+    // Extract results from each loader (default to 0 if failed or void)
+    const defaultResult = { total: 0, newCount: 0 };
+    const commandsResult = results[0].status === 'fulfilled' && results[0].value ? results[0].value : defaultResult;
+    const mcpResult = results[1].status === 'fulfilled' && results[1].value ? results[1].value : defaultResult;
+    const hooksResult = results[2].status === 'fulfilled' && results[2].value ? results[2].value : defaultResult;
+    const memoriesResult = results[3].status === 'fulfilled' && results[3].value ? results[3].value : defaultResult;
+
+    // Build detailed result
+    const detailedResult: DetailedScanResult = {
+      total: agentResult.total + commandsResult.total + mcpResult.total + hooksResult.total + memoriesResult.total,
+      newCount: agentResult.newCount + commandsResult.newCount + mcpResult.newCount + hooksResult.newCount + memoriesResult.newCount,
+      breakdown: {
+        agents: { total: agentResult.total, new: agentResult.newCount },
+        skills: { total: 0, new: 0 }, // Skills are loaded as part of agents
+        commands: { total: commandsResult.total, new: commandsResult.newCount },
+        mcpServers: { total: mcpResult.total, new: mcpResult.newCount },
+        hooks: { total: hooksResult.total, new: hooksResult.newCount },
+        memories: { total: memoriesResult.total, new: memoriesResult.newCount },
+      },
+    };
+
+    // Show enhanced toast with breakdown when new items found
+    if (detailedResult.newCount > 0) {
+      const parts: string[] = [];
+      if (detailedResult.breakdown.agents.new > 0) {
+        parts.push(`${detailedResult.breakdown.agents.new} agent${detailedResult.breakdown.agents.new === 1 ? '' : 's'}`);
+      }
+      if (detailedResult.breakdown.commands.new > 0) {
+        parts.push(`${detailedResult.breakdown.commands.new} command${detailedResult.breakdown.commands.new === 1 ? '' : 's'}`);
+      }
+      if (detailedResult.breakdown.mcpServers.new > 0) {
+        parts.push(`${detailedResult.breakdown.mcpServers.new} MCP server${detailedResult.breakdown.mcpServers.new === 1 ? '' : 's'}`);
+      }
+      if (detailedResult.breakdown.hooks.new > 0) {
+        parts.push(`${detailedResult.breakdown.hooks.new} hook${detailedResult.breakdown.hooks.new === 1 ? '' : 's'}`);
+      }
+      if (detailedResult.breakdown.memories.new > 0) {
+        parts.push(`${detailedResult.breakdown.memories.new} memor${detailedResult.breakdown.memories.new === 1 ? 'y' : 'ies'}`);
+      }
+      showToast('success', `Scan complete: Found ${parts.join(', ')}`);
+    } else {
+      showToast('success', `Scan complete: ${detailedResult.total} resource${detailedResult.total === 1 ? '' : 's'} (no new)`);
+    }
+
+    return detailedResult;
+  }, [loadAgents, loadCommands, loadMCPServers, loadHooks, loadMemories, scanSettings.watchedDirectories, showToast]);
 
   const value: WorkspaceContextType = {
     // Agents

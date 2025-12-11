@@ -2,12 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Theme } from '../hooks/useTheme';
 import { LicenseInfo } from '../types/licensing';
-import { LoadAgentsOptions, ScanSettings } from '../types';
+import { LoadAgentsOptions, ScanSettings, DetailedScanResult } from '../types';
 import { ClaudeSession } from '../types/session';
 import { SunIcon } from './icons/SunIcon';
 import { MoonIcon } from './icons/MoonIcon';
 import { HelpIcon } from './icons/HelpIcon';
-import { SettingsModal } from './SettingsModal';
+import { SettingsModal, FDA_RETURN_TO_SETTINGS_KEY, FDA_RETURN_SECTION_KEY, SettingsSection } from './SettingsModal';
 import { ScanModal } from './ScanModal';
 import { SessionIndicator } from './SessionIndicator';
 import { SessionPanel } from './SessionPanel';
@@ -43,7 +43,7 @@ interface HeaderProps {
     theme: Theme;
     onToggleTheme: () => void;
     onNavigateHome: () => void;
-    onScan: (options?: LoadAgentsOptions) => Promise<{ total: number; newCount: number }>;
+    onScan: (options?: LoadAgentsOptions) => Promise<DetailedScanResult>;
     isScanning?: boolean;
     licenseInfo: LicenseInfo | null;
     onResetLicense: () => void;
@@ -101,6 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
   const { showToast } = useToast();
   const [showScanModal, setShowScanModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection | undefined>(undefined);
   const [showSessionPanel, setShowSessionPanel] = useState(false);
   const [defaultTheme, setDefaultTheme] = useState<'system' | 'light' | 'dark'>('system');
   const [defaultView, setDefaultView] = useState<'table' | 'grid'>('table');
@@ -161,6 +162,23 @@ export const Header: React.FC<HeaderProps> = ({
     };
 
     loadThemePreference();
+  }, []);
+
+  // Check if we should return to settings after FDA flow
+  useEffect(() => {
+    const shouldReturnToSettings = localStorage.getItem(FDA_RETURN_TO_SETTINGS_KEY);
+    if (shouldReturnToSettings) {
+      // Read the section to return to
+      const returnSection = localStorage.getItem(FDA_RETURN_SECTION_KEY) as SettingsSection | null;
+      // Clear the flags
+      localStorage.removeItem(FDA_RETURN_TO_SETTINGS_KEY);
+      localStorage.removeItem(FDA_RETURN_SECTION_KEY);
+      // Set the initial section and open settings modal
+      if (returnSection) {
+        setSettingsInitialSection(returnSection);
+      }
+      setShowSettingsModal(true);
+    }
   }, []);
 
   const resolveSystemTheme = (): Theme => {
@@ -328,7 +346,11 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Settings Modal */}
       <SettingsModal
         isOpen={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
+        onClose={() => {
+          setShowSettingsModal(false);
+          setSettingsInitialSection(undefined); // Reset for next time
+        }}
+        initialSection={settingsInitialSection}
         defaultTheme={defaultTheme}
         onThemeChange={handleThemePreference}
         defaultView={defaultView}
