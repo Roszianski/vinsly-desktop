@@ -228,15 +228,17 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   }, []);
 
   const makeAgentKey = useCallback((agent: Agent) => {
-    const scopePrefix = agent.scope === AgentScope.Project ? 'project' : 'global';
+    // Use path-only deduplication - same file path = same agent regardless of scope
+    // This prevents duplicates when the same file is discovered via multiple scan methods
     const idPart = agent.path || agent.id || agent.name;
-    return `${scopePrefix}:${idPart}`;
+    return idPart;
   }, []);
 
   const makeSkillKey = useCallback((skill: Skill) => {
-    const scopePrefix = skill.scope === AgentScope.Project ? 'project' : 'global';
+    // Use path-only deduplication - same file path = same skill regardless of scope
+    // This prevents duplicates when the same file is discovered via multiple scan methods
     const idPart = skill.directoryPath || skill.path || skill.name;
-    return `${scopePrefix}:${idPart}`;
+    return idPart;
   }, []);
 
   const refreshGlobalSkills = useCallback(async () => {

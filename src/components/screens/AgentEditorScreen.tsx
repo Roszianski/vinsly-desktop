@@ -13,6 +13,7 @@ import { CheckIcon } from '../icons/CheckIcon';
 import { WarningIcon } from '../icons/WarningIcon';
 import { FolderIcon } from '../icons/FolderIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
+import { InfoIcon } from '../icons/InfoIcon';
 import { extractProjectRootFromAgentPath } from '../../utils/path';
 import { devLog } from '../../utils/devLogger';
 import { serializeFrontmatter } from '../../utils/frontmatter';
@@ -125,15 +126,17 @@ const RISK_WEIGHT: Record<ToolRisk, number> = {
   [ToolRisk.Unknown]: 0,
 };
 
-const SCOPE_DETAILS: Record<AgentScope, { title: string; description: string; path: string }> = {
+const SCOPE_DETAILS: Record<AgentScope, { title: string; description: string; benefit: string; path: string }> = {
   [AgentScope.Global]: {
     title: 'Global agent',
-    description: 'Saved inside ~/.claude/agents/ and available in every project you open.',
+    description: 'Available in every project on this computer.',
+    benefit: 'Use for general-purpose helpers you want everywhere.',
     path: '~/.claude/agents/'
   },
   [AgentScope.Project]: {
     title: 'Project agent',
-    description: 'Saved inside .claude/agents/ for this project. Perfect for project-specific helpers.',
+    description: 'Only available in the selected project folder.',
+    benefit: 'Team members with access to the repo can use it too.',
     path: '.claude/agents/'
   },
 };
@@ -827,7 +830,16 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
     switch (currentStep.id) {
       case 'scope':
         return (
-          <div className="space-y-3">
+          <div className="space-y-4">
+            {/* Info tip explaining scope concept */}
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-v-light-bg/50 dark:bg-v-dark/50 border border-v-light-border/50 dark:border-v-border/50">
+              <InfoIcon className="h-4 w-4 text-v-accent flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                <span className="font-medium text-v-light-text-primary dark:text-v-text-primary">Where should this agent live?</span>{' '}
+                Global agents are personal to you. Project agents are stored with the project and can be shared with your team via version control.
+              </p>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               {(Object.keys(SCOPE_DETAILS) as AgentScope[]).map((scope) => {
                 const detail = SCOPE_DETAILS[scope];
@@ -877,6 +889,7 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
                     )}
                     <p className="text-sm font-bold text-v-light-text-primary dark:text-v-text-primary">{detail.title}</p>
                     <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">{detail.description}</p>
+                    <p className="text-xs text-v-accent/80 mt-1">{detail.benefit}</p>
                     <p className="text-xs font-mono text-v-light-text-secondary dark:text-v-text-secondary mt-2">
                       {isProjectScope && projectFolderPath
                         ? `Saved in ${projectFolderPath.replace(/^\/Users\/([^/]+)/, '~').replace(/^C:\\Users\\([^\\]+)/, '~')}/.claude/agents/`

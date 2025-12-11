@@ -122,18 +122,29 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [containerHeight, setContainerHeight] = useState(DEFAULT_CONTAINER_HEIGHT);
+  // Deduplicate agents by path for consistent counts
+  const dedupedAgents = useMemo(() => {
+    const seenPaths = new Set<string>();
+    return agents.filter(agent => {
+      const key = agent.path || agent.id || agent.name;
+      if (seenPaths.has(key)) return false;
+      seenPaths.add(key);
+      return true;
+    });
+  }, [agents]);
+
   const { totalAgents, projectAgents, globalAgents } = useMemo(() => {
-    const projectCount = agents.filter(agent => agent.scope === AgentScope.Project).length;
-    const globalCount = agents.filter(agent => agent.scope === AgentScope.Global).length;
+    const projectCount = dedupedAgents.filter(agent => agent.scope === AgentScope.Project).length;
+    const globalCount = dedupedAgents.filter(agent => agent.scope === AgentScope.Global).length;
     return {
-      totalAgents: agents.length,
+      totalAgents: dedupedAgents.length,
       projectAgents: projectCount,
       globalAgents: globalCount,
     };
-  }, [agents]);
+  }, [dedupedAgents]);
 
   const processedAgents = useMemo(() => {
-    const filtered = agents.filter(agent => {
+    const filtered = dedupedAgents.filter(agent => {
         const scopeMatch = filter === 'All' || agent.scope === filter;
         const searchMatch = !searchQuery ||
             fuzzyMatch(agent.name, searchQuery) ||
@@ -167,7 +178,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
       }
       return compareByCriteria(a, b);
     });
-  }, [agents, filter, searchQuery, sortCriteria]);
+  }, [dedupedAgents, filter, searchQuery, sortCriteria]);
 
   useEffect(() => {
     if (!layoutLoaded) return;
@@ -302,12 +313,12 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
   };
 
   const handleExportAll = async () => {
-    if (isExportingAll || agents.length === 0) return;
+    if (isExportingAll || dedupedAgents.length === 0) return;
     setIsExportingAll(true);
     try {
-      const success = await exportAgentsAsZip(agents, 'all-agents');
+      const success = await exportAgentsAsZip(dedupedAgents, 'all-agents');
       if (success) {
-        showToast('success', `Successfully exported ${agents.length} agent(s)`);
+        showToast('success', `Successfully exported ${dedupedAgents.length} agent(s)`);
       }
     } catch (error) {
       showToast('error', `Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -320,7 +331,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
     if (selectedAgentIds.size === 0) return;
 
     try {
-      const selectedAgents = agents.filter(agent => selectedAgentIds.has(agent.id));
+      const selectedAgents = dedupedAgents.filter(agent => selectedAgentIds.has(agent.id));
       const success = await exportAgentsAsZip(selectedAgents, 'selected-agents');
       if (success) {
         showToast('success', `Successfully exported ${selectedAgents.length} agent(s)`);
@@ -450,7 +461,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Network View button */}
+          {/* Team View button */}
           <button
             onClick={onShowTeam}
             className="p-2 rounded-md border border-v-light-border dark:border-v-border hover:border-v-accent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent transition-colors"
@@ -555,7 +566,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
                     </button>
                     <button
                       onClick={handleExportAll}
-                      disabled={isExportingAll || agents.length === 0}
+                      disabled={isExportingAll || dedupedAgents.length === 0}
                       className="inline-flex h-10 items-center gap-2 px-3 text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary border border-v-light-border dark:border-v-border rounded-md hover:border-v-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Export all agents as .zip"
                     >

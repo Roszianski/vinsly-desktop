@@ -5,7 +5,7 @@ import { useToast } from '../contexts/ToastContext';
 import { cancelHomeDiscovery, DEFAULT_HOME_DISCOVERY_DEPTH, discoverHomeDirectories } from '../utils/homeDiscovery';
 import { LoadAgentsOptions, ScanSettings, DetailedScanResult } from '../types';
 import { devLog } from '../utils/devLogger';
-import { checkFullDiskAccess } from '../utils/tauriCommands';
+import { checkFullDiskAccess, scanDirectoryForProjects } from '../utils/tauriCommands';
 
 type ScanSource = 'home' | 'watched';
 
@@ -77,6 +77,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
   const [isDiscoveringHome, setIsDiscoveringHome] = useState(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<DetailedScanResult | null>(null);
+  const [showWhatGetsScanned, setShowWhatGetsScanned] = useState(false);
   const homeDiscoveryAbortRef = useRef<AbortController | null>(null);
   // Track FDA status locally so we can refresh it when modal opens
   const [canUseHomeSource, setCanUseHomeSource] = useState(
@@ -216,8 +217,32 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       directories = directories.concat(scanSettings.watchedDirectories);
     }
 
+    // Process custom paths - discover projects in subfolders if enabled
     if (customPaths.length > 0) {
-      directories = directories.concat(customPaths);
+      for (const path of customPaths) {
+        if (recursivePaths.has(path)) {
+          // Scan this directory recursively for projects
+          setScanMessage(`Discovering projects in ${path}…`);
+          try {
+            const discovered = await scanDirectoryForProjects(path, {
+              maxDepth: DEFAULT_HOME_DISCOVERY_DEPTH,
+            });
+            if (discovered.length > 0) {
+              directories = directories.concat(discovered);
+            } else {
+              // No projects found in subfolders, add the path itself
+              directories.push(path);
+            }
+          } catch (error) {
+            devLog.error(`Failed to scan ${path}:`, error);
+            // Fall back to treating it as a direct project path
+            directories.push(path);
+          }
+        } else {
+          // Just add the path directly (no recursive scan)
+          directories.push(path);
+        }
+      }
     }
 
     if (selectedSources.has('home')) {
@@ -245,7 +270,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
       try {
         const discovered = await discoverHomeDirectories({
           maxDepth: DEFAULT_HOME_DISCOVERY_DEPTH,
-          includeProtectedDirs: false, // Never scan Music/Movies/Pictures etc.
+          includeProtectedDirs: canUseHomeSource, // Scan Desktop/Documents/Downloads when FDA granted
           signal: controller.signal,
         });
 
@@ -344,8 +369,11 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                   Scan
                 </p>
                 <h2 className="text-xl font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                  Find Claude Code resources
+                  Discover Claude Code resources
                 </h2>
+                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                  Find subagents, skills, memory files, commands, and more across your computer
+                </p>
               </div>
               <button
                 onClick={onClose}
@@ -373,7 +401,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                     label="Home directory"
                     description={
                       canUseHomeSource
-                        ? 'Scans for all Claude Code resources.'
+                        ? 'Scan all projects in your home folder.'
                         : 'Requires Full Disk Access.'
                     }
                     active={selectedSources.has('home')}
@@ -423,7 +451,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                         className="flex items-center gap-3 px-3 py-2 rounded-lg border border-v-light-border dark:border-v-border bg-v-light-bg dark:bg-v-dark text-sm text-v-light-text-primary dark:text-v-text-primary"
                       >
                         <span className="truncate flex-1 min-w-0">{path}</span>
-                        <label className="flex items-center gap-1.5 text-xs text-v-light-text-secondary dark:text-v-text-secondary whitespace-nowrap cursor-pointer">
+                        <label className="flex items-center gap-1.5 text-xs text-v-light-text-secondary dark:text-v-text-secondary whitespace-nowrap cursor-pointer" title="Recursively scan for projects within this folder">
                           <input
                             type="checkbox"
                             checked={recursivePaths.has(path)}
@@ -431,7 +459,7 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                             disabled={isScanning || isDiscoveringHome}
                             className="w-3.5 h-3.5 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
                           />
-                          Subfolders
+                          Include subfolders
                         </label>
                         <button
                           type="button"
@@ -446,6 +474,40 @@ export const ScanModal: React.FC<ScanModalProps> = ({
                     ))}
                   </div>
                 )}
+
+                {/* What gets scanned - expandable section */}
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowWhatGetsScanned(prev => !prev)}
+                    className="text-xs text-v-accent hover:text-v-accent-hover flex items-center gap-1"
+                  >
+                    <svg
+                      className={`w-3 h-3 transition-transform ${showWhatGetsScanned ? 'rotate-90' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    What gets scanned?
+                  </button>
+                  {showWhatGetsScanned && (
+                    <div className="mt-2 p-3 rounded-lg bg-v-light-bg/50 dark:bg-v-dark/50 border border-v-light-border/50 dark:border-v-border/50">
+                      <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mb-2">
+                        Vinsly looks for Claude Code resources in these locations:
+                      </p>
+                      <ul className="text-xs text-v-light-text-secondary dark:text-v-text-secondary space-y-1 font-mono">
+                        <li><span className="text-v-accent">.claude/agents/</span> — Agent definitions</li>
+                        <li><span className="text-v-accent">.claude/skills/</span> — Skill packages</li>
+                        <li><span className="text-v-accent">.claude/commands/</span> — Slash commands</li>
+                        <li><span className="text-v-accent">CLAUDE.md</span> — Memory files</li>
+                        <li><span className="text-v-accent">.claude/settings.json</span> — Hooks configuration</li>
+                        <li><span className="text-v-accent">.mcp.json</span> — MCP server configs</li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </section>
 
               <section className="space-y-3">

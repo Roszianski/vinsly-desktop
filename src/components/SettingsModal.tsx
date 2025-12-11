@@ -678,6 +678,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </p>
 
                         <div className="space-y-3">
+                          {/* Home directory */}
+                          {isMacPlatform && !localScanSettings.fullDiskAccessEnabled ? (
+                            <div className="flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-lg border border-v-light-border dark:border-v-border">
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                                  Home directory
+                                </p>
+                                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                                  Requires Full Disk Access.{' '}
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveSection('permissions')}
+                                    className="text-v-accent hover:underline"
+                                  >
+                                    Enable in Permissions →
+                                  </button>
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <label className="flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-lg border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent/50 transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={localScanSettings.autoScanHomeDirectoryOnStartup}
+                                onChange={(e) => handleAutoScanHomeToggle(e.target.checked)}
+                                className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
+                              />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                                  Home directory
+                                </p>
+                                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                                  Scan entire home folder
+                                </p>
+                              </div>
+                            </label>
+                          )}
+
                           {/* Global resources */}
                           <label className="flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-lg border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent/50 transition-colors">
                             <input
@@ -713,42 +751,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               </p>
                             </div>
                           </label>
-
-                          {/* Home directory */}
-                          {isMacPlatform && !localScanSettings.fullDiskAccessEnabled ? (
-                            <div className="flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-lg border border-v-light-border dark:border-v-border">
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
-                                  Home directory
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={() => void handleOpenFullDiskSettings()}
-                                  className="text-xs text-v-accent hover:text-v-accent-hover hover:underline transition-colors text-left flex items-center gap-1"
-                                >
-                                  <span>→</span>
-                                  <span>Grant Full Disk Access to enable</span>
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <label className="flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-lg border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent/50 transition-colors">
-                              <input
-                                type="checkbox"
-                                checked={localScanSettings.autoScanHomeDirectoryOnStartup}
-                                onChange={(e) => handleAutoScanHomeToggle(e.target.checked)}
-                                className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
-                              />
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
-                                  Home directory
-                                </p>
-                                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                                  Scan entire home folder
-                                </p>
-                              </div>
-                            </label>
-                          )}
                         </div>
                       </div>
 
@@ -811,9 +813,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           Permissions
                         </h3>
                         <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
-                          Manage access to protected folders on your Mac.
+                          Control how Vinsly accesses folders on your Mac.
                         </p>
                       </div>
+
+                      {/* Recommended approach callout */}
+                      {isMacPlatform && fullDiskStatus !== 'granted' && (
+                        <div className="p-4 rounded-lg bg-v-accent/5 border border-v-accent/20">
+                          <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary mb-1">
+                            Recommended: Use Watched Folders
+                          </p>
+                          <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                            Most users add specific project folders in{' '}
+                            <button
+                              onClick={() => setActiveSection('scanning')}
+                              className="text-v-accent hover:underline"
+                            >
+                              Settings → Scanning
+                            </button>
+                            {' '}instead of granting Full Disk Access. It's simpler and more secure.
+                          </p>
+                        </div>
+                      )}
 
                       {isMacPlatform ? (
                         <>

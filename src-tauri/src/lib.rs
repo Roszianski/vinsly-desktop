@@ -1,6 +1,6 @@
 pub mod scanner;
 
-use scanner::{scan_project_directories, DEFAULT_DISCOVERY_DEPTH};
+use scanner::{scan_directory, scan_project_directories, DEFAULT_DISCOVERY_DEPTH};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
 use std::fs;
@@ -1190,6 +1190,28 @@ async fn discover_project_directories(
     let directories = perform_directory_scan(depth, include_protected).await?;
     cache_directories(depth, include_protected, &directories).await;
     Ok(directories)
+}
+
+/// Scan a specific directory recursively for Claude Code projects.
+/// Used for custom paths where the user wants to discover projects within subfolders.
+#[tauri::command]
+async fn scan_directory_for_projects(
+    directory: String,
+    max_depth: Option<usize>,
+) -> Result<Vec<String>, String> {
+    let root_dir = PathBuf::from(&directory);
+    if !root_dir.exists() {
+        return Err(format!("Directory does not exist: {}", directory));
+    }
+    if !root_dir.is_dir() {
+        return Err(format!("Path is not a directory: {}", directory));
+    }
+
+    let depth = max_depth.unwrap_or(DEFAULT_DISCOVERY_DEPTH).max(1);
+
+    tauri::async_runtime::spawn_blocking(move || scan_directory(root_dir, depth))
+        .await
+        .map_err(|err| format!("Failed to scan directory: {}", err))?
 }
 
 #[tauri::command]
@@ -3111,6 +3133,7 @@ pub fn run() {
             export_skills_archive,
             get_home_dir,
             discover_project_directories,
+            scan_directory_for_projects,
             check_full_disk_access,
             open_full_disk_access_settings,
             // CLAUDE.md (Memory) commands

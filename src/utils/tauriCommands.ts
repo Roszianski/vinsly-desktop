@@ -124,6 +124,21 @@ export async function discoverProjectDirectories(options: DiscoverProjectDirecto
   return await invoke<string[]>('discover_project_directories', payload);
 }
 
+interface ScanDirectoryOptions {
+  maxDepth?: number;
+}
+
+export async function scanDirectoryForProjects(
+  directory: string,
+  options: ScanDirectoryOptions = {}
+): Promise<string[]> {
+  const payload: Record<string, string | number> = { directory };
+  if (typeof options.maxDepth === 'number') {
+    payload.max_depth = options.maxDepth;
+  }
+  return await invoke<string[]>('scan_directory_for_projects', payload);
+}
+
 export async function checkFullDiskAccess(): Promise<boolean> {
   return await invoke<boolean>('check_full_disk_access');
 }

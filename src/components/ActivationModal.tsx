@@ -487,54 +487,6 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                     These are optional. You can always scan manually once you're in the app.
                   </p>
                   <div className="space-y-3">
-                    {/* Home directory - with inline FDA for macOS */}
-                    {isMacPlatform && fullDiskStatus !== 'granted' ? (
-                      <div className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border ${isSubmitting ? 'opacity-70' : ''}`}>
-                        <input
-                          type="checkbox"
-                          checked={false}
-                          disabled
-                          className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent opacity-50"
-                        />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Home directory</p>
-                          <button
-                            type="button"
-                            onClick={() => void handleOpenFullDiskSettings()}
-                            disabled={isOpeningFullDiskSettings || isSubmitting}
-                            className="text-xs text-v-accent hover:text-v-accent-hover hover:underline transition-colors text-left flex items-center gap-1 disabled:opacity-60"
-                          >
-                            <span>→</span>
-                            <span>{isOpeningFullDiskSettings ? 'Opening…' : 'Enable Full Disk Access to unlock'}</span>
-                          </button>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void refreshFullDiskStatus()}
-                          disabled={fullDiskStatus === 'checking' || isSubmitting}
-                          className="text-xs text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent transition-colors disabled:opacity-60"
-                        >
-                          {fullDiskStatus === 'checking' ? 'Checking…' : 'Check again'}
-                        </button>
-                      </div>
-                    ) : (
-                      <label className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent transition-colors ${isSubmitting ? 'opacity-70 pointer-events-none' : ''}`}>
-                        <input
-                          type="checkbox"
-                          checked={autoScanHome}
-                          onChange={(e) => setAutoScanHome(e.target.checked)}
-                          disabled={isSubmitting}
-                          className="w-4 h-4 rounded border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent focus:ring-offset-0"
-                        />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Home directory</p>
-                          <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                            {isMacPlatform ? 'Full Disk Access enabled' : 'Scan entire home folder'}
-                          </p>
-                        </div>
-                      </label>
-                    )}
-
                     {/* Global resources */}
                     <label className={`flex items-center gap-3 p-3 bg-v-light-bg dark:bg-v-dark rounded-xl border border-v-light-border dark:border-v-border cursor-pointer hover:border-v-accent transition-colors ${isSubmitting ? 'opacity-70 pointer-events-none' : ''}`}>
                       <input
