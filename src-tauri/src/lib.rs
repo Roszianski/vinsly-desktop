@@ -119,17 +119,42 @@ struct SkillFile {
 
 fn validate_entry_name(name: &str) -> Result<(), String> {
     if name.trim().is_empty() {
-        return Err("Agent name cannot be empty".to_string());
+        return Err("Name cannot be empty".to_string());
     }
     if name.contains('/') || name.contains('\\') {
-        return Err("Agent name cannot contain path separators".to_string());
+        return Err("Name cannot contain path separators".to_string());
     }
     if name.contains("..") {
-        return Err("Agent name cannot contain '..'".to_string());
+        return Err("Name cannot contain '..'".to_string());
     }
     if name.contains('\0') {
-        return Err("Agent name contains invalid characters".to_string());
+        return Err("Name contains invalid characters".to_string());
     }
+
+    // Windows reserved characters (enforce on all platforms for cross-platform compatibility)
+    const WINDOWS_RESERVED_CHARS: &[char] = &['<', '>', ':', '"', '|', '?', '*'];
+    for c in WINDOWS_RESERVED_CHARS {
+        if name.contains(*c) {
+            return Err(format!("Name cannot contain '{}'", c));
+        }
+    }
+
+    // Windows doesn't allow names ending with space or period
+    if name.ends_with(' ') || name.ends_with('.') {
+        return Err("Name cannot end with a space or period".to_string());
+    }
+
+    // Windows reserved names (case-insensitive)
+    let base_name = name.split('.').next().unwrap_or(name).to_uppercase();
+    const WINDOWS_RESERVED_NAMES: &[&str] = &[
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    if WINDOWS_RESERVED_NAMES.contains(&base_name.as_str()) {
+        return Err(format!("'{}' is a reserved name on Windows", name));
+    }
+
     Ok(())
 }
 
