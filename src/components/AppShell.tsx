@@ -39,6 +39,7 @@ interface AppShellProps {
   pendingUpdate: PendingUpdateDetails | null;
   appVersion: string;
   lastUpdateCheckAt: string | null;
+  lastCheckError: string | null;
   onInstallUpdate: () => void;
 
   // Platform
@@ -70,6 +71,7 @@ export function AppShell({
   pendingUpdate,
   appVersion,
   lastUpdateCheckAt,
+  lastCheckError,
   onInstallUpdate,
   isMacPlatform,
   macOSVersionMajor,
@@ -95,6 +97,7 @@ export function AppShell({
         pendingUpdate={pendingUpdate}
         appVersion={appVersion}
         lastUpdateCheckAt={lastUpdateCheckAt}
+        lastCheckError={lastCheckError}
         onInstallUpdate={onInstallUpdate}
         isMacPlatform={isMacPlatform}
         macOSVersionMajor={macOSVersionMajor}

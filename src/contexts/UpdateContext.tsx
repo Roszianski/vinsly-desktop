@@ -10,6 +10,7 @@ interface UpdateContextType {
   isInstallingUpdate: boolean;
   pendingUpdate: PendingUpdateDetails | null;
   lastUpdateCheckAt: string | null;
+  lastCheckError: string | null;
   initialCheckComplete: boolean;
   handleManualUpdateCheck: () => Promise<void>;
   handleInstallUpdate: () => Promise<void>;
@@ -34,6 +35,7 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
     isInstalling: isInstallingUpdate,
     pendingUpdate: rawPendingUpdate,
     lastCheckedAt: lastUpdateCheckAt,
+    lastCheckError,
     checkForUpdate,
     installUpdate,
     clearPendingUpdate,
@@ -95,6 +97,7 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
     isInstallingUpdate,
     pendingUpdate,
     lastUpdateCheckAt,
+    lastCheckError,
     initialCheckComplete,
     handleManualUpdateCheck,
     handleInstallUpdate,

@@ -105,13 +105,9 @@ export function useUpdater(): UseUpdaterResult {
   }, [releaseUpdateResource]);
 
   const checkForUpdate = useCallback(async () => {
-    if (typeof window === 'undefined' || !(window as any).__TAURI__) {
-      return null;
-    }
     setIsChecking(true);
     setLastCheckError(null);
     try {
-      // Check for updates with retry logic and exponential backoff
       const update = await checkWithRetry();
       const checkedAt = new Date().toISOString();
       setLastCheckedAt(checkedAt);

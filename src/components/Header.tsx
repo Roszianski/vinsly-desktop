@@ -57,6 +57,7 @@ interface HeaderProps {
     pendingUpdate: PendingUpdateDetails | null;
     appVersion: string;
     lastUpdateCheckAt: string | null;
+    lastCheckError: string | null;
     onInstallUpdate: () => void;
     isMacPlatform: boolean;
     macOSVersionMajor?: number | null;
@@ -87,6 +88,7 @@ export const Header: React.FC<HeaderProps> = ({
   pendingUpdate,
   appVersion,
   lastUpdateCheckAt,
+  lastCheckError,
   onInstallUpdate,
   isMacPlatform,
   macOSVersionMajor = null,
@@ -367,6 +369,7 @@ export const Header: React.FC<HeaderProps> = ({
         pendingUpdate={pendingUpdate}
         appVersion={appVersion}
         lastUpdateCheckAt={lastUpdateCheckAt}
+        lastCheckError={lastCheckError}
         onInstallUpdate={onInstallUpdate}
         isMacPlatform={isMacPlatform}
         macOSVersionMajor={macOSVersionMajor}

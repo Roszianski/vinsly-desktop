@@ -73,6 +73,7 @@ export const AppContent: React.FC = () => {
     isInstallingUpdate,
     pendingUpdate,
     lastUpdateCheckAt,
+    lastCheckError,
     initialCheckComplete,
     handleManualUpdateCheck,
     handleInstallUpdate,
@@ -733,6 +734,7 @@ export const AppContent: React.FC = () => {
         pendingUpdate={pendingUpdate}
         appVersion={appVersion}
         lastUpdateCheckAt={lastUpdateCheckAt}
+        lastCheckError={lastCheckError}
         onInstallUpdate={handleInstallUpdate}
         isMacPlatform={isMacLike}
         macOSVersionMajor={macOSMajorVersion}

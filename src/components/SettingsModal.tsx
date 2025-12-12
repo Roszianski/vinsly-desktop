@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { open } from '@tauri-apps/plugin-dialog';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { ScanSettings } from '../types';
 import { getScanSettings, saveScanSettings, addWatchedDirectory, removeWatchedDirectory } from '../utils/scanSettings';
 import { DeleteIcon } from './icons/DeleteIcon';
@@ -34,6 +35,7 @@ interface SettingsModalProps {
   pendingUpdate: PendingUpdateDetails | null;
   appVersion: string;
   lastUpdateCheckAt: string | null;
+  lastCheckError: string | null;
   onInstallUpdate: () => Promise<void> | void;
   isMacPlatform?: boolean;
   macOSVersionMajor?: number | null;
@@ -62,6 +64,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   pendingUpdate,
   appVersion,
   lastUpdateCheckAt,
+  lastCheckError,
   onInstallUpdate,
   isMacPlatform = false,
   macOSVersionMajor = null,
@@ -1081,9 +1084,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               <span className="text-v-light-text-secondary dark:text-v-text-secondary">Current version</span>
                               <span className="font-mono text-v-light-text-primary dark:text-v-text-primary">{appVersion || '—'}</span>
                             </div>
-                            {!pendingUpdate && (
+                            {!pendingUpdate && !lastCheckError && (
                               <p className="text-v-light-text-secondary dark:text-v-text-secondary">
                                 You're up to date
+                              </p>
+                            )}
+                            {lastCheckError && (
+                              <p className="text-red-500 dark:text-red-400 text-xs">
+                                Update check failed: {lastCheckError}
+                              </p>
+                            )}
+                            {lastUpdateCheckAt && (
+                              <p className="text-v-light-text-secondary/60 dark:text-v-text-secondary/60 text-xs">
+                                Last checked: {new Date(lastUpdateCheckAt).toLocaleTimeString()}
                               </p>
                             )}
                           </div>
@@ -1100,9 +1113,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             </div>
                           )}
 
-                          {pendingUpdate?.notes && (
-                            <div className="mt-4 p-3 rounded-lg border border-dashed border-v-light-border dark:border-v-border bg-v-light-surface dark:bg-v-mid-dark text-xs text-v-light-text-secondary dark:text-v-text-secondary whitespace-pre-line">
-                              {pendingUpdate.notes.length > 600 ? `${pendingUpdate.notes.slice(0, 600)}…` : pendingUpdate.notes}
+                          {pendingUpdate && (
+                            <div className="mt-4 p-3 rounded-lg border border-dashed border-v-light-border dark:border-v-border bg-v-light-surface dark:bg-v-mid-dark text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                              {pendingUpdate.notes && (
+                                <p className="whitespace-pre-line">
+                                  {pendingUpdate.notes.length > 600 ? `${pendingUpdate.notes.slice(0, 600)}…` : pendingUpdate.notes}
+                                </p>
+                              )}
+                              <button
+                                onClick={() => void openUrl(`https://github.com/Roszianski/vinsly-desktop/releases/tag/v${pendingUpdate.version}`)}
+                                className="mt-2 text-v-accent hover:underline"
+                              >
+                                View release on GitHub →
+                              </button>
                             </div>
                           )}
                         </div>

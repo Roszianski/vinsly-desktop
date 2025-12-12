@@ -16,11 +16,8 @@ import { ListIcon } from '../icons/ListIcon';
 import { GridIcon } from '../icons/GridIcon';
 import { GlobeIcon } from '../icons/GlobeIcon';
 import { SpinnerIcon } from '../icons/SpinnerIcon';
-import { DocumentIcon } from '../icons/DocumentIcon';
-import { TerminalIcon } from '../icons/TerminalIcon';
-import { ServerIcon } from '../icons/ServerIcon';
-import { LightningIcon } from '../icons/LightningIcon';
 import { listContainer } from '../../animations';
+import { NavigationTabs, TabView } from '../NavigationTabs';
 import { fuzzyMatch } from '../../utils/fuzzyMatch';
 import { exportAgentsAsZip } from '../../utils/agentExport';
 import { openImportDialog } from '../../utils/agentImport';
@@ -359,6 +356,18 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
     }
   };
 
+  const handleNavigate = (view: TabView) => {
+    const handlers: Record<TabView, () => void> = {
+      subagents: onShowSubagents,
+      skills: onShowSkills,
+      memory: onShowMemory,
+      commands: onShowCommands,
+      mcp: onShowMCP,
+      hooks: onShowHooks,
+    };
+    handlers[view]();
+  };
+
   const FilterButton: React.FC<{ value: Filter; label: string }> = ({ value, label }) => (
     <button
       onClick={() => setFilter(value)}
@@ -402,63 +411,7 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
 
       {/* View Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-stretch border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark">
-          {[
-            {
-              key: 'subagents',
-              label: 'Subagents',
-              icon: <ListIcon className="h-4 w-4" />,
-              action: onShowSubagents,
-            },
-            {
-              key: 'skills',
-              label: 'Skills',
-              icon: <LayersIcon className="h-4 w-4" />,
-              action: onShowSkills,
-            },
-            {
-              key: 'memory',
-              label: 'Memory',
-              icon: <DocumentIcon className="h-4 w-4" />,
-              action: onShowMemory,
-            },
-            {
-              key: 'commands',
-              label: 'Commands',
-              icon: <TerminalIcon className="h-4 w-4" />,
-              action: onShowCommands,
-            },
-            {
-              key: 'mcp',
-              label: 'MCP',
-              icon: <ServerIcon className="h-4 w-4" />,
-              action: onShowMCP,
-            },
-            {
-              key: 'hooks',
-              label: 'Hooks',
-              icon: <LightningIcon className="h-4 w-4" />,
-              action: onShowHooks,
-            },
-          ].map((item, index, array) => (
-            <React.Fragment key={item.key}>
-              <button
-                onClick={item.action}
-                className={`px-3 py-2 text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 ${
-                  activeView === item.key
-                    ? 'bg-v-accent/10 text-v-accent'
-                    : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-light-text-primary dark:hover:text-v-text-primary hover:bg-v-accent/10 dark:hover:bg-v-light-dark'
-                }`}
-              >
-                {item.icon}
-                <span className="hidden sm:inline">{item.label}</span>
-              </button>
-              {index < array.length - 1 && (
-                <div className="w-px bg-v-light-border dark:bg-v-border opacity-50" />
-              )}
-            </React.Fragment>
-          ))}
-        </div>
+        <NavigationTabs activeView={activeView} onNavigate={handleNavigate} />
 
         <div className="flex items-center gap-2">
           {/* Team View button */}
