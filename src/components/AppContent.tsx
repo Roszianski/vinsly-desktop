@@ -171,23 +171,22 @@ export const AppContent: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, []);
 
-  // Determine if we should show the pre-activation update modal
-  const showPreActivationUpdate = !showSplash &&
+  // Determine if we should show the update modal (for all users on startup)
+  const showUpdateModal = !showSplash &&
     initialCheckComplete &&
-    pendingUpdate !== null &&
-    !licenseInfo;
+    pendingUpdate !== null;
 
-  // Open activation modal when license bootstrap completes (and no pre-activation update is showing)
+  // Open activation modal when license bootstrap completes (and no update modal is showing)
   useEffect(() => {
     if (activationPresented || !licenseBootstrapComplete || !initialCheckComplete) return;
     // Don't open activation if we're showing the update modal
-    if (!showSplash && !licenseInfo && !pendingUpdate) {
+    if (!showSplash && !licenseInfo && !showUpdateModal) {
       setIsActivationOpen(true);
     }
-    if (!showSplash && !pendingUpdate) {
+    if (!showSplash && !showUpdateModal) {
       setActivationPresented(true);
     }
-  }, [licenseInfo, showSplash, activationPresented, licenseBootstrapComplete, initialCheckComplete, pendingUpdate, setIsActivationOpen, setActivationPresented]);
+  }, [licenseInfo, showSplash, activationPresented, licenseBootstrapComplete, initialCheckComplete, showUpdateModal, setIsActivationOpen, setActivationPresented]);
 
   // Keyboard shortcuts
   useKeyboardShortcuts([
@@ -754,9 +753,9 @@ export const AppContent: React.FC = () => {
 
       <ToastContainer toasts={toasts} onClose={removeToast} />
 
-      {showPreActivationUpdate && pendingUpdate && (
+      {showUpdateModal && pendingUpdate && (
         <UpdateAvailableModal
-          isOpen={showPreActivationUpdate}
+          isOpen={showUpdateModal}
           update={pendingUpdate}
           isInstalling={isInstallingUpdate}
           onInstall={handleInstallUpdate}

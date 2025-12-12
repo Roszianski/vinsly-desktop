@@ -236,8 +236,8 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="font-bold text-[1.65rem] sm:text-[1.75rem] text-v-light-text-primary dark:text-v-text-primary tracking-wider transition-colors">
               VINSLY
             </span>
-            <span className="ml-3 text-sm text-v-light-text-secondary dark:text-v-text-secondary font-mono">
-              / Studio
+            <span className="ml-2 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-v-accent/15 text-v-accent border border-v-accent/30">
+              Beta
             </span>
           </button>
           <div className="flex items-center gap-3">

@@ -98,6 +98,9 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
               >
                 Skip for Now
               </button>
+              <p className="text-xs text-v-light-text-secondary/70 dark:text-v-text-secondary/70 text-center">
+                You can update later in Settings
+              </p>
             </div>
 
             <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary text-center">
