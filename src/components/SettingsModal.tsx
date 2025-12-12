@@ -820,25 +820,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </p>
                       </div>
 
-                      {/* Recommended approach callout */}
-                      {isMacPlatform && fullDiskStatus !== 'granted' && (
-                        <div className="p-4 rounded-lg bg-v-accent/5 border border-v-accent/20">
-                          <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary mb-1">
-                            Recommended: Use Watched Folders
-                          </p>
-                          <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                            Most users add specific project folders in{' '}
-                            <button
-                              onClick={() => setActiveSection('scanning')}
-                              className="text-v-accent hover:underline"
-                            >
-                              Settings → Scanning
-                            </button>
-                            {' '}instead of granting Full Disk Access. It's simpler and more secure.
-                          </p>
-                        </div>
-                      )}
-
                       {isMacPlatform ? (
                         <>
                           <div className="space-y-4 border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark">
@@ -918,18 +899,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 )}
                               </div>
                             )}
-                          </div>
-
-                          <div className="border border-dashed border-v-light-border dark:border-v-border rounded-lg p-4 bg-v-light-bg/60 dark:bg-v-dark/60">
-                            <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
-                              <span className="font-semibold text-v-light-text-primary dark:text-v-text-primary">Alternative:</span> Skip Full Disk Access and add specific folders in{' '}
-                              <button
-                                onClick={() => setActiveSection('scanning')}
-                                className="font-semibold text-v-accent hover:text-v-accent-hover"
-                              >
-                                Scanning → Watched Directories
-                              </button>
-                            </p>
                           </div>
                         </>
                       ) : (
