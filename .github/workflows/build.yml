@@ -18,14 +18,14 @@ jobs:
           - platform: macos-latest
             target: x86_64-apple-darwin
             artifact_name: Vinsly-macOS-x64
-          # Linux
-          - platform: ubuntu-latest
-            target: ''
-            artifact_name: Vinsly-Linux
-          # Windows
-          - platform: windows-latest
-            target: ''
-            artifact_name: Vinsly-Windows
+          # # Linux
+          # - platform: ubuntu-latest
+          #   target: ''
+          #   artifact_name: Vinsly-Linux
+          # # Windows
+          # - platform: windows-latest
+          #   target: ''
+          #   artifact_name: Vinsly-Windows
 
     runs-on: ${{ matrix.platform }}
 
