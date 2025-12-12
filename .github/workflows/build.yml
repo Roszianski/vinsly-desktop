@@ -18,14 +18,14 @@ jobs:
           - platform: macos-latest
             target: x86_64-apple-darwin
             artifact_name: Vinsly-macOS-x64
-          # Linux
-          - platform: ubuntu-latest
-            target: ''
-            artifact_name: Vinsly-Linux
-          # Windows
-          - platform: windows-latest
-            target: ''
-            artifact_name: Vinsly-Windows
+          # # Linux
+          # - platform: ubuntu-latest
+          #   target: ''
+          #   artifact_name: Vinsly-Linux
+          # # Windows
+          # - platform: windows-latest
+          #   target: ''
+          #   artifact_name: Vinsly-Windows
 
     runs-on: ${{ matrix.platform }}
 
@@ -140,15 +140,19 @@ jobs:
         run: |
           mkdir -p release-files
 
-          # Flatten macOS Apple Silicon (arm64) artifacts
+          # Flatten macOS Apple Silicon (arm64) artifacts - rename tar.gz to include arch
           find artifacts/Vinsly-macOS-arm64 -name "*.dmg" -exec cp {} release-files/ \; 2>/dev/null || true
-          find artifacts/Vinsly-macOS-arm64 -name "*.app.tar.gz" -exec cp {} release-files/ \; 2>/dev/null || true
-          find artifacts/Vinsly-macOS-arm64 -name "*.app.tar.gz.sig" -exec cp {} release-files/ \; 2>/dev/null || true
+          ARM_TARGZ=$(find artifacts/Vinsly-macOS-arm64 -name "*.app.tar.gz" ! -name "*.sig" 2>/dev/null | head -1)
+          ARM_SIG=$(find artifacts/Vinsly-macOS-arm64 -name "*.app.tar.gz.sig" 2>/dev/null | head -1)
+          if [ -n "$ARM_TARGZ" ]; then cp "$ARM_TARGZ" release-files/Vinsly_aarch64.app.tar.gz; fi
+          if [ -n "$ARM_SIG" ]; then cp "$ARM_SIG" release-files/Vinsly_aarch64.app.tar.gz.sig; fi
 
-          # Flatten macOS Intel (x64) artifacts
+          # Flatten macOS Intel (x64) artifacts - rename tar.gz to include arch
           find artifacts/Vinsly-macOS-x64 -name "*.dmg" -exec cp {} release-files/ \; 2>/dev/null || true
-          find artifacts/Vinsly-macOS-x64 -name "*.app.tar.gz" -exec cp {} release-files/ \; 2>/dev/null || true
-          find artifacts/Vinsly-macOS-x64 -name "*.app.tar.gz.sig" -exec cp {} release-files/ \; 2>/dev/null || true
+          X64_TARGZ=$(find artifacts/Vinsly-macOS-x64 -name "*.app.tar.gz" ! -name "*.sig" 2>/dev/null | head -1)
+          X64_SIG=$(find artifacts/Vinsly-macOS-x64 -name "*.app.tar.gz.sig" 2>/dev/null | head -1)
+          if [ -n "$X64_TARGZ" ]; then cp "$X64_TARGZ" release-files/Vinsly_x64.app.tar.gz; fi
+          if [ -n "$X64_SIG" ]; then cp "$X64_SIG" release-files/Vinsly_x64.app.tar.gz.sig; fi
 
           # Flatten Linux artifacts
           find artifacts/Vinsly-Linux -name "*.deb" -exec cp {} release-files/ \; 2>/dev/null || true
@@ -232,15 +236,17 @@ jobs:
           echo "Listing artifacts (recursive)..."
           find artifacts/ -type f | sort
 
-          # Find macOS Apple Silicon (arm64) signature and file
+          # Find macOS Apple Silicon (arm64) signature
           MACOS_ARM_SIG_FILE=$(find artifacts/Vinsly-macOS-arm64 -name "*.app.tar.gz.sig" 2>/dev/null | head -1)
           MACOS_ARM_SIG=$(cat "$MACOS_ARM_SIG_FILE" 2>/dev/null || echo "")
-          MACOS_ARM_FILE=$(find artifacts/Vinsly-macOS-arm64 -name "*.app.tar.gz" ! -name "*.sig" 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
+          # Use the renamed filename
+          MACOS_ARM_FILE="Vinsly_aarch64.app.tar.gz"
 
-          # Find macOS Intel (x64) signature and file
+          # Find macOS Intel (x64) signature
           MACOS_X64_SIG_FILE=$(find artifacts/Vinsly-macOS-x64 -name "*.app.tar.gz.sig" 2>/dev/null | head -1)
           MACOS_X64_SIG=$(cat "$MACOS_X64_SIG_FILE" 2>/dev/null || echo "")
-          MACOS_X64_FILE=$(find artifacts/Vinsly-macOS-x64 -name "*.app.tar.gz" ! -name "*.sig" 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
+          # Use the renamed filename
+          MACOS_X64_FILE="Vinsly_x64.app.tar.gz"
 
           # Find Windows signature and file
           WINDOWS_SIG_FILE=$(find artifacts/Vinsly-Windows -name "*.exe.sig" 2>/dev/null | head -1)
