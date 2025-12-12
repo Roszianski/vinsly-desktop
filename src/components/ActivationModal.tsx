@@ -516,6 +516,13 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                         <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">Configured in settings</p>
                       </div>
                     </label>
+
+                    {/* FDA tip for macOS users */}
+                    {isMacPlatform && (
+                      <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary px-3 py-2 border border-dashed border-v-light-border dark:border-v-border rounded-xl">
+                        Tip: To scan your entire home directory, enable Full Disk Access in Vinsly's Permissions settings.
+                      </p>
+                    )}
                   </div>
                 </div>
 
