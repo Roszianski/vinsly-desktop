@@ -940,17 +940,24 @@ fn extract_skill_archive(archive_path: &Path, base: &Path) -> Result<PathBuf, St
             continue;
         }
         let relative_path: PathBuf = components.collect();
-        let output_path = if relative_path.as_os_str().is_empty() {
-            target_dir.clone()
-        } else {
-            target_dir.join(&relative_path)
-        };
 
         // Security check: ensure extracted path stays within target directory
-        // Use lexical check first (before creating the file)
-        let output_str = output_path.to_string_lossy();
-        let target_str = target_dir.to_string_lossy();
-        if !output_str.starts_with(target_str.as_ref()) {
+        // Use canonical path comparison to prevent path traversal attacks
+        // This is more robust than string comparison which can be bypassed with tricks like
+        // "/target-dir-pwned/../actual-target-dir" passing a starts_with() check
+        let canonical_target = target_dir.canonicalize().map_err(|e| {
+            format!("Failed to canonicalize target directory: {}", e)
+        })?;
+
+        // Build the output path using the canonical target to ensure safety
+        let output_path = if relative_path.as_os_str().is_empty() {
+            canonical_target.clone()
+        } else {
+            canonical_target.join(&relative_path)
+        };
+
+        // Verify the output path is still within the canonical target
+        if !output_path.starts_with(&canonical_target) {
             return Err(format!(
                 "Archive contains path that escapes target directory: {:?}",
                 relative_path
@@ -3202,5 +3209,8 @@ pub fn run() {
             set_title_bar_theme,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .unwrap_or_else(|e| {
+            eprintln!("Error: Failed to start Vinsly application: {}", e);
+            std::process::exit(1);
+        });
 }

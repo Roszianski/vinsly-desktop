@@ -198,10 +198,21 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
       let homeDirectories: string[] = [];
       if (storedSettings.autoScanHomeDirectoryOnStartup && storedSettings.fullDiskAccessEnabled) {
         try {
-          homeDirectories = await discoverHomeDirectories({
+          // Add timeout to prevent app freezes with slow/network-mounted drives
+          const HOME_DISCOVERY_TIMEOUT_MS = 10000;
+          const discoveryPromise = discoverHomeDirectories({
             maxDepth: HOME_DISCOVERY_MAX_DEPTH,
             includeProtectedDirs: false, // Never scan Music/Movies/Pictures - no Claude projects there
           });
+
+          const timeoutPromise = new Promise<string[]>((resolve) => {
+            setTimeout(() => {
+              devLog.warn('Home directory discovery timed out after 10s, continuing without results');
+              resolve([]);
+            }, HOME_DISCOVERY_TIMEOUT_MS);
+          });
+
+          homeDirectories = await Promise.race([discoveryPromise, timeoutPromise]);
         } catch (error) {
           devLog.error('Error discovering home directories:', error);
         }

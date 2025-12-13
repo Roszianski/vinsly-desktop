@@ -156,6 +156,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   const scanAbortController = useRef<AbortController | null>(null);
   const pendingScanOptions = useRef<LoadAgentsOptions | null>(null);
   const scanMutexRef = useRef<Promise<{ total: number; newCount: number }> | null>(null);
+  const importInProgressRef = useRef(false);
 
   useEffect(() => {
     agentsRef.current = agents;
@@ -173,21 +174,30 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
     const CACHE_HYDRATION_TIMEOUT_MS = 5000;
 
     const hydrateWorkspaceFromCache = async () => {
+      let timedOut = false;
+
       try {
         // Add timeout to prevent UI hang if storage is slow
-        const timeoutPromise = new Promise<null>((_, reject) => {
-          setTimeout(() => reject(new Error('Cache hydration timeout')), CACHE_HYDRATION_TIMEOUT_MS);
-        });
+        // Use a flag-based approach instead of Promise.race to avoid abandoning the storage operation
+        const timeoutId = setTimeout(() => {
+          timedOut = true;
+          devLog.warn('Cache hydration timed out, continuing with empty cache');
+          workspaceCacheHydrated.current = true;
+          setIsCacheReady(true);
+        }, CACHE_HYDRATION_TIMEOUT_MS);
 
-        const cachePromise = Promise.all([
+        const [cachedAgents, cachedSkills] = await Promise.all([
           getStorageItem<Agent[]>(AGENT_CACHE_KEY),
           getStorageItem<Skill[]>(SKILL_CACHE_KEY),
         ]);
 
-        const [cachedAgents, cachedSkills] = await Promise.race([
-          cachePromise,
-          timeoutPromise.then(() => [null, null] as [Agent[] | null, Skill[] | null]),
-        ]) as [Agent[] | null, Skill[] | null];
+        // Clear the timeout since we got results
+        clearTimeout(timeoutId);
+
+        // If we already timed out, don't update state to avoid race conditions
+        if (timedOut) {
+          return;
+        }
 
         if (cachedAgents && cachedAgents.length > 0 && agentsRef.current.length === 0) {
           const agentsWithFavorites = await applyAgentFavorites(cachedAgents);
@@ -200,8 +210,10 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
       } catch (error) {
         devLog.error('Failed to hydrate workspace cache', error);
       } finally {
-        workspaceCacheHydrated.current = true;
-        setIsCacheReady(true);
+        if (!timedOut) {
+          workspaceCacheHydrated.current = true;
+          setIsCacheReady(true);
+        }
       }
     };
 
@@ -645,29 +657,47 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
         return;
       }
 
-      const adjustedAgents = importedAgents.map(agent => {
-        let newName = agent.name;
-        let counter = 1;
+      // Prevent concurrent imports which can cause race conditions with name collision detection
+      if (importInProgressRef.current) {
+        options.showToast('error', 'An import is already in progress. Please wait.');
+        return;
+      }
 
-        while (agentsRef.current.some(a => a.name === newName)) {
-          newName = `${agent.name}-${counter}`;
-          counter += 1;
-        }
-
-        if (newName !== agent.name) {
-          return {
-            ...agent,
-            name: newName,
-            frontmatter: { ...agent.frontmatter, name: newName },
-            id: `${agent.scope === AgentScope.Project ? '.claude/agents/' : '~/.claude/agents/'}${newName}.md`,
-            path: `${agent.scope === AgentScope.Project ? '.claude/agents/' : '~/.claude/agents/'}${newName}.md`,
-          };
-        }
-
-        return agent;
-      });
+      importInProgressRef.current = true;
 
       try {
+        // Track skipped agents for user feedback
+        const skippedAgents: string[] = [];
+
+        // Take a snapshot of current agents at the start to avoid race conditions
+        const currentAgentsSnapshot = [...agentsRef.current];
+        const usedNames = new Set(currentAgentsSnapshot.map(a => a.name));
+
+        const adjustedAgents = importedAgents.map(agent => {
+          let newName = agent.name;
+          let counter = 1;
+
+          while (usedNames.has(newName)) {
+            newName = `${agent.name}-${counter}`;
+            counter += 1;
+          }
+
+          // Add to used names set to prevent duplicates within the same import batch
+          usedNames.add(newName);
+
+          if (newName !== agent.name) {
+            return {
+              ...agent,
+              name: newName,
+              frontmatter: { ...agent.frontmatter, name: newName },
+              id: `${agent.scope === AgentScope.Project ? '.claude/agents/' : '~/.claude/agents/'}${newName}.md`,
+              path: `${agent.scope === AgentScope.Project ? '.claude/agents/' : '~/.claude/agents/'}${newName}.md`,
+            };
+          }
+
+          return agent;
+        });
+
         const persistedAgents: Agent[] = [];
         for (const agent of adjustedAgents) {
           const markdown = agentToMarkdown(agent);
@@ -679,6 +709,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
 
           if (scope === 'project' && !projectPathForImport) {
             devLog.warn(`Skipping project agent "${agent.name}" import due to missing project path`);
+            skippedAgents.push(agent.name);
             continue;
           }
 
@@ -692,13 +723,22 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
 
         setAgents(prev => [...prev, ...persistedAgents]);
 
-        if (errors.length > 0) {
-          options.showToast(
-            'error',
-            `Imported ${importedAgents.length} agent(s) with ${errors.length} error(s).`
-          );
+        // Build informative toast message
+        const importedCount = persistedAgents.length;
+        const skippedCount = skippedAgents.length;
+        const errorCount = errors.length;
+
+        if (errorCount > 0 || skippedCount > 0) {
+          let message = `Imported ${importedCount} agent(s)`;
+          if (skippedCount > 0) {
+            message += `, skipped ${skippedCount} (missing project path)`;
+          }
+          if (errorCount > 0) {
+            message += `, ${errorCount} error(s)`;
+          }
+          options.showToast('error', message);
         } else {
-          options.showToast('success', `Successfully imported ${importedAgents.length} agent(s).`);
+          options.showToast('success', `Successfully imported ${importedCount} agent(s).`);
         }
       } catch (error) {
         devLog.error('Error persisting imported agents:', error);
@@ -706,6 +746,8 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
           'error',
           `Failed to persist imported agents: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
+      } finally {
+        importInProgressRef.current = false;
       }
     },
     [options.showToast]
@@ -714,8 +756,9 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   const toggleAgentFavorite = useCallback(async (agentToToggle: Agent) => {
     const toggleKey = agentToToggle.id || agentToToggle.name;
     const newFavoriteState = !agentToToggle.isFavorite;
+    const previousFavoriteState = agentToToggle.isFavorite;
 
-    // Update local state immediately
+    // Update local state immediately for responsive UI
     setAgents(prev =>
       prev.map(agent => {
         const currentKey = agent.id || agent.name;
@@ -729,7 +772,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
       })
     );
 
-    // Persist to storage
+    // Persist to storage with rollback on failure
     try {
       const currentFavorites = await getFavorites(ResourceType.Agent);
       let updatedFavorites: string[];
@@ -745,6 +788,19 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
       await saveFavorites(ResourceType.Agent, updatedFavorites);
     } catch (error) {
       devLog.error('Failed to persist agent favorite:', error);
+      // Rollback UI state on persistence failure
+      setAgents(prev =>
+        prev.map(agent => {
+          const currentKey = agent.id || agent.name;
+          if (currentKey === toggleKey) {
+            return {
+              ...agent,
+              isFavorite: previousFavoriteState,
+            };
+          }
+          return agent;
+        })
+      );
     }
   }, []);
 
@@ -836,8 +892,9 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   const toggleSkillFavorite = useCallback(async (skillToToggle: Skill) => {
     const toggleKey = skillToToggle.id || skillToToggle.name;
     const newFavoriteState = !skillToToggle.isFavorite;
+    const previousFavoriteState = skillToToggle.isFavorite;
 
-    // Update local state immediately
+    // Update local state immediately for responsive UI
     setSkills(prev =>
       prev.map(skill => {
         const currentKey = skill.id || skill.name;
@@ -851,7 +908,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
       })
     );
 
-    // Persist to storage
+    // Persist to storage with rollback on failure
     try {
       const currentFavorites = await getFavorites(ResourceType.Skill);
       let updatedFavorites: string[];
@@ -865,6 +922,19 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
       await saveFavorites(ResourceType.Skill, updatedFavorites);
     } catch (error) {
       devLog.error('Failed to persist skill favorite:', error);
+      // Rollback UI state on persistence failure
+      setSkills(prev =>
+        prev.map(skill => {
+          const currentKey = skill.id || skill.name;
+          if (currentKey === toggleKey) {
+            return {
+              ...skill,
+              isFavorite: previousFavoriteState,
+            };
+          }
+          return skill;
+        })
+      );
     }
   }, []);
 
