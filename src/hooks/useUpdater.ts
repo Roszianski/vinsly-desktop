@@ -3,6 +3,10 @@ import { relaunch } from '@tauri-apps/plugin-process';
 import { check, Update } from '@tauri-apps/plugin-updater';
 import { PendingUpdateDetails } from '../types/updater';
 import { devLog } from '../utils/devLogger';
+import { setStorageItem } from '../utils/storage';
+
+// Storage key for tracking completed updates
+export const UPDATE_COMPLETED_VERSION_KEY = 'vinsly-update-completed-version';
 
 // Network configuration for update checks
 const UPDATE_CHECK_TIMEOUT_MS = 30000; // 30 second timeout per attempt
@@ -153,6 +157,10 @@ export function useUpdater(): UseUpdaterResult {
 
     setIsInstalling(true);
     try {
+      // Store the version we're updating to so we can show a confirmation after restart
+      const updateVersion = updateResourceRef.current.version;
+      await setStorageItem(UPDATE_COMPLETED_VERSION_KEY, updateVersion);
+
       await updateResourceRef.current.downloadAndInstall();
       await releaseUpdateResource();
       setPendingUpdate(null);

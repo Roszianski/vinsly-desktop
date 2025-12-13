@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
-import { useUpdater } from '../hooks/useUpdater';
+import { useUpdater, UPDATE_COMPLETED_VERSION_KEY } from '../hooks/useUpdater';
 import { useToast } from './ToastContext';
 import { useLicenseContext } from './LicenseContext';
 import { PendingUpdateDetails } from '../types/updater';
 import { devLog } from '../utils/devLogger';
+import { getStorageItem, removeStorageItem } from '../utils/storage';
 
 interface UpdateContextType {
   isCheckingUpdate: boolean;
@@ -15,6 +16,10 @@ interface UpdateContextType {
   handleManualUpdateCheck: () => Promise<void>;
   handleInstallUpdate: () => Promise<void>;
   dismissPendingUpdate: () => void;
+  // Update complete modal state
+  showUpdateCompleteModal: boolean;
+  updateCompletedVersion: string | null;
+  dismissUpdateCompleteModal: () => void;
 }
 
 const UpdateContext = createContext<UpdateContextType | undefined>(undefined);
@@ -25,10 +30,13 @@ interface UpdateProviderProps {
 
 export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
   const { showToast } = useToast();
-  const { licenseInfo } = useLicenseContext();
+  const { licenseInfo, appVersion } = useLicenseContext();
   const hasCheckedRef = useRef(false);
+  const hasCheckedUpdateCompleteRef = useRef(false);
   const [initialCheckComplete, setInitialCheckComplete] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [showUpdateCompleteModal, setShowUpdateCompleteModal] = useState(false);
+  const [updateCompletedVersion, setUpdateCompletedVersion] = useState<string | null>(null);
 
   const {
     isChecking: isCheckingUpdate,
@@ -63,6 +71,34 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
     runInitialCheck();
   }, [checkForUpdate]);
 
+  // Check if we just completed an update (after app restart)
+  useEffect(() => {
+    if (hasCheckedUpdateCompleteRef.current || !appVersion) {
+      return;
+    }
+    hasCheckedUpdateCompleteRef.current = true;
+
+    const checkUpdateComplete = async () => {
+      try {
+        const storedVersion = await getStorageItem<string>(UPDATE_COMPLETED_VERSION_KEY);
+        if (storedVersion && storedVersion === appVersion) {
+          // We just updated to this version - show the modal
+          setUpdateCompletedVersion(storedVersion);
+          setShowUpdateCompleteModal(true);
+          // Clear the stored version so we don't show again
+          await removeStorageItem(UPDATE_COMPLETED_VERSION_KEY);
+          devLog.log(`Update complete: now running version ${storedVersion}`);
+        } else if (storedVersion) {
+          // Stored version doesn't match current - clear it (update may have failed)
+          await removeStorageItem(UPDATE_COMPLETED_VERSION_KEY);
+        }
+      } catch (error) {
+        devLog.warn('Failed to check update completion status', error);
+      }
+    };
+    checkUpdateComplete();
+  }, [appVersion]);
+
   const handleManualUpdateCheck = useCallback(async () => {
     try {
       const update = await checkForUpdate();
@@ -92,6 +128,11 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
     void clearPendingUpdate();
   }, [clearPendingUpdate]);
 
+  const dismissUpdateCompleteModal = useCallback(() => {
+    setShowUpdateCompleteModal(false);
+    setUpdateCompletedVersion(null);
+  }, []);
+
   const value: UpdateContextType = {
     isCheckingUpdate,
     isInstallingUpdate,
@@ -102,6 +143,9 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
     handleManualUpdateCheck,
     handleInstallUpdate,
     dismissPendingUpdate,
+    showUpdateCompleteModal,
+    updateCompletedVersion,
+    dismissUpdateCompleteModal,
   };
 
   return (

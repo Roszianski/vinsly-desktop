@@ -21,6 +21,7 @@ import { ToastContainer } from './Toast';
 import { ActivationModal } from './ActivationModal';
 import { ChangeLicenseModal } from './ChangeLicenseModal';
 import { UpdateAvailableModal } from './UpdateAvailableModal';
+import { UpdateCompleteModal } from './UpdateCompleteModal';
 import { SplashScreen } from './SplashScreen';
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 import { DocsPanel } from './DocsPanel';
@@ -78,6 +79,9 @@ export const AppContent: React.FC = () => {
     handleManualUpdateCheck,
     handleInstallUpdate,
     dismissPendingUpdate,
+    showUpdateCompleteModal,
+    updateCompletedVersion,
+    dismissUpdateCompleteModal,
   } = useUpdateContext();
 
   // Workspace context
@@ -760,6 +764,14 @@ export const AppContent: React.FC = () => {
           isInstalling={isInstallingUpdate}
           onInstall={handleInstallUpdate}
           onSkip={handleSkipPreActivationUpdate}
+        />
+      )}
+
+      {showUpdateCompleteModal && updateCompletedVersion && (
+        <UpdateCompleteModal
+          isOpen={showUpdateCompleteModal}
+          version={updateCompletedVersion}
+          onClose={dismissUpdateCompleteModal}
         />
       )}
 
