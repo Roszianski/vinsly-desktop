@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Hook, HookScope, getHookScopeDisplayName, getHookEventDisplayName } from '../../types/hooks';
+import { Hook, HookScope, getHookScopeDisplayName, getHookEventDisplayName, getHookExecutionTypeDisplayName } from '../../types/hooks';
 import { listContainer } from '../../animations';
 import { PlusIcon } from '../icons/PlusIcon';
 import { SearchIcon } from '../icons/SearchIcon';
@@ -53,12 +53,33 @@ const getEventTypeColor = (type: string): string => {
       return 'bg-blue-500/20 text-blue-600 dark:text-blue-400';
     case 'PostToolUse':
       return 'bg-green-500/20 text-green-600 dark:text-green-400';
+    case 'PermissionRequest':
+      return 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400';
     case 'Notification':
       return 'bg-purple-500/20 text-purple-600 dark:text-purple-400';
+    case 'UserPromptSubmit':
+      return 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400';
     case 'Stop':
       return 'bg-orange-500/20 text-orange-600 dark:text-orange-400';
     case 'SubagentStop':
       return 'bg-red-500/20 text-red-600 dark:text-red-400';
+    case 'PreCompact':
+      return 'bg-amber-500/20 text-amber-600 dark:text-amber-400';
+    case 'SessionStart':
+      return 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400';
+    case 'SessionEnd':
+      return 'bg-rose-500/20 text-rose-600 dark:text-rose-400';
+    default:
+      return 'bg-gray-500/20 text-gray-600 dark:text-gray-400';
+  }
+};
+
+const getExecutionTypeColor = (type: string): string => {
+  switch (type) {
+    case 'command':
+      return 'bg-slate-500/20 text-slate-600 dark:text-slate-400';
+    case 'prompt':
+      return 'bg-violet-500/20 text-violet-600 dark:text-violet-400';
     default:
       return 'bg-gray-500/20 text-gray-600 dark:text-gray-400';
   }
@@ -145,8 +166,10 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
 
       return (
         fuzzyMatch(hook.name, normalizedQuery) ||
-        hook.type.toLowerCase().includes(normalizedQuery) ||
-        hook.command.toLowerCase().includes(normalizedQuery) ||
+        hook.eventType.toLowerCase().includes(normalizedQuery) ||
+        hook.executionType.toLowerCase().includes(normalizedQuery) ||
+        (hook.command && hook.command.toLowerCase().includes(normalizedQuery)) ||
+        (hook.prompt && hook.prompt.toLowerCase().includes(normalizedQuery)) ||
         (hook.matcher && hook.matcher.toLowerCase().includes(normalizedQuery))
       );
     });
@@ -160,7 +183,7 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
         case 'name-desc':
           return b.name.localeCompare(a.name);
         case 'type':
-          return a.type.localeCompare(b.type);
+          return a.eventType.localeCompare(b.eventType);
         case 'scope':
           return a.scope.localeCompare(b.scope);
         default:
@@ -414,8 +437,8 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
             </div>
 
             <div>
-              <span className={`px-2 py-0.5 text-xs font-medium rounded ${getEventTypeColor(hook.type)}`}>
-                {getHookEventDisplayName(hook.type)}
+              <span className={`px-2 py-0.5 text-xs font-medium rounded ${getEventTypeColor(hook.eventType)}`}>
+                {getHookEventDisplayName(hook.eventType)}
               </span>
             </div>
 
@@ -424,7 +447,7 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
             </div>
 
             <div className="text-sm text-v-light-text-secondary dark:text-v-text-secondary truncate font-mono">
-              {hook.command}
+              {hook.executionType === 'command' ? hook.command : hook.prompt}
             </div>
 
             <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -528,9 +551,12 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`px-2 py-0.5 text-xs font-medium rounded ${getEventTypeColor(hook.type)}`}>
-                  {getHookEventDisplayName(hook.type)}
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className={`px-2 py-0.5 text-xs font-medium rounded ${getEventTypeColor(hook.eventType)}`}>
+                  {getHookEventDisplayName(hook.eventType)}
+                </span>
+                <span className={`px-2 py-0.5 text-xs font-medium rounded ${getExecutionTypeColor(hook.executionType)}`}>
+                  {getHookExecutionTypeDisplayName(hook.executionType)}
                 </span>
                 <span className="text-xs text-v-light-text-secondary dark:text-v-text-secondary flex items-center gap-1">
                   {hook.scope === 'user' ? (
@@ -549,7 +575,7 @@ export const HooksListScreen: React.FC<HooksListScreenProps> = ({
               )}
 
               <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary truncate font-mono">
-                {hook.command}
+                {hook.executionType === 'command' ? hook.command : hook.prompt}
               </p>
             </div>
             ))}

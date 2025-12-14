@@ -10,6 +10,7 @@ import {
   Hook,
   HookScope,
   HookEventType,
+  HookExecutionType,
   createHookId,
   hookToConfig,
 } from '../types/hooks';
@@ -27,9 +28,11 @@ function rawToHook(raw: HookInfoRaw): Hook {
   return {
     id: raw.id,
     name: raw.name,
-    type: raw.event_type as HookEventType,
+    eventType: raw.event_type as HookEventType,
+    executionType: (raw.execution_type || 'command') as HookExecutionType,
     matcher: raw.matcher,
     command: raw.command,
+    prompt: raw.prompt,
     timeout: raw.timeout,
     scope: raw.scope as HookScope,
     sourcePath: raw.source_path,
@@ -46,6 +49,7 @@ function hookToRawConfig(hook: Hook): HookConfigRaw {
     type: config.type,
     matcher: config.matcher,
     command: config.command,
+    prompt: config.prompt,
     timeout: config.timeout,
   };
 }
@@ -69,7 +73,7 @@ export interface UseHooksResult {
   removeHook: (hook: Hook, projectPath?: string) => Promise<void>;
   toggleFavorite: (hook: Hook) => void;
   getHookById: (id: string) => Hook | undefined;
-  getHooksByType: (type: HookEventType) => Hook[];
+  getHooksByEventType: (eventType: HookEventType) => Hook[];
 }
 
 export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
@@ -170,7 +174,7 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
   const addHookFn = useCallback(async (hook: Hook, projectPath?: string) => {
     try {
       const rawConfig = hookToRawConfig(hook);
-      await addHookCmd(hook.scope, hook.type, rawConfig, projectPath);
+      await addHookCmd(hook.scope, hook.eventType, rawConfig, projectPath);
 
       // Add to local state with a generated ID
       const newHook: Hook = {
@@ -195,7 +199,7 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
     try {
       // Find the index of the old hook in its event type group
       const hooksOfType = hooksRef.current.filter(
-        h => h.type === oldHook.type && h.scope === oldHook.scope
+        h => h.eventType === oldHook.eventType && h.scope === oldHook.scope
       );
       const hookIndex = hooksOfType.findIndex(h => h.id === oldHook.id);
 
@@ -204,11 +208,11 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
       }
 
       // Remove old hook
-      await removeHookCmd(oldHook.scope, oldHook.type, hookIndex, projectPath);
+      await removeHookCmd(oldHook.scope, oldHook.eventType, hookIndex, projectPath);
 
       // Add new hook
       const rawConfig = hookToRawConfig(hook);
-      await addHookCmd(hook.scope, hook.type, rawConfig, projectPath);
+      await addHookCmd(hook.scope, hook.eventType, rawConfig, projectPath);
 
       // Update local state
       setHooks(prev => {
@@ -228,7 +232,7 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
     try {
       // Find the index of the hook in its event type group
       const hooksOfType = hooksRef.current.filter(
-        h => h.type === hook.type && h.scope === hook.scope
+        h => h.eventType === hook.eventType && h.scope === hook.scope
       );
       const hookIndex = hooksOfType.findIndex(h => h.id === hook.id);
 
@@ -236,7 +240,7 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
         throw new Error('Hook not found');
       }
 
-      await removeHookCmd(hook.scope, hook.type, hookIndex, projectPath);
+      await removeHookCmd(hook.scope, hook.eventType, hookIndex, projectPath);
 
       // Remove from local state
       setHooks(prev => prev.filter(h => h.id !== hook.id));
@@ -260,8 +264,8 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
     return hooksRef.current.find(h => h.id === id);
   }, []);
 
-  const getHooksByType = useCallback((type: HookEventType): Hook[] => {
-    return hooksRef.current.filter(h => h.type === type);
+  const getHooksByEventType = useCallback((eventType: HookEventType): Hook[] => {
+    return hooksRef.current.filter(h => h.eventType === eventType);
   }, []);
 
   return {
@@ -274,6 +278,6 @@ export function useHooks({ showToast }: UseHooksOptions): UseHooksResult {
     removeHook: removeHookFn,
     toggleFavorite,
     getHookById,
-    getHooksByType,
+    getHooksByEventType,
   };
 }

@@ -334,17 +334,18 @@ describe('Hook Types', () => {
   describe('configToHook', () => {
     it('should convert config to Hook', () => {
       const config: HookConfig = {
-        type: 'PreToolUse',
+        type: 'command',
         matcher: 'Bash',
         command: 'echo "test"',
         timeout: 5000,
       };
 
-      const hook = configToHook(config, 'bash-guard', 'user', '~/.claude/settings.json', 0);
+      const hook = configToHook(config, 'PreToolUse', 'bash-guard', 'user', '~/.claude/settings.json', 0);
 
       expect(hook.id).toBe('user:bash-guard:0');
       expect(hook.name).toBe('bash-guard');
-      expect(hook.type).toBe('PreToolUse');
+      expect(hook.eventType).toBe('PreToolUse');
+      expect(hook.executionType).toBe('command');
       expect(hook.matcher).toBe('Bash');
       expect(hook.command).toBe('echo "test"');
       expect(hook.timeout).toBe(5000);
@@ -358,7 +359,8 @@ describe('Hook Types', () => {
       const hook: Hook = {
         id: 'user:test:0',
         name: 'test',
-        type: 'PostToolUse',
+        eventType: 'PostToolUse',
+        executionType: 'command',
         matcher: 'Write',
         command: 'echo "done"',
         timeout: 10000,
@@ -369,7 +371,7 @@ describe('Hook Types', () => {
 
       const config = hookToConfig(hook);
 
-      expect(config.type).toBe('PostToolUse');
+      expect(config.type).toBe('command');
       expect(config.matcher).toBe('Write');
       expect(config.command).toBe('echo "done"');
       expect(config.timeout).toBe(10000);
@@ -379,7 +381,8 @@ describe('Hook Types', () => {
       const hook: Hook = {
         id: 'user:minimal:0',
         name: 'minimal',
-        type: 'Stop',
+        eventType: 'Stop',
+        executionType: 'command',
         command: 'cleanup.sh',
         scope: 'user',
         sourcePath: '~/.claude/settings.json',
@@ -397,7 +400,8 @@ describe('Hook Types', () => {
     it('should pass for valid hook', () => {
       const hook: Partial<Hook> = {
         name: 'my-hook',
-        type: 'PreToolUse',
+        eventType: 'PreToolUse',
+        executionType: 'command',
         command: 'echo "test"',
       };
 
@@ -406,7 +410,8 @@ describe('Hook Types', () => {
 
     it('should require name', () => {
       const hook: Partial<Hook> = {
-        type: 'PreToolUse',
+        eventType: 'PreToolUse',
+        executionType: 'command',
         command: 'echo "test"',
       };
 
@@ -417,7 +422,8 @@ describe('Hook Types', () => {
     it('should validate name format', () => {
       const hook: Partial<Hook> = {
         name: 'invalid name!',
-        type: 'PreToolUse',
+        eventType: 'PreToolUse',
+        executionType: 'command',
         command: 'echo "test"',
       };
 
@@ -428,6 +434,7 @@ describe('Hook Types', () => {
     it('should require type', () => {
       const hook: Partial<Hook> = {
         name: 'test',
+        executionType: 'command',
         command: 'echo "test"',
       };
 
@@ -435,20 +442,22 @@ describe('Hook Types', () => {
       expect(errors).toContain('Event type is required');
     });
 
-    it('should require command', () => {
+    it('should require command for command-type hooks', () => {
       const hook: Partial<Hook> = {
         name: 'test',
-        type: 'PreToolUse',
+        eventType: 'PreToolUse',
+        executionType: 'command',
       };
 
       const errors = validateHook(hook);
-      expect(errors).toContain('Command is required');
+      expect(errors).toContain('Command is required for command-type hooks');
     });
 
     it('should validate matcher as regex', () => {
       const hook: Partial<Hook> = {
         name: 'test',
-        type: 'PreToolUse',
+        eventType: 'PreToolUse',
+        executionType: 'command',
         command: 'echo "test"',
         matcher: '[invalid regex',
       };
@@ -460,7 +469,8 @@ describe('Hook Types', () => {
     it('should accept valid regex matchers', () => {
       const hook: Partial<Hook> = {
         name: 'test',
-        type: 'PreToolUse',
+        eventType: 'PreToolUse',
+        executionType: 'command',
         command: 'echo "test"',
         matcher: 'Bash|Write|Edit',
       };
@@ -471,7 +481,8 @@ describe('Hook Types', () => {
     it('should validate timeout is positive', () => {
       const hook: Partial<Hook> = {
         name: 'test',
-        type: 'PreToolUse',
+        eventType: 'PreToolUse',
+        executionType: 'command',
         command: 'echo "test"',
         timeout: -100,
       };

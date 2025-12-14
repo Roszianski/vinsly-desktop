@@ -392,10 +392,11 @@ export async function removeMCPServer(
 // ============================================================================
 
 export interface HookConfigRaw {
-  type: string;
-  matcher?: string;
-  command: string;
-  timeout?: number;
+  type: 'command' | 'prompt';                // Execution type: bash command or LLM prompt
+  matcher?: string;                          // Regex pattern for filtering
+  command?: string;                          // Shell command (for type: 'command')
+  prompt?: string;                           // LLM prompt (for type: 'prompt')
+  timeout?: number;                          // Timeout in seconds
 }
 
 export interface HooksConfigFileRaw {
@@ -405,9 +406,11 @@ export interface HooksConfigFileRaw {
 export interface HookInfoRaw {
   id: string;
   name: string;
-  event_type: string;
+  event_type: string;                        // HookEventType as string
+  execution_type: 'command' | 'prompt';      // Execution type
   matcher?: string;
-  command: string;
+  command?: string;                          // Shell command (for command type)
+  prompt?: string;                           // LLM prompt (for prompt type)
   timeout?: number;
   scope: string;
   source_path: string;

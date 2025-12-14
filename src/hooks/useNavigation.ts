@@ -129,7 +129,8 @@ export function useNavigation(options?: { agents?: Agent[]; initialView?: View }
     (): Hook => ({
       id: '',
       name: '',
-      type: 'PreToolUse',
+      eventType: 'PreToolUse',
+      executionType: 'command',
       command: '',
       scope: 'user',
       sourcePath: '',
