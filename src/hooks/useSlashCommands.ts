@@ -9,12 +9,66 @@ import {
 import { ToastType } from '../components/Toast';
 import { getStorageItem, setStorageItem } from '../utils/storage';
 import { devLog } from '../utils/devLogger';
+import { serializeFrontmatter, parseFrontmatter } from '../utils/frontmatter';
 
 const SLASH_COMMANDS_CACHE_KEY = 'vinsly-slash-commands-cache';
 
+// Parse frontmatter from command content
+function parseCommandContent(content: string): { frontmatter?: SlashCommand['frontmatter']; body: string } {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith('---')) {
+    return { body: content };
+  }
+
+  const endIndex = trimmed.indexOf('---', 3);
+  if (endIndex === -1) {
+    return { body: content };
+  }
+
+  const yamlContent = trimmed.slice(3, endIndex).trim();
+  const body = trimmed.slice(endIndex + 3).trim();
+
+  try {
+    const parsed = parseFrontmatter(yamlContent);
+    const frontmatter: SlashCommand['frontmatter'] = {};
+
+    if (parsed.description) frontmatter.description = String(parsed.description);
+    if (parsed.argumentHint) frontmatter.argumentHint = String(parsed.argumentHint);
+    if (parsed.allowedTools) frontmatter.allowedTools = String(parsed.allowedTools);
+    if (parsed.model) frontmatter.model = String(parsed.model);
+    if (parsed.disableModelInvocation) frontmatter.disableModelInvocation = Boolean(parsed.disableModelInvocation);
+
+    return {
+      frontmatter: Object.keys(frontmatter).length > 0 ? frontmatter : undefined,
+      body,
+    };
+  } catch {
+    return { body: content };
+  }
+}
+
+// Serialize command with frontmatter
+function serializeCommandContent(command: SlashCommand): string {
+  if (!command.frontmatter || Object.keys(command.frontmatter).length === 0) {
+    return command.body;
+  }
+
+  const frontmatterYaml = serializeFrontmatter(command.frontmatter);
+  return `---\n${frontmatterYaml}\n---\n\n${command.body}`;
+}
+
 // Extract first non-empty line as description
 function extractDescription(content: string): string {
-  const lines = content.split('\n');
+  // Skip frontmatter if present
+  let textToSearch = content;
+  if (content.trim().startsWith('---')) {
+    const endIndex = content.indexOf('---', 3);
+    if (endIndex !== -1) {
+      textToSearch = content.slice(endIndex + 3);
+    }
+  }
+
+  const lines = textToSearch.split('\n');
   for (const line of lines) {
     const trimmed = line.trim();
     if (trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('---')) {
@@ -32,13 +86,15 @@ function parseSlashCommand(file: {
   content: string;
   scope: string;
 }): SlashCommand {
+  const { frontmatter, body } = parseCommandContent(file.content);
   return {
     id: file.path,
     name: file.name,
     scope: file.scope === 'global' ? AgentScope.Global : AgentScope.Project,
     path: file.path,
-    description: extractDescription(file.content),
-    body: file.content,
+    frontmatter,
+    description: frontmatter?.description || extractDescription(body),
+    body,
     isFavorite: false,
   };
 }
@@ -199,10 +255,13 @@ export function useSlashCommands(options: UseSlashCommandsOptions): UseSlashComm
           throw new Error('Select a project folder before saving a project command.');
         }
 
+        // Serialize content with frontmatter
+        const serializedContent = serializeCommandContent(commandToSave);
+
         const absolutePath = await writeSlashCommand(
           scope,
           commandToSave.name,
-          commandToSave.body,
+          serializedContent,
           projectPath
         );
 
@@ -210,7 +269,7 @@ export function useSlashCommands(options: UseSlashCommandsOptions): UseSlashComm
           ...commandToSave,
           id: absolutePath,
           path: absolutePath,
-          description: extractDescription(commandToSave.body),
+          description: commandToSave.frontmatter?.description || extractDescription(commandToSave.body),
         };
 
         setCommands(prev => {

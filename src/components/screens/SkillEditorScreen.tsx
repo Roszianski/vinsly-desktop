@@ -469,6 +469,8 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
           name: formData.name.trim(),
           description: formData.frontmatter.description?.trim() || '',
           allowedTools: inheritsAllTools ? undefined : normalizedAllowedTools,
+          version: formData.frontmatter.version?.trim() || undefined,
+          disableModelInvocation: formData.frontmatter.disableModelInvocation || undefined,
         },
       },
       { projectPath: projectFolderPath }
@@ -584,7 +586,24 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
               placeholder="Describe when Claude should invoke this skill..."
               rows={4}
               required
-              hint="Keep it specific: “Use for filling financial spreadsheets”"
+              hint='Keep it specific: "Use for filling financial spreadsheets"'
+            />
+            <InputField
+              label="Version (optional)"
+              id="skill-version"
+              value={formData.frontmatter.version || ''}
+              onChange={event => {
+                const value = event.target.value;
+                setFormData(current => ({
+                  ...current,
+                  frontmatter: {
+                    ...current.frontmatter,
+                    version: value || undefined,
+                  },
+                }));
+              }}
+              placeholder="1.0.0"
+              hint="Optional version number for tracking changes."
             />
           </div>
         );
@@ -657,6 +676,9 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
                 <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary mt-1">
                   {formData.frontmatter.description || 'No description provided.'}
                 </p>
+                {formData.frontmatter.version && (
+                  <p className="text-xs text-v-accent mt-1">v{formData.frontmatter.version}</p>
+                )}
               </div>
               <div className="rounded-lg border border-v-light-border dark:border-v-border p-4">
                 <p className="text-xs uppercase tracking-[0.3em] text-v-light-text-secondary dark:text-v-text-secondary">
@@ -679,6 +701,37 @@ export const SkillEditorScreen: React.FC<SkillEditorScreenProps> = ({
               <p className="text-v-light-text-secondary dark:text-v-text-secondary whitespace-pre-wrap text-sm max-h-48 overflow-auto custom-scrollbar">
                 {formData.body || 'No instructions provided yet.'}
               </p>
+            </div>
+            {/* Manual invocation toggle */}
+            <div className="rounded-lg border border-v-light-border dark:border-v-border p-4">
+              <label className="flex items-center justify-between cursor-pointer">
+                <div>
+                  <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                    Require manual invocation
+                  </p>
+                  <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-0.5">
+                    If enabled, Claude cannot auto-invoke this skill — users must type /{formData.name || 'skill-name'}
+                  </p>
+                </div>
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={formData.frontmatter.disableModelInvocation === true}
+                    onChange={(e) => {
+                      setFormData(current => ({
+                        ...current,
+                        frontmatter: {
+                          ...current.frontmatter,
+                          disableModelInvocation: e.target.checked || undefined,
+                        },
+                      }));
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-v-light-border dark:bg-v-border rounded-full peer peer-checked:bg-v-accent transition-colors"></div>
+                  <div className="absolute left-0.5 top-0.5 bg-white w-5 h-5 rounded-full transition-transform peer-checked:translate-x-5"></div>
+                </div>
+              </label>
             </div>
           </div>
         );

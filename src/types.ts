@@ -6,6 +6,8 @@ export enum AgentScope {
 
 export type AgentModel = 'sonnet' | 'haiku' | 'inherit' | 'opus' | 'default';
 
+export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'ignore';
+
 export enum ToolRisk {
   Low = 'Low',
   Medium = 'Medium',
@@ -32,6 +34,8 @@ export interface Agent {
     model?: AgentModel;
     tools?: string | string[];
     color?: string;
+    permissionMode?: PermissionMode;
+    skills?: string[];
     [key: string]: unknown; // For unknown keys
   };
   body: string;
@@ -49,6 +53,8 @@ export interface Skill {
     description: string;
     allowedTools?: string[]; // Array of tool names per official SKILL.md spec
     license?: string;
+    version?: string;
+    disableModelInvocation?: boolean;
     [key: string]: unknown;
   };
   body: string;
@@ -73,8 +79,15 @@ export interface SlashCommand {
   name: string;         // Command name (filename without .md)
   scope: AgentScope;
   path: string;         // Full file path
-  description?: string; // First line or extracted summary
-  body: string;         // Full markdown content
+  frontmatter?: {
+    description?: string;
+    argumentHint?: string;      // Shows as [args] hint, e.g., "[message]"
+    allowedTools?: string;      // Comma-separated tools
+    model?: string;
+    disableModelInvocation?: boolean;
+  };
+  description?: string; // First line or extracted summary (legacy, prefer frontmatter)
+  body: string;         // Markdown content after frontmatter
   isFavorite?: boolean;
 }
 

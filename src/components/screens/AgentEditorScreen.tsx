@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { open } from '@tauri-apps/plugin-dialog';
-import { Agent, AgentModel, AgentScope, Tool, ToolCategory, ToolRisk } from '../../types';
+import { Agent, AgentModel, AgentScope, PermissionMode, Tool, ToolCategory, ToolRisk } from '../../types';
 import { AVAILABLE_TOOLS, AVAILABLE_COLORS } from '../../constants';
 import { CodeEditor } from '../CodeEditor';
 import { AgentPreviewCard } from '../AgentPreviewCard';
@@ -37,7 +37,9 @@ type WizardStepId =
   | 'prompt'
   | 'description'
   | 'tools'
+  | 'skills'
   | 'model'
+  | 'permissionMode'
   | 'color'
   | 'review';
 
@@ -87,9 +89,21 @@ const WIZARD_STEPS: { id: WizardStepId; label: string; description: string; requ
     required: false
   },
   {
+    id: 'skills',
+    label: 'Skills',
+    description: 'Select skills to auto-load when the agent starts.',
+    required: false
+  },
+  {
     id: 'model',
     label: 'Model',
     description: 'Balance speed and reasoning with the right model choice.',
+    required: false
+  },
+  {
+    id: 'permissionMode',
+    label: 'Permission Mode',
+    description: 'Control how the agent handles permission requests.',
     required: false
   },
   {
@@ -167,6 +181,40 @@ const MODEL_CHOICES: Array<{
     value: 'inherit',
     title: 'Inherit from parent',
     description: 'Use the same model as the parent conversation when executed.'
+  }
+];
+
+const PERMISSION_MODE_CHOICES: Array<{
+  value: PermissionMode;
+  title: string;
+  description: string;
+  badge?: string;
+}> = [
+  {
+    value: 'default',
+    title: 'Default',
+    description: 'Agent asks for permission before potentially dangerous operations.',
+    badge: 'Recommended'
+  },
+  {
+    value: 'acceptEdits',
+    title: 'Accept Edits',
+    description: 'Automatically accept code edits without confirmation prompts.'
+  },
+  {
+    value: 'bypassPermissions',
+    title: 'Bypass Permissions',
+    description: 'Skip all permission checks. Use with caution for trusted agents.'
+  },
+  {
+    value: 'plan',
+    title: 'Plan Mode',
+    description: 'Analysis only — agent cannot make any edits or run commands.'
+  },
+  {
+    value: 'ignore',
+    title: 'Ignore',
+    description: 'Ignore the permission system entirely.'
   }
 ];
 
@@ -544,7 +592,9 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
         return trimmedDescription.length > 0;
       case 'tools':
         return inheritsAllTools || selectedTools.size > 0;
+      case 'skills':
       case 'model':
+      case 'permissionMode':
       case 'color':
         return true;
       case 'review':
@@ -824,6 +874,42 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
         model: choice === 'default' ? undefined : choice
       }
     }));
+  };
+
+  const handlePermissionModeChoice = (choice: PermissionMode) => {
+    setFormData(prev => ({
+      ...prev,
+      frontmatter: {
+        ...prev.frontmatter,
+        permissionMode: choice === 'default' ? undefined : choice
+      }
+    }));
+  };
+
+  const resolvedPermissionModeValue = (formData.frontmatter.permissionMode || 'default') as PermissionMode;
+
+  // Skills selection handlers
+  const selectedSkills = useMemo(() => {
+    return new Set(formData.frontmatter.skills || []);
+  }, [formData.frontmatter.skills]);
+
+  const handleSkillToggle = (skillName: string, checked: boolean) => {
+    setFormData(prev => {
+      const currentSkills = new Set(prev.frontmatter.skills || []);
+      if (checked) {
+        currentSkills.add(skillName);
+      } else {
+        currentSkills.delete(skillName);
+      }
+      const skillsArray = Array.from(currentSkills).sort();
+      return {
+        ...prev,
+        frontmatter: {
+          ...prev.frontmatter,
+          skills: skillsArray.length > 0 ? skillsArray : undefined
+        }
+      };
+    });
   };
 
   const renderStepContent = () => {
@@ -1127,6 +1213,62 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
             />
           </div>
         );
+      case 'skills':
+        return (
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Auto-load skills</p>
+              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                Select skills that will automatically load when this agent starts. Leave empty to not auto-load any skills.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <InputField
+                label="Skill names (comma-separated)"
+                id="skills-input"
+                name="skills"
+                value={(formData.frontmatter.skills || []).join(', ')}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const skillNames = value
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(Boolean);
+                  setFormData(prev => ({
+                    ...prev,
+                    frontmatter: {
+                      ...prev.frontmatter,
+                      skills: skillNames.length > 0 ? skillNames : undefined
+                    }
+                  }));
+                }}
+                placeholder="e.g., code-review, testing, documentation"
+                hint="Enter skill names separated by commas. These skills will be auto-loaded when the agent starts."
+              />
+            </div>
+            {selectedSkills.size > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {Array.from(selectedSkills).map(skill => (
+                  <span
+                    key={skill}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-v-accent/10 text-v-accent rounded-full text-sm"
+                  >
+                    {skill}
+                    <button
+                      type="button"
+                      onClick={() => handleSkillToggle(skill, false)}
+                      className="hover:text-v-accent-hover"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
       case 'model':
         return (
           <div className="space-y-3">
@@ -1144,6 +1286,59 @@ export const AgentEditorScreen: React.FC<AgentEditorScreenProps> = ({ agent, onS
                     type="button"
                     key={choice.value}
                     onClick={() => handleModelChoice(choice.value)}
+                    className={`w-full text-left border rounded-xl px-4 py-3 flex items-start gap-4 transition-all ${
+                      isSelected
+                        ? 'border-v-accent bg-v-light-hover dark:bg-v-light-dark shadow-sm'
+                        : 'border-v-light-border dark:border-v-border hover:border-v-accent'
+                    }`}
+                  >
+                    <span
+                      className={`mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full border ${
+                        isSelected
+                          ? 'border-v-accent bg-v-accent text-white'
+                          : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary'
+                      }`}
+                    >
+                      {isSelected ? <CheckIcon className="h-3 w-3" /> : ''}
+                    </span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                          {choice.title}
+                        </p>
+                        {choice.badge && (
+                          <span className="text-[10px] uppercase tracking-wide text-white bg-v-accent px-2 py-0.5 rounded-full">
+                            {choice.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                        {choice.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      case 'permissionMode':
+        return (
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">Permission mode</p>
+              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                Control how this agent handles permission requests for potentially dangerous operations.
+              </p>
+            </div>
+            <div className="space-y-3">
+              {PERMISSION_MODE_CHOICES.map(choice => {
+                const isSelected = resolvedPermissionModeValue === choice.value;
+                return (
+                  <button
+                    type="button"
+                    key={choice.value}
+                    onClick={() => handlePermissionModeChoice(choice.value)}
                     className={`w-full text-left border rounded-xl px-4 py-3 flex items-start gap-4 transition-all ${
                       isSelected
                         ? 'border-v-accent bg-v-light-hover dark:bg-v-light-dark shadow-sm'

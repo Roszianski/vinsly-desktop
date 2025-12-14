@@ -26,6 +26,8 @@ export const SlashCommandEditorScreen: React.FC<SlashCommandEditorScreenProps> =
   const [name, setName] = useState(command.name);
   const [scope, setScope] = useState(command.scope);
   const [body, setBody] = useState(command.body);
+  const [argumentHint, setArgumentHint] = useState(command.frontmatter?.argumentHint || '');
+  const [disableModelInvocation, setDisableModelInvocation] = useState(command.frontmatter?.disableModelInvocation || false);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; body?: string }>({});
   const [projectFolderPath, setProjectFolderPath] = useState('');
@@ -37,6 +39,8 @@ export const SlashCommandEditorScreen: React.FC<SlashCommandEditorScreenProps> =
     setName(command.name);
     setScope(command.scope);
     setBody(command.body);
+    setArgumentHint(command.frontmatter?.argumentHint || '');
+    setDisableModelInvocation(command.frontmatter?.disableModelInvocation || false);
     setErrors({});
   }, [command]);
 
@@ -127,11 +131,21 @@ export const SlashCommandEditorScreen: React.FC<SlashCommandEditorScreenProps> =
 
     setIsSaving(true);
     try {
+      // Build frontmatter object, only include fields with values
+      const frontmatter: SlashCommand['frontmatter'] = {};
+      if (argumentHint.trim()) {
+        frontmatter.argumentHint = argumentHint.trim();
+      }
+      if (disableModelInvocation) {
+        frontmatter.disableModelInvocation = true;
+      }
+
       const updatedCommand: SlashCommand = {
         ...command,
         name,
         scope,
         body,
+        frontmatter: Object.keys(frontmatter).length > 0 ? frontmatter : undefined,
       };
 
       await onSave(updatedCommand, {
@@ -330,15 +344,83 @@ Provide specific suggestions for improvement."
             </p>
           </div>
 
+          {/* Optional frontmatter fields */}
+          <div className="space-y-4 p-4 bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg">
+            <div className="text-xs font-bold text-v-light-text-secondary dark:text-v-text-secondary uppercase tracking-wider">
+              Optional Settings
+            </div>
+
+            {/* Argument hint */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <label className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                  Argument Hint
+                </label>
+                <div className="group relative">
+                  <div className="w-4 h-4 rounded-full border border-v-light-text-secondary dark:border-v-text-secondary flex items-center justify-center cursor-help text-[10px] text-v-light-text-secondary dark:text-v-text-secondary">
+                    i
+                  </div>
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-v-dark dark:bg-v-light-surface text-white dark:text-v-dark text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-10 shadow-lg">
+                    Shows users what to type after the command, e.g. /commit [message]
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-v-dark dark:border-t-v-light-surface" />
+                  </div>
+                </div>
+              </div>
+              <input
+                type="text"
+                value={argumentHint}
+                onChange={(e) => setArgumentHint(e.target.value)}
+                placeholder="[message]"
+                className="w-full px-4 py-2 bg-v-light-bg dark:bg-v-dark border border-v-light-border dark:border-v-border rounded-lg text-v-light-text-primary dark:text-v-text-primary placeholder:text-v-light-text-secondary/50 dark:placeholder:text-v-text-secondary/50 focus:outline-none focus:border-v-accent focus:ring-2 focus:ring-v-accent/20"
+              />
+            </div>
+
+            {/* Disable model invocation toggle */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                  Prevent auto-invocation
+                </p>
+                <div className="group relative">
+                  <div className="w-4 h-4 rounded-full border border-v-light-text-secondary dark:border-v-text-secondary flex items-center justify-center cursor-help text-[10px] text-v-light-text-secondary dark:text-v-text-secondary">
+                    i
+                  </div>
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-v-dark dark:bg-v-light-surface text-white dark:text-v-dark text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-10 shadow-lg">
+                    When on, only humans can run this command
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-v-dark dark:border-t-v-light-surface" />
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={disableModelInvocation}
+                onClick={() => setDisableModelInvocation(!disableModelInvocation)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-v-accent focus:ring-offset-2 ${
+                  disableModelInvocation ? 'bg-v-accent' : 'bg-v-light-border dark:bg-v-border'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    disableModelInvocation ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
           {/* Preview */}
           <div className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg p-4">
             <div className="text-xs font-bold text-v-light-text-secondary dark:text-v-text-secondary uppercase tracking-wider mb-2">
               Preview
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2 px-3 py-2 bg-v-light-hover dark:bg-v-light-dark rounded-lg">
                 <TerminalIcon className="w-4 h-4 text-v-accent" />
-                <span className="font-mono text-v-light-text-primary dark:text-v-text-primary">/{name || 'command-name'}</span>
+                <span className="font-mono text-v-light-text-primary dark:text-v-text-primary">
+                  /{name || 'command-name'}
+                  {argumentHint && <span className="text-v-light-text-secondary dark:text-v-text-secondary ml-1">{argumentHint}</span>}
+                </span>
               </div>
               <span className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
                 {scope === AgentScope.Global
@@ -347,6 +429,11 @@ Provide specific suggestions for improvement."
                     ? `In ${displayProjectPath}`
                     : 'Project-scoped'}
               </span>
+              {disableModelInvocation && (
+                <span className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded">
+                  Manual only
+                </span>
+              )}
             </div>
           </div>
         </div>
