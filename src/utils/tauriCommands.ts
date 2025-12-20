@@ -565,3 +565,133 @@ export async function importBinaryFile(path: string): Promise<number[]> {
 export async function setTitleBarTheme(dark: boolean): Promise<void> {
   return await invoke('set_title_bar_theme', { dark });
 }
+
+// ============================================================================
+// Feedback
+// ============================================================================
+
+export interface SendFeedbackParams {
+  feedbackType: string;
+  message: string;
+  email?: string;
+  appVersion: string;
+  osInfo: string;
+}
+
+// Send feedback via mailto: - opens user's default email client
+export async function sendFeedback(params: SendFeedbackParams): Promise<void> {
+  return await invoke('send_feedback', {
+    feedbackType: params.feedbackType,
+    feedback_type: params.feedbackType,
+    message: params.message,
+    email: params.email,
+    appVersion: params.appVersion,
+    app_version: params.appVersion,
+    osInfo: params.osInfo,
+    os_info: params.osInfo,
+  });
+}
+
+// ============================================================================
+// Config Bundle Export/Import
+// ============================================================================
+
+export interface BundleCounts {
+  agents: number;
+  skills: number;
+  commands: number;
+  memories: number;
+  mcp_servers: number;
+  hooks: number;
+}
+
+export interface BundleManifest {
+  version: string;
+  exported_at: string;
+  vinsly_version: string;
+  counts: BundleCounts;
+}
+
+export interface ExportBundleResult {
+  path: string;
+  counts: BundleCounts;
+}
+
+export interface ImportBundleResult {
+  counts: BundleCounts;
+  errors: string[];
+}
+
+export interface ExportBundleOptions {
+  includeAgents: boolean;
+  includeSkills: boolean;
+  includeCommands: boolean;
+  includeMemory: boolean;
+  includeMcp: boolean;
+  includeHooks: boolean;
+  projectPaths: string[];
+  destination: string;
+}
+
+export interface ImportBundleOptions {
+  archivePath: string;
+  importAgents: boolean;
+  importSkills: boolean;
+  importCommands: boolean;
+  importMemory: boolean;
+  importMcp: boolean;
+  importHooks: boolean;
+}
+
+// Export all config to a .vinsly bundle
+export async function exportConfigBundle(options: ExportBundleOptions): Promise<ExportBundleResult> {
+  return await invoke<ExportBundleResult>('export_config_bundle', {
+    includeAgents: options.includeAgents,
+    includeSkills: options.includeSkills,
+    includeCommands: options.includeCommands,
+    includeMemory: options.includeMemory,
+    includeMcp: options.includeMcp,
+    includeHooks: options.includeHooks,
+    projectPaths: options.projectPaths,
+    destination: options.destination,
+  });
+}
+
+// Import config from a .vinsly bundle
+export async function importConfigBundle(options: ImportBundleOptions): Promise<ImportBundleResult> {
+  return await invoke<ImportBundleResult>('import_config_bundle', {
+    archivePath: options.archivePath,
+    importAgents: options.importAgents,
+    importSkills: options.importSkills,
+    importCommands: options.importCommands,
+    importMemory: options.importMemory,
+    importMcp: options.importMcp,
+    importHooks: options.importHooks,
+  });
+}
+
+// Read manifest from a .vinsly bundle without importing
+export async function readBundleManifest(archivePath: string): Promise<BundleManifest> {
+  return await invoke<BundleManifest>('read_bundle_manifest', {
+    archive_path: archivePath,
+  });
+}
+
+// ============================================================================
+// System Tray Commands
+// ============================================================================
+
+// Update the system tray menu with current session and resource counts
+export async function updateTrayStatus(
+  sessionCount: number,
+  agentCount: number,
+  skillCount: number,
+  hookCount: number
+): Promise<void> {
+  return await invoke('update_tray_status', {
+    sessionCount,
+    agentCount,
+    skillCount,
+    hookCount,
+  });
+}

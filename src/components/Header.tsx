@@ -7,7 +7,9 @@ import { ClaudeSession } from '../types/session';
 import { SunIcon } from './icons/SunIcon';
 import { MoonIcon } from './icons/MoonIcon';
 import { HelpIcon } from './icons/HelpIcon';
+import { FeedbackIcon } from './icons/FeedbackIcon';
 import { SettingsModal, FDA_RETURN_TO_SETTINGS_KEY, FDA_RETURN_SECTION_KEY, SettingsSection } from './SettingsModal';
+import { FeedbackModal } from './FeedbackModal';
 import { ScanModal } from './ScanModal';
 import { SessionIndicator } from './SessionIndicator';
 import { SessionPanel } from './SessionPanel';
@@ -68,6 +70,8 @@ interface HeaderProps {
     isLoadingSessions?: boolean;
     sessionError?: string | null;
     onRefreshSessions?: () => void;
+    // Export support
+    loadedProjectPaths?: string[];
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -99,12 +103,15 @@ export const Header: React.FC<HeaderProps> = ({
   isLoadingSessions = false,
   sessionError = null,
   onRefreshSessions,
+  // Export support
+  loadedProjectPaths = [],
 }) => {
   const { showToast } = useToast();
   const [showScanModal, setShowScanModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection | undefined>(undefined);
   const [showSessionPanel, setShowSessionPanel] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [defaultTheme, setDefaultTheme] = useState<'system' | 'light' | 'dark'>('system');
   const [defaultView, setDefaultView] = useState<'table' | 'grid'>('table');
   const [showScanHighlight, setShowScanHighlight] = useState(false);
@@ -291,6 +298,16 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {/* Feedback Button */}
+            <button
+              onClick={() => setShowFeedbackModal(true)}
+              className="p-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer shadow-none"
+              aria-label="Send feedback"
+              title="Send Feedback"
+            >
+              <FeedbackIcon className="h-5 w-5 pointer-events-none" />
+            </button>
+
             {/* Theme Toggle - Light | Dark */}
             <div className="flex items-center border border-v-light-border dark:border-v-border rounded-lg overflow-hidden bg-v-light-bg dark:bg-v-dark">
               <button
@@ -377,6 +394,7 @@ export const Header: React.FC<HeaderProps> = ({
           setShowSettingsModal(false);
           onResetLicense();
         }}
+        loadedProjectPaths={loadedProjectPaths}
       />
 
       {/* Scan Modal */}
@@ -397,6 +415,14 @@ export const Header: React.FC<HeaderProps> = ({
         onClose={() => setShowSessionPanel(false)}
         onRefresh={onRefreshSessions || (() => {})}
         isMacPlatform={isMacPlatform}
+      />
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        appVersion={appVersion}
+        userEmail={licenseInfo?.email}
       />
     </header>
   );

@@ -15,10 +15,19 @@ use walkdir::WalkDir;
 use zip::write::FileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 use tauri::Manager;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 const HOME_DISCOVERY_CACHE_TTL_SECS: u64 = 120;
 #[cfg(target_os = "macos")]
 const MACOS_BUNDLE_IDENTIFIER: &str = "com.vinsly.desktop";
+
+// Tray state - atomic counters for lock-free updates
+static TRAY_SESSION_COUNT: AtomicUsize = AtomicUsize::new(0);
+static TRAY_AGENT_COUNT: AtomicUsize = AtomicUsize::new(0);
+static TRAY_SKILL_COUNT: AtomicUsize = AtomicUsize::new(0);
+static TRAY_HOOK_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 struct DiscoveryCacheEntry {
     depth: usize,
@@ -2670,7 +2679,6 @@ async fn invoke_claude_code(prompt: String) -> Result<ClaudeCodeInvocationResult
                                 }
                             }
                             // Other message types (init, assistant, user, etc.) are progress
-                            // We could emit events for these if we want real-time progress
                             _ => {}
                         }
                     }
@@ -3069,6 +3077,551 @@ fn set_title_bar_theme(window: tauri::WebviewWindow, dark: bool) {
     }
 }
 
+// ============================================================================
+// Feedback Command
+// ============================================================================
+
+const FORMSPREE_ENDPOINT: &str = "https://formspree.io/f/mbdrddak";
+
+#[tauri::command]
+async fn send_feedback(
+    feedback_type: String,
+    message: String,
+    email: Option<String>,
+    app_version: String,
+    os_info: String,
+) -> Result<(), String> {
+    let client = reqwest::Client::new();
+
+    let mut form_data = std::collections::HashMap::new();
+    form_data.insert("_subject", format!("[Vinsly {}] {} Feedback", app_version, feedback_type));
+    form_data.insert("type", feedback_type);
+    form_data.insert("message", message);
+    form_data.insert("email", email.unwrap_or_else(|| "Anonymous".to_string()));
+    form_data.insert("app_version", app_version);
+    form_data.insert("os_info", os_info);
+
+    let response = client
+        .post(FORMSPREE_ENDPOINT)
+        .header("Accept", "application/json")
+        .form(&form_data)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send feedback: {}", e))?;
+
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Failed to send feedback: server returned {}",
+            response.status()
+        ))
+    }
+}
+
+// ============================================================================
+// Config Bundle Export/Import
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BundleCounts {
+    agents: usize,
+    skills: usize,
+    commands: usize,
+    memories: usize,
+    mcp_servers: usize,
+    hooks: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BundleManifest {
+    version: String,
+    exported_at: String,
+    vinsly_version: String,
+    counts: BundleCounts,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ExportBundleResult {
+    path: String,
+    counts: BundleCounts,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ImportBundleResult {
+    counts: BundleCounts,
+    errors: Vec<String>,
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+async fn export_config_bundle(
+    includeAgents: bool,
+    includeSkills: bool,
+    includeCommands: bool,
+    includeMemory: bool,
+    includeMcp: bool,
+    includeHooks: bool,
+    projectPaths: Vec<String>,
+    destination: String,
+) -> Result<ExportBundleResult, String> {
+    // Map camelCase params to snake_case locals
+    let include_agents = includeAgents;
+    let include_skills = includeSkills;
+    let include_commands = includeCommands;
+    let include_memory = includeMemory;
+    let include_mcp = includeMcp;
+    let include_hooks = includeHooks;
+    let project_paths = projectPaths;
+
+    let destination_path = PathBuf::from(&destination);
+    validate_export_destination(&destination_path)?;
+
+    if let Some(parent) = destination_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to prepare destination: {}", e))?;
+        }
+    }
+
+    let file = fs::File::create(&destination_path)
+        .map_err(|e| format!("Failed to create archive: {}", e))?;
+    let mut zip = ZipWriter::new(file);
+    let options = FileOptions::default().compression_method(CompressionMethod::Deflated);
+
+    let mut counts = BundleCounts {
+        agents: 0,
+        skills: 0,
+        commands: 0,
+        memories: 0,
+        mcp_servers: 0,
+        hooks: 0,
+    };
+
+    let home_dir = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+    let global_claude_dir = home_dir.join(".claude");
+
+    // Helper to add a file to the ZIP
+    fn add_file_to_zip(
+        zip: &mut ZipWriter<fs::File>,
+        options: FileOptions,
+        archive_path: &str,
+        file_path: &Path,
+    ) -> Result<(), String> {
+        if !file_path.exists() {
+            return Ok(());
+        }
+        let content = fs::read(file_path).map_err(|e| format!("Failed to read {}: {}", file_path.display(), e))?;
+        zip.start_file(archive_path, options)
+            .map_err(|e| format!("Failed to add {}: {}", archive_path, e))?;
+        zip.write_all(&content)
+            .map_err(|e| format!("Failed to write {}: {}", archive_path, e))?;
+        Ok(())
+    }
+
+    // Export agents
+    if include_agents {
+        let agents_dir = global_claude_dir.join("agents");
+        if agents_dir.exists() {
+            for entry in fs::read_dir(&agents_dir).map_err(|e| e.to_string())? {
+                let entry = entry.map_err(|e| e.to_string())?;
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("md") {
+                    let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("agent.md");
+                    let archive_path = format!("agents/{}", file_name);
+                    add_file_to_zip(&mut zip, options, &archive_path, &path)?;
+                    counts.agents += 1;
+                }
+            }
+        }
+
+        // Project agents
+        for proj_path in &project_paths {
+            let proj_agents_dir = PathBuf::from(proj_path).join(".claude").join("agents");
+            if proj_agents_dir.exists() {
+                let proj_name = PathBuf::from(proj_path)
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("project")
+                    .to_string();
+                for entry in fs::read_dir(&proj_agents_dir).map_err(|e| e.to_string())? {
+                    let entry = entry.map_err(|e| e.to_string())?;
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) == Some("md") {
+                        let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("agent.md");
+                        let archive_path = format!("agents/projects/{}/{}", proj_name, file_name);
+                        add_file_to_zip(&mut zip, options, &archive_path, &path)?;
+                        counts.agents += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // Export skills
+    if include_skills {
+        let skills_dir = global_claude_dir.join("skills");
+        if skills_dir.exists() {
+            for entry in fs::read_dir(&skills_dir).map_err(|e| e.to_string())? {
+                let entry = entry.map_err(|e| e.to_string())?;
+                let path = entry.path();
+                if path.is_dir() {
+                    let skill_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("skill");
+                    for file_entry in WalkDir::new(&path) {
+                        let file_entry = file_entry.map_err(|e| e.to_string())?;
+                        let file_path = file_entry.path();
+                        let relative = file_path.strip_prefix(&path).map_err(|e| e.to_string())?;
+
+                        if file_entry.file_type().is_dir() {
+                            let dir_path = format!("skills/{}/{}/", skill_name, relative.to_string_lossy().replace('\\', "/"));
+                            zip.add_directory(&dir_path, options).map_err(|e| e.to_string())?;
+                        } else {
+                            let archive_path = format!("skills/{}/{}", skill_name, relative.to_string_lossy().replace('\\', "/"));
+                            add_file_to_zip(&mut zip, options, &archive_path, file_path)?;
+                        }
+                    }
+                    counts.skills += 1;
+                }
+            }
+        }
+    }
+
+    // Export commands
+    if include_commands {
+        let commands_dir = global_claude_dir.join("commands");
+        if commands_dir.exists() {
+            for entry in fs::read_dir(&commands_dir).map_err(|e| e.to_string())? {
+                let entry = entry.map_err(|e| e.to_string())?;
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("md") {
+                    let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("command.md");
+                    let archive_path = format!("commands/{}", file_name);
+                    add_file_to_zip(&mut zip, options, &archive_path, &path)?;
+                    counts.commands += 1;
+                }
+            }
+        }
+    }
+
+    // Export memory (CLAUDE.md files)
+    if include_memory {
+        let global_memory = global_claude_dir.join("CLAUDE.md");
+        if global_memory.exists() {
+            add_file_to_zip(&mut zip, options, "memory/global-CLAUDE.md", &global_memory)?;
+            counts.memories += 1;
+        }
+
+        for proj_path in &project_paths {
+            let proj_path_buf = PathBuf::from(proj_path);
+            let proj_memory = proj_path_buf.join("CLAUDE.md");
+            if proj_memory.exists() {
+                let proj_name = proj_path_buf
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("project");
+                let archive_path = format!("memory/{}-CLAUDE.md", proj_name);
+                add_file_to_zip(&mut zip, options, &archive_path, &proj_memory)?;
+                counts.memories += 1;
+            }
+        }
+    }
+
+    // Export MCP config
+    if include_mcp {
+        let mcp_config = home_dir.join(".claude").join("mcp.json");
+        if mcp_config.exists() {
+            add_file_to_zip(&mut zip, options, "mcp/mcp-config.json", &mcp_config)?;
+            // Count servers in the config
+            if let Ok(content) = fs::read_to_string(&mcp_config) {
+                if let Ok(config) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(servers) = config.get("mcpServers").and_then(|s| s.as_object()) {
+                        counts.mcp_servers = servers.len();
+                    }
+                }
+            }
+        }
+    }
+
+    // Export hooks config
+    if include_hooks {
+        let hooks_config = home_dir.join(".claude").join("settings.json");
+        if hooks_config.exists() {
+            add_file_to_zip(&mut zip, options, "hooks/settings.json", &hooks_config)?;
+            // Count hooks in the config
+            if let Ok(content) = fs::read_to_string(&hooks_config) {
+                if let Ok(config) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(hooks) = config.get("hooks").and_then(|h| h.as_object()) {
+                        counts.hooks = hooks.values()
+                            .filter_map(|v| v.as_array())
+                            .map(|arr| arr.len())
+                            .sum();
+                    }
+                }
+            }
+        }
+    }
+
+    // Create and add manifest
+    let manifest = BundleManifest {
+        version: "1.0".to_string(),
+        exported_at: chrono::Utc::now().to_rfc3339(),
+        vinsly_version: env!("CARGO_PKG_VERSION").to_string(),
+        counts: BundleCounts {
+            agents: counts.agents,
+            skills: counts.skills,
+            commands: counts.commands,
+            memories: counts.memories,
+            mcp_servers: counts.mcp_servers,
+            hooks: counts.hooks,
+        },
+    };
+
+    let manifest_json = serde_json::to_string_pretty(&manifest)
+        .map_err(|e| format!("Failed to serialize manifest: {}", e))?;
+    zip.start_file("manifest.json", options)
+        .map_err(|e| format!("Failed to add manifest: {}", e))?;
+    zip.write_all(manifest_json.as_bytes())
+        .map_err(|e| format!("Failed to write manifest: {}", e))?;
+
+    zip.finish().map_err(|e| format!("Failed to finalize archive: {}", e))?;
+
+    // Verify the file was created
+    if !destination_path.exists() {
+        return Err("Archive was not created - file does not exist after export".to_string());
+    }
+
+    Ok(ExportBundleResult {
+        path: destination_path.to_string_lossy().to_string(),
+        counts,
+    })
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+async fn import_config_bundle(
+    archivePath: String,
+    importAgents: bool,
+    importSkills: bool,
+    importCommands: bool,
+    importMemory: bool,
+    importMcp: bool,
+    importHooks: bool,
+) -> Result<ImportBundleResult, String> {
+    // Map camelCase params to snake_case locals
+    let import_agents = importAgents;
+    let import_skills = importSkills;
+    let import_commands = importCommands;
+    let import_memory = importMemory;
+    let import_mcp = importMcp;
+    let import_hooks = importHooks;
+
+    let path = PathBuf::from(&archivePath);
+    validate_user_file_path(&path, true)?;
+
+    let file = fs::File::open(&path).map_err(|e| format!("Failed to open archive: {}", e))?;
+    let mut archive = ZipArchive::new(file).map_err(|e| format!("Failed to read archive: {}", e))?;
+
+    let home_dir = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+    let global_claude_dir = home_dir.join(".claude");
+
+    let mut counts = BundleCounts {
+        agents: 0,
+        skills: 0,
+        commands: 0,
+        memories: 0,
+        mcp_servers: 0,
+        hooks: 0,
+    };
+    let mut errors: Vec<String> = Vec::new();
+
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+        let entry_path = match entry.enclosed_name() {
+            Some(p) => p.to_path_buf(),
+            None => {
+                errors.push(format!("Skipped invalid path in archive"));
+                continue;
+            }
+        };
+
+        let entry_str = entry_path.to_string_lossy();
+
+        // Skip directories, manifest, and macOS artifacts
+        if entry.is_dir() || entry_str == "manifest.json" || entry_str.starts_with("__MACOSX") {
+            continue;
+        }
+
+        // Determine destination based on path prefix
+        let destination: Option<PathBuf> = if entry_str.starts_with("agents/") && import_agents {
+            if entry_str.starts_with("agents/projects/") {
+                // Project agents - skip for now (would need project path)
+                None
+            } else {
+                let file_name = entry_path.file_name().and_then(|s| s.to_str());
+                if let Some(name) = file_name {
+                    fs::create_dir_all(global_claude_dir.join("agents")).ok();
+                    Some(global_claude_dir.join("agents").join(name))
+                } else {
+                    None
+                }
+            }
+        } else if entry_str.starts_with("skills/") && import_skills {
+            // Preserve skill directory structure
+            let relative = entry_path.strip_prefix("skills/").unwrap_or(&entry_path);
+            fs::create_dir_all(global_claude_dir.join("skills").join(relative.parent().unwrap_or(Path::new("")))).ok();
+            Some(global_claude_dir.join("skills").join(relative))
+        } else if entry_str.starts_with("commands/") && import_commands {
+            let file_name = entry_path.file_name().and_then(|s| s.to_str());
+            if let Some(name) = file_name {
+                fs::create_dir_all(global_claude_dir.join("commands")).ok();
+                Some(global_claude_dir.join("commands").join(name))
+            } else {
+                None
+            }
+        } else if entry_str.starts_with("memory/") && import_memory {
+            let file_name = entry_path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            if file_name == "global-CLAUDE.md" {
+                Some(global_claude_dir.join("CLAUDE.md"))
+            } else {
+                // Project memories - skip for now
+                None
+            }
+        } else if entry_str.starts_with("mcp/") && import_mcp {
+            if entry_str == "mcp/mcp-config.json" {
+                Some(home_dir.join(".claude").join("mcp.json"))
+            } else {
+                None
+            }
+        } else if entry_str.starts_with("hooks/") && import_hooks {
+            if entry_str == "hooks/settings.json" {
+                Some(home_dir.join(".claude").join("settings.json"))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(dest) = destination {
+            // Read entry content
+            let mut content = Vec::new();
+            entry.read_to_end(&mut content).map_err(|e| e.to_string())?;
+
+            // Write to destination
+            if let Err(e) = fs::write(&dest, &content) {
+                errors.push(format!("Failed to write {}: {}", dest.display(), e));
+            } else {
+                // Update counts
+                if entry_str.starts_with("agents/") {
+                    counts.agents += 1;
+                } else if entry_str.starts_with("skills/") && entry_str.ends_with("SKILL.md") {
+                    counts.skills += 1;
+                } else if entry_str.starts_with("commands/") {
+                    counts.commands += 1;
+                } else if entry_str.starts_with("memory/") {
+                    counts.memories += 1;
+                } else if entry_str.starts_with("mcp/") {
+                    counts.mcp_servers = 1; // We import the whole config
+                } else if entry_str.starts_with("hooks/") {
+                    counts.hooks = 1; // We import the whole config
+                }
+            }
+        }
+    }
+
+    Ok(ImportBundleResult { counts, errors })
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+async fn read_bundle_manifest(archivePath: String) -> Result<BundleManifest, String> {
+    let path = PathBuf::from(&archivePath);
+    validate_user_file_path(&path, true)?;
+
+    let file = fs::File::open(&path).map_err(|e| format!("Failed to open archive: {}", e))?;
+    let mut archive = ZipArchive::new(file).map_err(|e| format!("Failed to read archive: {}", e))?;
+
+    let mut manifest_entry = archive.by_name("manifest.json")
+        .map_err(|_| "Bundle does not contain a manifest.json - may be an invalid or old format bundle".to_string())?;
+
+    let mut content = String::new();
+    manifest_entry.read_to_string(&mut content).map_err(|e| e.to_string())?;
+
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse manifest: {}", e))
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+fn update_tray_status(
+    app: tauri::AppHandle,
+    sessionCount: usize,
+    agentCount: usize,
+    skillCount: usize,
+    hookCount: usize,
+) -> Result<(), String> {
+    use tauri::tray::TrayIconId;
+
+    // Update atomic counters
+    TRAY_SESSION_COUNT.store(sessionCount, Ordering::SeqCst);
+    TRAY_AGENT_COUNT.store(agentCount, Ordering::SeqCst);
+    TRAY_SKILL_COUNT.store(skillCount, Ordering::SeqCst);
+    TRAY_HOOK_COUNT.store(hookCount, Ordering::SeqCst);
+
+    // Get the tray and update menu items
+    let tray_id = TrayIconId::new("main-tray");
+    if let Some(tray) = app.tray_by_id(&tray_id) {
+        // Build session text with colored emoji indicator
+        let session_text = if sessionCount == 0 {
+            "⚪  No active sessions".to_string()
+        } else if sessionCount == 1 {
+            "🟢  1 active session".to_string()
+        } else {
+            format!("🟢  {} active sessions", sessionCount)
+        };
+
+        // Build resources text
+        let mut parts = Vec::new();
+        if agentCount > 0 {
+            parts.push(format!("{} agent{}", agentCount, if agentCount == 1 { "" } else { "s" }));
+        }
+        if skillCount > 0 {
+            parts.push(format!("{} skill{}", skillCount, if skillCount == 1 { "" } else { "s" }));
+        }
+        if hookCount > 0 {
+            parts.push(format!("{} hook{}", hookCount, if hookCount == 1 { "" } else { "s" }));
+        }
+        let resources_text = if parts.is_empty() {
+            "No resources".to_string()
+        } else {
+            parts.join(" · ")
+        };
+
+        // Rebuild menu with updated text (enabled=true so text isn't greyed out)
+        let sessions_item = MenuItem::with_id(&app, "sessions", &session_text, true, None::<&str>)
+            .map_err(|e| e.to_string())?;
+        let resources_item = MenuItem::with_id(&app, "resources", &resources_text, true, None::<&str>)
+            .map_err(|e| e.to_string())?;
+        let separator = MenuItem::with_id(&app, "sep", "─────────────", false, None::<&str>)
+            .map_err(|e| e.to_string())?;
+        let open_item = MenuItem::with_id(&app, "open", "Open Vinsly", true, None::<&str>)
+            .map_err(|e| e.to_string())?;
+        let quit_item = MenuItem::with_id(&app, "quit", "Quit", true, None::<&str>)
+            .map_err(|e| e.to_string())?;
+
+        let menu = Menu::with_items(&app, &[
+            &sessions_item,
+            &resources_item,
+            &separator,
+            &open_item,
+            &quit_item,
+        ]).map_err(|e| e.to_string())?;
+
+        tray.set_menu(Some(menu)).map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -3147,6 +3700,40 @@ pub fn run() {
                 }
             }
 
+            // Setup system tray (items enabled=true so text isn't greyed out)
+            let sessions_item = MenuItem::with_id(app, "sessions", "⚪  No active sessions", true, None::<&str>)?;
+            let resources_item = MenuItem::with_id(app, "resources", "Loading...", true, None::<&str>)?;
+            let separator = MenuItem::with_id(app, "sep", "─────────────", false, None::<&str>)?;
+            let open_item = MenuItem::with_id(app, "open", "Open Vinsly", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+
+            let menu = Menu::with_items(app, &[
+                &sessions_item,
+                &resources_item,
+                &separator,
+                &open_item,
+                &quit_item,
+            ])?;
+
+            let _tray = TrayIconBuilder::with_id("main-tray")
+                .menu(&menu)
+                .show_menu_on_left_click(true)
+                .on_menu_event(|app, event| {
+                    match event.id.as_ref() {
+                        "open" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .build(app)?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -3207,6 +3794,14 @@ pub fn run() {
             import_binary_file,
             // Window appearance
             set_title_bar_theme,
+            // Feedback
+            send_feedback,
+            // Config Bundle
+            export_config_bundle,
+            import_config_bundle,
+            read_bundle_manifest,
+            // System Tray
+            update_tray_status,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

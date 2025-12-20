@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Agent, AgentScope, ScanSettings, Skill, ClaudeMemory } from '../types';
 import { LicenseInfo } from '../types/licensing';
@@ -38,11 +38,12 @@ import { validateLicenseWithLemon, activateLicenseWithLemon, deactivateLicenseWi
 import { saveScanSettings } from '../utils/scanSettings';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
-import { exportSkillDirectory, importSkillArchive, exportSkillsArchive, exportSlashCommandsArchive, importSlashCommandsArchive, exportMemoriesArchive, importMemoriesArchive } from '../utils/tauriCommands';
+import { exportSkillDirectory, importSkillArchive, exportSkillsArchive, exportSlashCommandsArchive, importSlashCommandsArchive, exportMemoriesArchive, importMemoriesArchive, updateTrayStatus } from '../utils/tauriCommands';
 import { DEFAULT_HOME_DISCOVERY_DEPTH, discoverHomeDirectories } from '../utils/homeDiscovery';
 import { MCPServer } from '../types/mcp';
 import { Hook } from '../types/hooks';
 import { devLog } from '../utils/devLogger';
+import { extractProjectRootFromAgentPath } from '../utils/path';
 
 const HOME_DISCOVERY_MAX_DEPTH = DEFAULT_HOME_DISCOVERY_DEPTH;
 
@@ -132,6 +133,20 @@ export const AppContent: React.FC = () => {
     cloneMemory,
   } = useWorkspaceContext();
 
+  // Compute unique project paths from loaded agents for config export
+  const loadedProjectPaths = useMemo(() => {
+    const paths = new Set<string>();
+    for (const agent of agents) {
+      if (agent.scope === AgentScope.Project && agent.path) {
+        const projectPath = extractProjectRootFromAgentPath(agent.path);
+        if (projectPath) {
+          paths.add(projectPath);
+        }
+      }
+    }
+    return Array.from(paths);
+  }, [agents]);
+
   // Navigation context
   const {
     currentView,
@@ -174,6 +189,18 @@ export const AppContent: React.FC = () => {
     const timer = window.setTimeout(() => setShowSplash(false), 1200);
     return () => window.clearTimeout(timer);
   }, []);
+
+  // Update system tray when session or resource counts change
+  useEffect(() => {
+    const sessionCount = sessions.length;
+    const agentCount = agents.length;
+    const skillCount = skills.length;
+    const hookCount = hooksList.length;
+
+    updateTrayStatus(sessionCount, agentCount, skillCount, hookCount).catch((err) => {
+      devLog.warn('Failed to update tray status:', err);
+    });
+  }, [sessions.length, agents.length, skills.length, hooksList.length]);
 
   // Determine if we should show the update modal (for all users on startup)
   const showUpdateModal = !showSplash &&
@@ -747,6 +774,7 @@ export const AppContent: React.FC = () => {
         isLoadingSessions={isSessionsLoading}
         sessionError={sessionsError}
         onRefreshSessions={refreshSessions}
+        loadedProjectPaths={loadedProjectPaths}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

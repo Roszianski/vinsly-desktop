@@ -4,7 +4,7 @@ import { FolderIcon } from '../icons/FolderIcon';
 import { DocumentIcon } from '../icons/DocumentIcon';
 import { TerminalIcon } from '../icons/TerminalIcon';
 
-export type ViewType = 'subagents' | 'skills' | 'team' | 'analytics' | 'memory' | 'commands';
+export type ViewType = 'subagents' | 'skills' | 'team' | 'memory' | 'commands';
 
 export interface ResourceListNavigationProps {
   activeView: ViewType;

@@ -7,8 +7,9 @@ import { getScanSettings, saveScanSettings, addWatchedDirectory, removeWatchedDi
 import { DeleteIcon } from './icons/DeleteIcon';
 import { LicenseInfo } from '../types/licensing';
 import { PendingUpdateDetails } from '../types/updater';
-import { checkFullDiskAccess, openFullDiskAccessSettings } from '../utils/tauriCommands';
+import { checkFullDiskAccess, openFullDiskAccessSettings, exportConfigBundle, importConfigBundle, readBundleManifest, BundleManifest } from '../utils/tauriCommands';
 import { devLog } from '../utils/devLogger';
+import { save, open as openFileDialog } from '@tauri-apps/plugin-dialog';
 
 // Keys for return-to-settings flow after FDA grant
 export const FDA_RETURN_TO_SETTINGS_KEY = 'vinsly-fda-return-to-settings';
@@ -39,9 +40,10 @@ interface SettingsModalProps {
   onInstallUpdate: () => Promise<void> | void;
   isMacPlatform?: boolean;
   macOSVersionMajor?: number | null;
+  loadedProjectPaths?: string[];
 }
 
-export type SettingsSection = 'appearance' | 'scanning' | 'account' | 'permissions';
+export type SettingsSection = 'appearance' | 'scanning' | 'account' | 'permissions' | 'backup';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -68,6 +70,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onInstallUpdate,
   isMacPlatform = false,
   macOSVersionMajor = null,
+  loadedProjectPaths = [],
 }) => {
   const [activeSection, setActiveSection] = useState<SettingsSection>(initialSection || 'account');
   const [localScanSettings, setLocalScanSettings] = useState<ScanSettings>(scanSettings);
@@ -78,6 +81,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [fullDiskStatusMessage, setFullDiskStatusMessage] = useState<{ tone: 'info' | 'warn'; text: string } | null>(null);
   const [showSequoiaTip, setShowSequoiaTip] = useState(false);
   const [showFdaGuide, setShowFdaGuide] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [exportResult, setExportResult] = useState<{ path: string; counts: { agents: number; skills: number; commands: number; memories: number; mcp_servers: number; hooks: number } } | null>(null);
+  const [importResult, setImportResult] = useState<{ counts: { agents: number; skills: number; commands: number; memories: number; mcp_servers: number; hooks: number }; errors: string[] } | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const displayNameSaveTimeoutRef = useRef<number | null>(null);
   const postGrantCheckTimeoutRef = useRef<number | null>(null);
   const lastCheckedLabel = lastUpdateCheckAt
@@ -300,6 +309,84 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [displayNameInput, onDisplayNameChange, userDisplayName]);
 
+  const handleExport = useCallback(async () => {
+    setIsExporting(true);
+    setExportResult(null);
+    setExportError(null);
+    try {
+      // Ask user for save location
+      const destination = await save({
+        title: 'Export Configuration Bundle',
+        defaultPath: `vinsly-config-bundle-${new Date().toISOString().split('T')[0]}.zip`,
+        filters: [{ name: 'Zip Archive', extensions: ['zip'] }],
+      });
+
+      if (!destination) {
+        setIsExporting(false);
+        return;
+      }
+
+      // Ensure .zip extension
+      const finalDestination = destination.endsWith('.zip') ? destination : `${destination}.zip`;
+
+      // Use project paths already loaded into Vinsly (extracted from loaded agents)
+      // This ensures we export exactly what the user sees in the app
+      const result = await exportConfigBundle({
+        includeAgents: true,
+        includeSkills: true,
+        includeCommands: true,
+        includeMemory: true,
+        includeMcp: true,
+        includeHooks: true,
+        projectPaths: loadedProjectPaths,
+        destination: finalDestination,
+      });
+
+      setExportResult(result);
+    } catch (error) {
+      devLog.error('Failed to export config bundle:', error);
+      setExportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsExporting(false);
+    }
+  }, [loadedProjectPaths]);
+
+  const handleImport = useCallback(async () => {
+    setIsImporting(true);
+    setImportResult(null);
+    setImportError(null);
+    try {
+      // Ask user for file to import
+      const archivePath = await openFileDialog({
+        title: 'Import Configuration Bundle',
+        filters: [{ name: 'Zip Archive', extensions: ['zip'] }],
+        multiple: false,
+      });
+
+      if (!archivePath || typeof archivePath !== 'string') {
+        setIsImporting(false);
+        return;
+      }
+
+      const result = await importConfigBundle({
+        archivePath,
+        importAgents: true,
+        importSkills: true,
+        importCommands: true,
+        importMemory: true,
+        importMcp: true,
+        importHooks: true,
+      });
+
+      setImportResult(result);
+    } catch (error) {
+      devLog.error('Failed to import config bundle:', error);
+      setImportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsImporting(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       void refreshFullDiskStatus();
@@ -408,6 +495,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       }`}
                     >
                       Permissions
+                    </button>
+                    <button
+                      onClick={() => setActiveSection('backup')}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                        activeSection === 'backup'
+                          ? 'bg-v-light-hover dark:bg-v-light-dark text-v-accent font-medium'
+                          : 'text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark'
+                      }`}
+                    >
+                      Backup
                     </button>
                   </nav>
                 </div>
@@ -1098,6 +1195,171 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             </div>
                           )}
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeSection === 'backup' && (
+                    <div className="max-w-2xl space-y-8">
+                      <div>
+                        <h3 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary mb-1">
+                          Backup & Restore
+                        </h3>
+                        <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
+                          Export your entire Claude Code configuration to a single file, or restore from a backup
+                        </p>
+                      </div>
+
+                      {/* Export Section */}
+                      <div className="border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark space-y-4">
+                        <div>
+                          <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                            Export Configuration
+                          </p>
+                          <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                            Create a backup of all your subagents, skills, memory files, commands, MCP servers, and hooks
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => void handleExport()}
+                          disabled={isExporting}
+                          className="px-4 py-2 rounded-lg bg-v-accent text-white text-sm font-medium hover:bg-v-accent-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          {isExporting && (
+                            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                              <circle
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                                strokeDasharray="60"
+                                strokeDashoffset="20"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          )}
+                          {!isExporting && (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                          )}
+                          <span>{isExporting ? 'Exporting…' : 'Export Bundle'}</span>
+                        </button>
+
+                        {exportResult && (
+                          <div className="mt-3 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-sm">
+                            <p className="font-medium text-green-600 dark:text-green-400 mb-2">
+                              Export successful!
+                            </p>
+                            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mb-2 font-mono break-all">
+                              {exportResult.path}
+                            </p>
+                            <div className="grid grid-cols-3 gap-2 text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                              <span>Agents: {exportResult.counts.agents}</span>
+                              <span>Skills: {exportResult.counts.skills}</span>
+                              <span>Commands: {exportResult.counts.commands}</span>
+                              <span>Memories: {exportResult.counts.memories}</span>
+                              <span>MCP: {exportResult.counts.mcp_servers}</span>
+                              <span>Hooks: {exportResult.counts.hooks}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {exportError && (
+                          <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm">
+                            <p className="font-medium text-red-600 dark:text-red-400 mb-1">
+                              Export failed
+                            </p>
+                            <p className="text-xs text-red-600 dark:text-red-300">
+                              {exportError}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Import Section */}
+                      <div className="border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark space-y-4">
+                        <div>
+                          <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
+                            Import Configuration
+                          </p>
+                          <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                            Restore your configuration from a previously exported backup
+                          </p>
+                        </div>
+
+                        <button
+                          onClick={() => void handleImport()}
+                          disabled={isImporting}
+                          className="px-4 py-2 rounded-lg border border-v-light-border dark:border-v-border text-sm font-medium text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          {isImporting && (
+                            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                              <circle
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                                strokeDasharray="60"
+                                strokeDashoffset="20"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          )}
+                          {!isImporting && (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                          )}
+                          <span>{isImporting ? 'Importing…' : 'Import Bundle'}</span>
+                        </button>
+
+                        <p className="text-xs text-amber-600 dark:text-amber-300">
+                          Warning: Importing will overwrite existing configurations with the same names.
+                        </p>
+
+                        {importResult && (
+                          <div className={`mt-3 p-3 rounded-lg text-sm ${importResult.errors.length > 0 ? 'bg-amber-500/10 border border-amber-500/30' : 'bg-green-500/10 border border-green-500/30'}`}>
+                            <p className={`font-medium mb-2 ${importResult.errors.length > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}>
+                              {importResult.errors.length > 0 ? 'Import completed with warnings' : 'Import successful!'}
+                            </p>
+                            <div className="grid grid-cols-3 gap-2 text-xs text-v-light-text-secondary dark:text-v-text-secondary mb-2">
+                              <span>Agents: {importResult.counts.agents}</span>
+                              <span>Skills: {importResult.counts.skills}</span>
+                              <span>Commands: {importResult.counts.commands}</span>
+                              <span>Memories: {importResult.counts.memories}</span>
+                              <span>MCP: {importResult.counts.mcp_servers}</span>
+                              <span>Hooks: {importResult.counts.hooks}</span>
+                            </div>
+                            {importResult.errors.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-amber-500/20">
+                                <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">Errors:</p>
+                                <ul className="text-xs text-amber-600 dark:text-amber-300 space-y-1">
+                                  {importResult.errors.slice(0, 5).map((error, idx) => (
+                                    <li key={idx}>• {error}</li>
+                                  ))}
+                                  {importResult.errors.length > 5 && (
+                                    <li>• ...and {importResult.errors.length - 5} more</li>
+                                  )}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {importError && (
+                          <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm">
+                            <p className="font-medium text-red-600 dark:text-red-400 mb-1">
+                              Import failed
+                            </p>
+                            <p className="text-xs text-red-600 dark:text-red-300">
+                              {importError}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

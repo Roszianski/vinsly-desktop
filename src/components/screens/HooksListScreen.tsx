@@ -96,7 +96,7 @@ interface HooksListScreenProps {
   onShowCommands: () => void;
   onShowMCP: () => void;
   onShowHooks: () => void;
-  activeView: string;
+  activeView: 'subagents' | 'skills' | 'memory' | 'commands' | 'mcp' | 'hooks';
   onToggleFavorite: (hook: Hook) => void;
   shortcutHint?: string;
 }
