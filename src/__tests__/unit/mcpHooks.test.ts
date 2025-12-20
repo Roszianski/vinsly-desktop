@@ -32,6 +32,7 @@ import {
   getHookScopeDisplayName,
   getHookConfigPath,
   getHookEnvVariables,
+  getHookStdinFields,
   HOOK_ENV_VARIABLES,
 } from '../../types/hooks';
 
@@ -512,33 +513,49 @@ describe('Hook Types', () => {
   });
 
   describe('getHookEnvVariables', () => {
-    it('should return env variables for PreToolUse', () => {
+    it('should return common env variables for most hook types', () => {
       const vars = getHookEnvVariables('PreToolUse');
-      expect(vars).toContain('TOOL_NAME');
-      expect(vars).toContain('TOOL_INPUT');
-      expect(vars).toContain('SESSION_ID');
+      expect(vars).toContain('CLAUDE_PROJECT_DIR');
+      expect(vars).toContain('CLAUDE_CODE_REMOTE');
+      expect(vars).toHaveLength(2);
     });
 
-    it('should return env variables for PostToolUse', () => {
-      const vars = getHookEnvVariables('PostToolUse');
-      expect(vars).toContain('TOOL_OUTPUT');
-      expect(vars).toContain('TOOL_RESULT');
+    it('should return additional CLAUDE_ENV_FILE for SessionStart', () => {
+      const vars = getHookEnvVariables('SessionStart');
+      expect(vars).toContain('CLAUDE_PROJECT_DIR');
+      expect(vars).toContain('CLAUDE_CODE_REMOTE');
+      expect(vars).toContain('CLAUDE_ENV_FILE');
+      expect(vars).toHaveLength(3);
+    });
+  });
+
+  describe('getHookStdinFields', () => {
+    it('should return stdin fields for PreToolUse', () => {
+      const fields = getHookStdinFields('PreToolUse');
+      expect(fields).toContain('tool_name');
+      expect(fields).toContain('tool_input');
+      expect(fields).toContain('session_id');
     });
 
-    it('should return env variables for Notification', () => {
-      const vars = getHookEnvVariables('Notification');
-      expect(vars).toContain('MESSAGE');
+    it('should return stdin fields for PostToolUse', () => {
+      const fields = getHookStdinFields('PostToolUse');
+      expect(fields).toContain('tool_name');
+      expect(fields).toContain('tool_response');
     });
 
-    it('should return env variables for Stop', () => {
-      const vars = getHookEnvVariables('Stop');
-      expect(vars).toContain('STOP_REASON');
+    it('should return stdin fields for Notification', () => {
+      const fields = getHookStdinFields('Notification');
+      expect(fields).toContain('message');
     });
 
-    it('should return env variables for SubagentStop', () => {
-      const vars = getHookEnvVariables('SubagentStop');
-      expect(vars).toContain('SUBAGENT_ID');
-      expect(vars).toContain('SUBAGENT_RESULT');
+    it('should return stdin fields for Stop', () => {
+      const fields = getHookStdinFields('Stop');
+      expect(fields).toContain('stop_hook_active');
+    });
+
+    it('should return stdin fields for SubagentStop', () => {
+      const fields = getHookStdinFields('SubagentStop');
+      expect(fields).toContain('stop_hook_active');
     });
   });
 
