@@ -40,6 +40,7 @@ static HOME_DISCOVERY_CACHE: OnceLock<Mutex<Option<DiscoveryCacheEntry>>> = Once
 static HOME_DISCOVERY_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
 #[cfg(target_os = "macos")]
 static SCAN_HELPER_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+static CLAUDE_CLI_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
 
 fn home_discovery_cache() -> &'static Mutex<Option<DiscoveryCacheEntry>> {
     HOME_DISCOVERY_CACHE.get_or_init(|| Mutex::new(None))
@@ -81,6 +82,188 @@ fn scan_helper_path() -> Option<PathBuf> {
             None
         })
         .clone()
+}
+
+/// Find the Claude CLI binary path using platform-appropriate methods.
+/// Returns None if Claude is not installed or cannot be found.
+fn find_claude_binary() -> Option<PathBuf> {
+    CLAUDE_CLI_PATH
+        .get_or_init(|| {
+            // On macOS, use login shell to find claude (respects user's PATH)
+            #[cfg(target_os = "macos")]
+            if let Some(path) = find_claude_via_login_shell() {
+                return Some(path);
+            }
+
+            // On non-macOS, try standard which command
+            #[cfg(not(target_os = "macos"))]
+            if let Some(path) = find_claude_via_which() {
+                return Some(path);
+            }
+
+            // Fall back to searching common installation paths
+            find_claude_in_common_paths()
+        })
+        .clone()
+}
+
+/// macOS: Use login shell to find claude binary (respects user's shell config)
+#[cfg(target_os = "macos")]
+fn find_claude_via_login_shell() -> Option<PathBuf> {
+    use std::process::Command as StdCommand;
+
+    // Get user's default shell
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+
+    // Use login shell (-l) to source shell config, then find claude
+    let output = StdCommand::new(&shell)
+        .args(["-l", "-c", "which claude 2>/dev/null"])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path_str.is_empty() {
+            let path = PathBuf::from(&path_str);
+            if path.exists() && path.is_file() {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
+/// Non-macOS: Use which/where command to find claude binary
+#[cfg(not(target_os = "macos"))]
+fn find_claude_via_which() -> Option<PathBuf> {
+    use std::process::Command as StdCommand;
+
+    #[cfg(target_os = "windows")]
+    let output = StdCommand::new("where").arg("claude").output().ok()?;
+
+    #[cfg(not(target_os = "windows"))]
+    let output = StdCommand::new("which").arg("claude").output().ok()?;
+
+    if output.status.success() {
+        let path_str = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .next()?
+            .trim()
+            .to_string();
+
+        if !path_str.is_empty() {
+            let path = PathBuf::from(&path_str);
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
+/// Search common installation paths for Claude CLI
+fn find_claude_in_common_paths() -> Option<PathBuf> {
+    let home = dirs::home_dir()?;
+
+    // Build list of candidate paths
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    // System paths
+    candidates.push(PathBuf::from("/usr/local/bin/claude"));
+    candidates.push(PathBuf::from("/opt/homebrew/bin/claude")); // Apple Silicon Homebrew
+    candidates.push(PathBuf::from("/usr/bin/claude"));
+
+    // User-specific npm global paths
+    candidates.push(home.join(".npm/bin/claude"));
+    candidates.push(home.join(".npm-global/bin/claude"));
+    candidates.push(home.join("npm-global/bin/claude"));
+
+    // User local bin
+    candidates.push(home.join(".local/bin/claude"));
+    candidates.push(home.join("bin/claude"));
+
+    // Check static candidates first
+    for candidate in &candidates {
+        if candidate.exists() && candidate.is_file() {
+            return Some(candidate.clone());
+        }
+    }
+
+    // Search nvm directories (version-specific)
+    if let Some(path) = find_claude_in_nvm_dirs(&home) {
+        return Some(path);
+    }
+
+    // Search n (Node version manager) directories
+    if let Some(path) = find_claude_in_n_dirs(&home) {
+        return Some(path);
+    }
+
+    None
+}
+
+/// Search nvm Node version directories for Claude CLI
+fn find_claude_in_nvm_dirs(home: &Path) -> Option<PathBuf> {
+    let nvm_dir = home.join(".nvm/versions/node");
+    if !nvm_dir.exists() {
+        return None;
+    }
+
+    // Get all node version directories, sorted by version (newest first)
+    let mut versions: Vec<_> = std::fs::read_dir(&nvm_dir)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.path())
+        .collect();
+
+    // Sort descending by directory name (version number)
+    versions.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
+
+    for version_dir in versions {
+        let claude_path = version_dir.join("bin/claude");
+        if claude_path.exists() && claude_path.is_file() {
+            return Some(claude_path);
+        }
+    }
+
+    None
+}
+
+/// Search n (Node version manager) directories for Claude CLI
+fn find_claude_in_n_dirs(home: &Path) -> Option<PathBuf> {
+    let n_dirs = [
+        PathBuf::from("/usr/local/n/versions/node"),
+        home.join("n/versions/node"),
+    ];
+
+    for n_dir in &n_dirs {
+        if !n_dir.exists() {
+            continue;
+        }
+
+        let mut versions: Vec<_> = match std::fs::read_dir(n_dir) {
+            Ok(entries) => entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .map(|e| e.path())
+                .collect(),
+            Err(_) => continue,
+        };
+
+        versions.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
+
+        for version_dir in versions {
+            let claude_path = version_dir.join("bin/claude");
+            if claude_path.exists() && claude_path.is_file() {
+                return Some(claude_path);
+            }
+        }
+    }
+
+    None
 }
 
 async fn get_cached_directories(depth: usize, include_protected: bool) -> Option<Vec<String>> {
@@ -2610,17 +2793,20 @@ async fn check_claude_cli_installed() -> Result<bool, String> {
     use std::process::Command;
 
     let result = tauri::async_runtime::spawn_blocking(|| {
-        Command::new("claude")
-            .arg("--version")
-            .output()
+        if let Some(claude_path) = find_claude_binary() {
+            Command::new(&claude_path)
+                .arg("--version")
+                .output()
+                .map(|output| output.status.success())
+                .unwrap_or(false)
+        } else {
+            false
+        }
     })
     .await
     .map_err(|e| format!("Task join error: {}", e))?;
 
-    match result {
-        Ok(output) => Ok(output.status.success()),
-        Err(_) => Ok(false), // CLI not found or not executable
-    }
+    Ok(result)
 }
 
 /// Invoke Claude Code in headless mode with the given prompt
@@ -2635,8 +2821,12 @@ async fn invoke_claude_code(prompt: String) -> Result<ClaudeCodeInvocationResult
         return Err("Prompt too long (max 50000 characters)".to_string());
     }
 
+    // Find claude binary path before spawning blocking task
+    let claude_path = find_claude_binary()
+        .ok_or_else(|| "Claude Code CLI not found. Please install it via 'npm install -g @anthropic-ai/claude-code'.".to_string())?;
+
     let result = tauri::async_runtime::spawn_blocking(move || -> Result<ClaudeCodeInvocationResult, String> {
-        let mut cmd = Command::new("claude");
+        let mut cmd = Command::new(&claude_path);
         cmd.args(["-p", &prompt, "--output-format", "stream-json", "--verbose"])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
