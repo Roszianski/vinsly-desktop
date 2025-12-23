@@ -34,6 +34,8 @@ import { useTheme } from '../hooks/useTheme';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { useClaudeSessions } from '../hooks/useClaudeSessions';
 import { useKeyboardShortcuts, CommonShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useTerminal } from '../contexts/TerminalContext';
+import { TerminalPanel } from './Terminal';
 import { validateLicenseWithLemon, activateLicenseWithLemon, deactivateLicenseWithLemon } from '../utils/lemonLicensingClient';
 import { saveScanSettings } from '../utils/scanSettings';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
@@ -184,6 +186,9 @@ export const AppContent: React.FC = () => {
   const claudeSessions = useClaudeSessions({ autoStart: true, pollInterval: 5000 });
   const { sessions, isLoading: isSessionsLoading, error: sessionsError, refresh: refreshSessions } = claudeSessions;
 
+  // Terminal
+  const { isOpen: isTerminalOpen, panelHeight: terminalPanelHeight, togglePanel: toggleTerminal, createNewTerminal, closeActiveTerminal, clearActiveTerminal, sessions: terminalSessions, increaseFontSize, decreaseFontSize, resetFontSize } = useTerminal();
+
   // Splash screen timer
   useEffect(() => {
     const timer = window.setTimeout(() => setShowSplash(false), 1200);
@@ -258,6 +263,65 @@ export const AppContent: React.FC = () => {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [isMacLike, navigateToAgentCreate]);
+
+  // Terminal keyboard shortcuts
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      const modifierPressed = isMacLike ? event.metaKey : event.ctrlKey;
+
+      // Cmd+` / Ctrl+` to toggle terminal
+      if (modifierPressed && event.key === '`') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          // Cmd+Shift+` to create new terminal
+          createNewTerminal();
+        } else {
+          toggleTerminal();
+        }
+        return;
+      }
+
+      // Only process these shortcuts when terminal is open
+      if (isTerminalOpen && terminalSessions.length > 0) {
+        // Cmd+W / Ctrl+W to close active terminal tab
+        if (modifierPressed && event.key.toLowerCase() === 'w') {
+          event.preventDefault();
+          closeActiveTerminal();
+          return;
+        }
+
+        // Cmd+K / Ctrl+K to clear terminal
+        if (modifierPressed && event.key.toLowerCase() === 'k') {
+          event.preventDefault();
+          clearActiveTerminal();
+          return;
+        }
+
+        // Cmd+= / Ctrl+= (or Cmd+Plus) to increase font size
+        if (modifierPressed && (event.key === '=' || event.key === '+')) {
+          event.preventDefault();
+          increaseFontSize();
+          return;
+        }
+
+        // Cmd+- / Ctrl+- to decrease font size
+        if (modifierPressed && event.key === '-') {
+          event.preventDefault();
+          decreaseFontSize();
+          return;
+        }
+
+        // Cmd+0 / Ctrl+0 to reset font size
+        if (modifierPressed && event.key === '0') {
+          event.preventDefault();
+          resetFontSize();
+          return;
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isMacLike, toggleTerminal, createNewTerminal, isTerminalOpen, terminalSessions.length, closeActiveTerminal, clearActiveTerminal, increaseFontSize, decreaseFontSize, resetFontSize]);
 
   // Handler wrappers
   const handleSaveAgent = async (agent: Agent, options?: { projectPath?: string }) => {
@@ -770,6 +834,7 @@ export const AppContent: React.FC = () => {
         macOSVersionMajor={macOSMajorVersion}
         onShowKeyboardShortcuts={() => setShowShortcutsPanel(true)}
         onOpenDocs={() => setShowDocsPanel(true)}
+        onToggleTerminal={toggleTerminal}
         sessions={sessions}
         isLoadingSessions={isSessionsLoading}
         sessionError={sessionsError}
@@ -777,7 +842,10 @@ export const AppContent: React.FC = () => {
         loadedProjectPaths={loadedProjectPaths}
       />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 transition-[padding-bottom] duration-200"
+        style={{ paddingBottom: isTerminalOpen ? terminalPanelHeight + 32 : 32 }}
+      >
         <AnimatePresence mode="wait">
           {renderContent()}
         </AnimatePresence>
@@ -993,6 +1061,8 @@ export const AppContent: React.FC = () => {
         isOpen={showDocsPanel}
         onClose={() => setShowDocsPanel(false)}
       />
+
+      <TerminalPanel theme={theme} />
 
       <SplashScreen isVisible={showSplash} theme={theme} />
     </div>

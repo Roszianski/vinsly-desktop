@@ -1,4 +1,5 @@
 pub mod scanner;
+pub mod terminal;
 
 use scanner::{scan_directory, scan_project_directories, DEFAULT_DISCOVERY_DEPTH};
 use serde::{Deserialize, Serialize};
@@ -3812,6 +3813,46 @@ fn update_tray_status(
     Ok(())
 }
 
+// ============================================================================
+// Terminal Commands
+// ============================================================================
+
+#[tauri::command]
+fn terminal_get_default_shell() -> String {
+    terminal::get_default_shell()
+}
+
+#[tauri::command]
+fn terminal_create(
+    app: tauri::AppHandle,
+    working_dir: Option<String>,
+    shell: Option<String>,
+    cols: u16,
+    rows: u16,
+) -> Result<String, String> {
+    terminal::create_terminal(app, working_dir, shell, cols, rows)
+}
+
+#[tauri::command]
+fn terminal_write(terminal_id: String, data: String) -> Result<(), String> {
+    terminal::write_to_terminal(&terminal_id, &data)
+}
+
+#[tauri::command]
+fn terminal_resize(terminal_id: String, cols: u16, rows: u16) -> Result<(), String> {
+    terminal::resize_terminal(&terminal_id, cols, rows)
+}
+
+#[tauri::command]
+fn terminal_close(terminal_id: String) -> Result<(), String> {
+    terminal::close_terminal(&terminal_id)
+}
+
+#[tauri::command]
+fn terminal_close_all() -> Result<Vec<String>, String> {
+    terminal::close_all_terminals()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -3992,6 +4033,13 @@ pub fn run() {
             read_bundle_manifest,
             // System Tray
             update_tray_status,
+            // Terminal
+            terminal_get_default_shell,
+            terminal_create,
+            terminal_write,
+            terminal_resize,
+            terminal_close,
+            terminal_close_all,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

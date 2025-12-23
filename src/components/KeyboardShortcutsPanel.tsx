@@ -51,6 +51,18 @@ const shortcuts: KeyboardShortcut[] = [
     windows: 'Ctrl + Enter',
     description: 'Generate agent (on describe step) or save agent (on review step)',
   },
+  {
+    action: 'Toggle Terminal',
+    mac: '⌘ `',
+    windows: 'Ctrl + `',
+    description: 'Show or hide the integrated terminal panel',
+  },
+  {
+    action: 'New Terminal',
+    mac: '⌘ ⇧ `',
+    windows: 'Ctrl + Shift + `',
+    description: 'Open a new terminal tab',
+  },
 ];
 
 export function KeyboardShortcutsPanel({

@@ -4,6 +4,7 @@ import { LicenseProvider } from './contexts/LicenseContext';
 import { UpdateProvider } from './contexts/UpdateContext';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { NavigationProvider } from './contexts/NavigationContext';
+import { TerminalProvider } from './contexts/TerminalContext';
 import { AppContent } from './components/AppContent';
 
 /**
@@ -45,7 +46,11 @@ const App: React.FC = () => {
                 <WorkspaceProvider>
                   <ErrorBoundary fallback={<ProviderErrorFallback provider="Navigation" />}>
                     <NavigationProvider>
-                      <AppContent />
+                      <ErrorBoundary fallback={<ProviderErrorFallback provider="Terminal" />}>
+                        <TerminalProvider>
+                          <AppContent />
+                        </TerminalProvider>
+                      </ErrorBoundary>
                     </NavigationProvider>
                   </ErrorBoundary>
                 </WorkspaceProvider>

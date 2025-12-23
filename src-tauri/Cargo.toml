@@ -1,6 +1,6 @@
 [package]
 name = "vinsly"
-version = "0.9.7"
+version = "0.9.8"
 description = "Vinsly - Agent Studio for Claude Code"
 authors = ["Vinsly"]
 edition = "2021"
@@ -39,6 +39,9 @@ zip = { version = "0.6", default-features = false, features = ["deflate"] }
 sysinfo = { version = "0.30", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 reqwest = { version = "0.12", features = ["json"] }
+portable-pty = "0.8"
+base64 = "0.21"
+uuid = { version = "1.0", features = ["v4"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.26"

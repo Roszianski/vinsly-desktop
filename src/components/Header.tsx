@@ -65,6 +65,7 @@ interface HeaderProps {
     macOSVersionMajor?: number | null;
     onShowKeyboardShortcuts?: () => void;
     onOpenDocs?: () => void;
+    onToggleTerminal?: () => void;
     // Session detection props
     sessions?: ClaudeSession[];
     isLoadingSessions?: boolean;
@@ -98,6 +99,7 @@ export const Header: React.FC<HeaderProps> = ({
   macOSVersionMajor = null,
   onShowKeyboardShortcuts,
   onOpenDocs,
+  onToggleTerminal,
   // Session detection props
   sessions = [],
   isLoadingSessions = false,
@@ -271,6 +273,20 @@ export const Header: React.FC<HeaderProps> = ({
               isLoading={isLoadingSessions}
               onClick={() => setShowSessionPanel(true)}
             />
+
+            {/* Terminal Button */}
+            {onToggleTerminal && (
+              <button
+                onClick={onToggleTerminal}
+                className="p-2 rounded-lg border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-v-light-bg dark:bg-v-dark hover:bg-v-light-hover dark:hover:bg-v-light-dark focus:outline-none focus-visible:ring-1 focus-visible:ring-v-accent/60 transition-colors cursor-pointer shadow-none"
+                aria-label="Toggle terminal"
+                title="Terminal"
+              >
+                <svg className="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </button>
+            )}
 
             {/* Keyboard Shortcuts Button */}
             {onShowKeyboardShortcuts && (
