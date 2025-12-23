@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { PendingUpdateDetails } from '../types/updater';
+import { ReleaseNotes } from './ReleaseNotes';
 
 interface UpdateAvailableModalProps {
   isOpen: boolean;
@@ -60,21 +61,17 @@ export const UpdateAvailableModal: React.FC<UpdateAvailableModalProps> = ({
             </p>
 
             <div className="p-4 rounded-xl bg-v-light-bg dark:bg-v-dark border border-v-light-border dark:border-v-border">
-                <p className="text-xs uppercase tracking-wider text-v-light-text-secondary dark:text-v-text-secondary mb-2">
-                  What's New
-                </p>
-                {update.notes && !update.notes.toLowerCase().includes('see github') && (
-                  <p className="text-sm text-v-light-text-primary dark:text-v-text-primary whitespace-pre-wrap line-clamp-4 mb-2">
-                    {update.notes}
-                  </p>
-                )}
-                <button
-                  onClick={() => void openUrl(`https://github.com/Roszianski/vinsly-desktop/releases/tag/v${update.version}`)}
-                  className="text-sm text-v-accent hover:underline"
-                >
-                  See release notes on GitHub →
-                </button>
-              </div>
+              <p className="text-xs uppercase tracking-wider text-v-light-text-secondary dark:text-v-text-secondary mb-3">
+                What's New
+              </p>
+              {update.notes && <ReleaseNotes notes={update.notes} maxItems={5} />}
+              <button
+                onClick={() => void openUrl(`https://github.com/Roszianski/vinsly-desktop/releases/tag/v${update.version}`)}
+                className="text-sm text-v-accent hover:underline mt-3 block"
+              >
+                See full release notes →
+              </button>
+            </div>
 
             <div className="flex flex-col gap-3">
               <button

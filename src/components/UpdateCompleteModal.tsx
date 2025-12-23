@@ -1,16 +1,19 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { ReleaseNotes } from './ReleaseNotes';
 
 interface UpdateCompleteModalProps {
   isOpen: boolean;
   version: string;
+  notes?: string | null;
   onClose: () => void;
 }
 
 export const UpdateCompleteModal: React.FC<UpdateCompleteModalProps> = ({
   isOpen,
   version,
+  notes,
   onClose,
 }) => {
   if (!isOpen) return null;
@@ -55,14 +58,15 @@ export const UpdateCompleteModal: React.FC<UpdateCompleteModalProps> = ({
             </p>
 
             <div className="p-4 rounded-xl bg-v-light-bg dark:bg-v-dark border border-v-light-border dark:border-v-border">
-              <p className="text-xs uppercase tracking-wider text-v-light-text-secondary dark:text-v-text-secondary mb-2">
+              <p className="text-xs uppercase tracking-wider text-v-light-text-secondary dark:text-v-text-secondary mb-3">
                 What's New
               </p>
+              {notes && <ReleaseNotes notes={notes} maxItems={5} />}
               <button
                 onClick={() => void openUrl(`https://github.com/Roszianski/vinsly-desktop/releases/tag/v${version}`)}
-                className="text-sm text-v-accent hover:underline"
+                className="text-sm text-v-accent hover:underline mt-3 block"
               >
-                See release notes on GitHub →
+                See full release notes →
               </button>
             </div>
 

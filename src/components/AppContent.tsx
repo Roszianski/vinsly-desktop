@@ -84,6 +84,7 @@ export const AppContent: React.FC = () => {
     dismissPendingUpdate,
     showUpdateCompleteModal,
     updateCompletedVersion,
+    updateCompletedNotes,
     dismissUpdateCompleteModal,
   } = useUpdateContext();
 
@@ -867,6 +868,7 @@ export const AppContent: React.FC = () => {
         <UpdateCompleteModal
           isOpen={showUpdateCompleteModal}
           version={updateCompletedVersion}
+          notes={updateCompletedNotes}
           onClose={dismissUpdateCompleteModal}
         />
       )}

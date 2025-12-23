@@ -2,7 +2,7 @@ import React, { createContext, useContext, useCallback, useEffect, useRef, useSt
 import { useUpdater, UPDATE_COMPLETED_VERSION_KEY } from '../hooks/useUpdater';
 import { useToast } from './ToastContext';
 import { useLicenseContext } from './LicenseContext';
-import { PendingUpdateDetails } from '../types/updater';
+import { PendingUpdateDetails, UpdateCompletedInfo } from '../types/updater';
 import { devLog } from '../utils/devLogger';
 import { getStorageItem, removeStorageItem } from '../utils/storage';
 
@@ -19,6 +19,7 @@ interface UpdateContextType {
   // Update complete modal state
   showUpdateCompleteModal: boolean;
   updateCompletedVersion: string | null;
+  updateCompletedNotes: string | null;
   dismissUpdateCompleteModal: () => void;
 }
 
@@ -37,6 +38,7 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
   const [dismissed, setDismissed] = useState(false);
   const [showUpdateCompleteModal, setShowUpdateCompleteModal] = useState(false);
   const [updateCompletedVersion, setUpdateCompletedVersion] = useState<string | null>(null);
+  const [updateCompletedNotes, setUpdateCompletedNotes] = useState<string | null>(null);
 
   const {
     isChecking: isCheckingUpdate,
@@ -80,15 +82,24 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
 
     const checkUpdateComplete = async () => {
       try {
-        const storedVersion = await getStorageItem<string>(UPDATE_COMPLETED_VERSION_KEY);
-        if (storedVersion && storedVersion === appVersion) {
+        // Try reading as new format (object with version and notes)
+        const storedInfo = await getStorageItem<UpdateCompletedInfo | string>(UPDATE_COMPLETED_VERSION_KEY);
+
+        if (!storedInfo) return;
+
+        // Handle both old format (string) and new format (object)
+        const version = typeof storedInfo === 'string' ? storedInfo : storedInfo.version;
+        const notes = typeof storedInfo === 'object' ? storedInfo.notes : undefined;
+
+        if (version === appVersion) {
           // We just updated to this version - show the modal
-          setUpdateCompletedVersion(storedVersion);
+          setUpdateCompletedVersion(version);
+          setUpdateCompletedNotes(notes ?? null);
           setShowUpdateCompleteModal(true);
-          // Clear the stored version so we don't show again
+          // Clear the stored info so we don't show again
           await removeStorageItem(UPDATE_COMPLETED_VERSION_KEY);
-          devLog.log(`Update complete: now running version ${storedVersion}`);
-        } else if (storedVersion) {
+          devLog.log(`Update complete: now running version ${version}`);
+        } else {
           // Stored version doesn't match current - clear it (update may have failed)
           await removeStorageItem(UPDATE_COMPLETED_VERSION_KEY);
         }
@@ -131,6 +142,7 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
   const dismissUpdateCompleteModal = useCallback(() => {
     setShowUpdateCompleteModal(false);
     setUpdateCompletedVersion(null);
+    setUpdateCompletedNotes(null);
   }, []);
 
   const value: UpdateContextType = {
@@ -145,6 +157,7 @@ export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
     dismissPendingUpdate,
     showUpdateCompleteModal,
     updateCompletedVersion,
+    updateCompletedNotes,
     dismissUpdateCompleteModal,
   };
 

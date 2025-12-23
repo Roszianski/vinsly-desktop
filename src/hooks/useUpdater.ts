@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { check, Update } from '@tauri-apps/plugin-updater';
-import { PendingUpdateDetails } from '../types/updater';
+import { PendingUpdateDetails, UpdateCompletedInfo } from '../types/updater';
 import { devLog } from '../utils/devLogger';
 import { setStorageItem } from '../utils/storage';
 
@@ -157,9 +157,12 @@ export function useUpdater(): UseUpdaterResult {
 
     setIsInstalling(true);
     try {
-      // Store the version we're updating to so we can show a confirmation after restart
-      const updateVersion = updateResourceRef.current.version;
-      await setStorageItem(UPDATE_COMPLETED_VERSION_KEY, updateVersion);
+      // Store the version and notes we're updating to so we can show a confirmation after restart
+      const updateInfo: UpdateCompletedInfo = {
+        version: updateResourceRef.current.version,
+        notes: typeof updateResourceRef.current.body === 'string' ? updateResourceRef.current.body : undefined,
+      };
+      await setStorageItem(UPDATE_COMPLETED_VERSION_KEY, updateInfo);
 
       await updateResourceRef.current.downloadAndInstall();
       await releaseUpdateResource();

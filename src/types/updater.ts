@@ -4,3 +4,8 @@ export interface PendingUpdateDetails {
   date?: string;
 }
 
+export interface UpdateCompletedInfo {
+  version: string;
+  notes?: string;
+}
+
