@@ -3,6 +3,7 @@ import { Terminal, ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon, ISearchOptions } from '@xterm/addon-search';
+import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 import { TerminalSession } from '../../types/terminal';
 import { useTerminal } from '../../contexts/TerminalContext';
@@ -178,12 +179,22 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({ session, isActive, pan
 
     const term = new Terminal({
       cursorBlink: true,
-      fontFamily: '"MesloLGS NF", "Menlo", "DejaVu Sans Mono", "Monaco", "Consolas", monospace',
+      cursorStyle: 'block',
+      cursorInactiveStyle: 'outline',
+      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       fontSize: fontSize,
       lineHeight: 1.2,
       allowProposedApi: true,
+      allowTransparency: false,
+      // Force consistent rendering across dev and production
+      overviewRulerWidth: 0,
+      scrollback: 5000,
       theme: theme === 'dark' ? darkTheme : lightTheme,
     });
+
+    // Force options after creation to ensure they're applied
+    term.options.cursorBlink = true;
+    term.options.cursorStyle = 'block';
 
     const fitAddon = new FitAddon();
     const searchAddon = new SearchAddon();
@@ -193,7 +204,20 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({ session, isActive, pan
 
     term.open(containerRef.current);
 
-    // Initial fit
+    // Try to load WebGL addon for better rendering (especially cursor)
+    // Falls back to canvas renderer if WebGL is not available
+    try {
+      const webglAddon = new WebglAddon();
+      webglAddon.onContextLoss(() => {
+        webglAddon.dispose();
+      });
+      term.loadAddon(webglAddon);
+      console.log('[Terminal] WebGL renderer loaded successfully');
+    } catch (e) {
+      console.warn('[Terminal] WebGL not available, using canvas renderer:', e);
+    }
+
+    // Initial fit and focus
     setTimeout(() => {
       fitAddon.fit();
       const dims = fitAddon.proposeDimensions();
@@ -201,7 +225,8 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({ session, isActive, pan
         lastDimsRef.current = { cols: dims.cols, rows: dims.rows };
         resizeTerminalSession(session.id, { cols: dims.cols, rows: dims.rows });
       }
-    }, 0);
+      term.focus();
+    }, 50);
 
     // Handle input - encode to base64 and send
     term.onData((data) => {
@@ -214,7 +239,11 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({ session, isActive, pan
     searchAddonRef.current = searchAddon;
 
     return () => {
-      term.dispose();
+      try {
+        term.dispose();
+      } catch (e) {
+        console.error('[Terminal] Error disposing terminal:', e);
+      }
       terminalRef.current = null;
       fitAddonRef.current = null;
       searchAddonRef.current = null;
@@ -360,13 +389,25 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({ session, isActive, pan
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isActive]);
 
+  // Focus terminal when container is clicked
+  const handleContainerClick = useCallback(() => {
+    terminalRef.current?.focus();
+  }, []);
+
+  // Get the correct background color based on theme
+  const terminalBgColor = theme === 'dark' ? '#1f2229' : '#f5f5f5';
+
   return (
     <>
       <div className={`relative h-full w-full ${isActive ? 'block' : 'hidden'}`}>
         <div
           ref={containerRef}
           className="h-full w-full"
-          style={{ padding: '4px 8px' }}
+          style={{
+            padding: '4px 8px',
+            backgroundColor: terminalBgColor,
+          }}
+          onClick={handleContainerClick}
           onContextMenu={handleContextMenu}
         />
         <TerminalSearchBar

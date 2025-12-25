@@ -114,3 +114,79 @@ button:disabled {
 [role="button"][aria-disabled="true"] {
   cursor: not-allowed;
 }
+
+/* xterm.js overrides - ensure terminal renders correctly in production */
+.xterm {
+  font-family: Menlo, Monaco, "Courier New", monospace !important;
+  font-feature-settings: "liga" 0;
+  position: relative;
+  user-select: none;
+  -ms-user-select: none;
+  -webkit-user-select: none;
+}
+
+.xterm.focus,
+.xterm:focus {
+  outline: none;
+}
+
+.xterm .xterm-viewport {
+  background-color: transparent;
+  overflow-y: scroll;
+  cursor: default;
+  position: absolute;
+  right: 0;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+
+.xterm .xterm-screen {
+  position: relative;
+}
+
+.xterm .xterm-screen canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.xterm .xterm-cursor-layer {
+  z-index: 5 !important;
+  pointer-events: none;
+}
+
+/* Force cursor visibility */
+.xterm .xterm-cursor-block {
+  background-color: currentColor !important;
+  opacity: 1 !important;
+}
+
+.xterm .xterm-cursor-outline {
+  outline: 1px solid currentColor !important;
+  outline-offset: -1px;
+  background-color: transparent !important;
+}
+
+.xterm .xterm-cursor-bar {
+  background-color: currentColor !important;
+  width: 2px !important;
+}
+
+.xterm .xterm-rows {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.xterm-helper-textarea {
+  position: absolute !important;
+  z-index: -10 !important;
+  opacity: 0 !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  resize: none !important;
+}

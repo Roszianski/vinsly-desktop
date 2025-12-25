@@ -241,16 +241,24 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const closeTerminalSession = useCallback(async (id: string) => {
-    await closeTerminal(id);
-    setSessions(prev => prev.filter(s => s.id !== id));
-    setActiveSessionId(prev => {
-      if (prev === id) {
-        const remaining = sessions.filter(s => s.id !== id);
-        return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
-      }
-      return prev;
+    try {
+      await closeTerminal(id);
+    } catch (e) {
+      console.error('[Terminal] Error closing terminal:', e);
+    }
+
+    setSessions(prev => {
+      const remaining = prev.filter(s => s.id !== id);
+      // Update active session ID based on the new remaining sessions
+      setActiveSessionId(currentActive => {
+        if (currentActive === id) {
+          return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
+        }
+        return currentActive;
+      });
+      return remaining;
     });
-  }, [sessions]);
+  }, []);
 
   const setActiveTerminal = useCallback((id: string) => {
     setActiveSessionId(id);

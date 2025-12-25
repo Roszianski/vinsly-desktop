@@ -122,8 +122,21 @@ pub fn create_terminal(
         })
         .map_err(|e| format!("Failed to open PTY: {}", e))?;
 
-    // Build command
+    // Build command - use interactive login shell on Unix to get full user environment
+    #[cfg(not(target_os = "windows"))]
+    let mut cmd = {
+        let mut c = CommandBuilder::new(&shell_path);
+        // Add -i (interactive) and -l (login) flags:
+        // -i: Interactive mode - enables prompt, cursor, job control
+        // -l: Login shell - sources user's shell config (~/.zshrc, ~/.bash_profile, etc.)
+        // This is critical for GUI apps on macOS which don't inherit terminal environment
+        c.arg("-il");
+        c
+    };
+
+    #[cfg(target_os = "windows")]
     let mut cmd = CommandBuilder::new(&shell_path);
+
     cmd.cwd(&cwd);
 
     // Set environment variables
@@ -131,6 +144,16 @@ pub fn create_terminal(
     {
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
+
+        // Ensure HOME is set (critical for shell config discovery)
+        if let Some(home) = dirs::home_dir() {
+            cmd.env("HOME", home.to_string_lossy().to_string());
+        }
+
+        // Set LANG for proper Unicode support
+        if std::env::var("LANG").is_err() {
+            cmd.env("LANG", "en_US.UTF-8");
+        }
     }
 
     // Spawn the shell process

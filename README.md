@@ -159,6 +159,54 @@ vinsly-desktop/
   - `tauri-plugin-updater` - Auto-update functionality
   - `tauri-plugin-process` - Process management (restart after update)
 
+## Integrated Terminal
+
+Vinsly includes a built-in terminal powered by [xterm.js](https://xtermjs.org/) and [portable-pty](https://crates.io/crates/portable-pty). This allows running CLI tools like Claude Code and Codex directly within the app.
+
+### Terminal Implementation Notes
+
+The terminal required specific configuration to work correctly in **production builds** (not just `npm run tauri dev`):
+
+1. **WebGL Renderer** (`@xterm/addon-webgl`)
+   - The default canvas renderer has issues in Tauri's production WebView (WKWebView on macOS)
+   - Cursor doesn't render and fonts display incorrectly without WebGL
+   - Falls back to canvas if WebGL is unavailable
+   - See: [xterm.js WKWebView Issue #3575](https://github.com/xtermjs/xterm.js/issues/3575)
+
+2. **Login Shell Flags** (`-il`)
+   - Production macOS apps launched from Finder/Dock don't inherit terminal environment
+   - Shell must be spawned with `-il` flags to source `~/.zshrc` / `~/.bash_profile`
+   - Without this, CLI tools like `claude` and `codex` are not found in PATH
+   - Location: `src-tauri/src/terminal.rs`
+
+3. **HTTPS Scheme** (`useHttpsScheme: true`)
+   - Configured in `tauri.conf.json` under `app.windows`
+   - Makes production WebView use `https://tauri.localhost` instead of `tauri://`
+   - Improves compatibility with web APIs and rendering
+
+4. **Environment Variables**
+   - Explicitly sets `HOME`, `LANG`, `TERM`, `COLORTERM` for the PTY
+   - Required because GUI apps don't inherit these from the user's shell
+
+### Key Files
+
+- `src/components/Terminal/TerminalTab.tsx` - xterm.js setup with WebGL addon
+- `src/contexts/TerminalContext.tsx` - Terminal session management
+- `src-tauri/src/terminal.rs` - Rust PTY implementation
+- `src/index.css` - xterm.js CSS overrides
+
+### Terminal Dependencies
+
+```json
+{
+  "@xterm/xterm": "^5.5.0",
+  "@xterm/addon-fit": "^0.10.0",
+  "@xterm/addon-search": "^0.16.0",
+  "@xterm/addon-web-links": "^0.11.0",
+  "@xterm/addon-webgl": "^0.18.0"
+}
+```
+
 ## Available Scripts
 
 - `npm run dev` - Start Vite development server
