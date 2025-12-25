@@ -280,7 +280,7 @@ git push origin main
 git push origin v0.1.1
 ```
 
-**Important**: The update modal shows bullet points from your commit message. Always include 3 lines starting with `- ` in your release commit message. These are automatically extracted and shown to users in the "What's New" section.
+**Important**: The update modal shows bullet points from your commit message. Always include 3 lines starting with `- ` in your release commit message. These are automatically extracted and shown to users in the "What's New" section. Keep bullet points concise (3-5 words each) as space in the modal is limited.
 
 The GitHub Actions workflow will automatically:
 - Build for macOS, Windows (NSIS), and Linux (deb, AppImage)

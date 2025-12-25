@@ -387,6 +387,107 @@ export async function removeMCPServer(
   });
 }
 
+// Get environment variable values for specified names
+export async function getEnvVars(
+  varNames: string[]
+): Promise<Record<string, string | null>> {
+  return await invoke<Record<string, string | null>>('get_env_vars', {
+    varNames,
+    var_names: varNames,
+  });
+}
+
+// Result of an MCP server health check
+export interface MCPHealthCheckResultRaw {
+  server_name: string;
+  status: string;
+  latency_ms: number | null;
+  error_message: string | null;
+}
+
+// Check the health/connectivity of an MCP server
+export async function checkMCPServerHealth(
+  serverType: string,
+  serverName: string,
+  url?: string,
+  command?: string,
+  timeoutMs: number = 5000
+): Promise<MCPHealthCheckResultRaw> {
+  return await invoke<MCPHealthCheckResultRaw>('check_mcp_server_health', {
+    serverType,
+    server_type: serverType,
+    serverName,
+    server_name: serverName,
+    url,
+    command,
+    timeoutMs,
+    timeout_ms: timeoutMs,
+  });
+}
+
+// ============================================================================
+// MCP OAuth Commands
+// ============================================================================
+
+// Get OAuth authentication status for an MCP server
+export async function getMCPAuthStatus(serverName: string): Promise<string> {
+  return await invoke<string>('get_mcp_auth_status', {
+    serverName,
+    server_name: serverName,
+  });
+}
+
+// Store OAuth token in OS keychain
+export async function storeMCPOAuthToken(
+  serverName: string,
+  accessToken: string,
+  refreshToken?: string,
+  expiresAt?: number,
+  tokenType: string = 'Bearer'
+): Promise<void> {
+  return await invoke<void>('store_mcp_oauth_token', {
+    serverName,
+    server_name: serverName,
+    accessToken,
+    access_token: accessToken,
+    refreshToken,
+    refresh_token: refreshToken,
+    expiresAt,
+    expires_at: expiresAt,
+    tokenType,
+    token_type: tokenType,
+  });
+}
+
+// OAuth token data from keychain
+export interface MCPOAuthTokenRaw {
+  access_token: string;
+  refresh_token: string | null;
+  expires_at: number | null;
+  token_type: string;
+}
+
+// Get OAuth token from OS keychain
+export async function getMCPOAuthToken(serverName: string): Promise<MCPOAuthTokenRaw | null> {
+  return await invoke<MCPOAuthTokenRaw | null>('get_mcp_oauth_token', {
+    serverName,
+    server_name: serverName,
+  });
+}
+
+// Revoke OAuth credentials
+export async function revokeMCPOAuth(serverName: string): Promise<void> {
+  return await invoke<void>('revoke_mcp_oauth', {
+    serverName,
+    server_name: serverName,
+  });
+}
+
+// Open URL in default browser (for OAuth flow)
+export async function openOAuthUrl(url: string): Promise<void> {
+  return await invoke<void>('open_oauth_url', { url });
+}
+
 // ============================================================================
 // Hooks Commands
 // ============================================================================

@@ -13,11 +13,16 @@ import { FolderIcon } from '../icons/FolderIcon';
 import { EditIcon } from '../icons/EditIcon';
 import { StarIcon } from '../icons/StarIcon';
 import { ServerIcon } from '../icons/ServerIcon';
+import { RefreshIcon } from '../icons/RefreshIcon';
+import { StatusIndicator } from '../icons/StatusIndicator';
+import { LockIcon } from '../icons/LockIcon';
 import { NavigationTabs, TabView } from '../NavigationTabs';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { getStorageItem, setStorageItem } from '../../utils/storage';
 import { fuzzyMatch } from '../../utils/fuzzyMatch';
 import { useToast } from '../../contexts/ToastContext';
+import { useMCPHealth } from '../../hooks/useMCPHealth';
+import { useMCPAuth } from '../../hooks/useMCPAuth';
 
 type LayoutMode = 'table' | 'grid';
 type Filter = 'All' | 'user' | 'project';
@@ -102,6 +107,18 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
   const [serverToDelete, setServerToDelete] = useState<MCPServer | null>(null);
   const [sortCriteria, setSortCriteria] = useState<SortCriteria>('name-asc');
   const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
+
+  // Health monitoring for MCP servers
+  const { getStatus, getHealthInfo, checkAllHealth, isChecking } = useMCPHealth({
+    servers,
+    enabled: true,
+  });
+
+  // Auth status for HTTP/SSE servers
+  const { getAuthStatus } = useMCPAuth({
+    servers,
+    enabled: true,
+  });
 
   useEffect(() => {
     const loadLayout = async () => {
@@ -287,6 +304,19 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={() => void checkAllHealth()}
+              disabled={isChecking}
+              className={`inline-flex h-10 items-center gap-2 px-3 border border-v-light-border dark:border-v-border font-medium text-sm transition-colors duration-150 flex-shrink-0 rounded-md ${
+                isChecking
+                  ? 'bg-v-light-hover dark:bg-v-light-dark text-v-light-text-secondary dark:text-v-text-secondary cursor-not-allowed'
+                  : 'bg-v-light-surface dark:bg-v-mid-dark text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent hover:text-v-accent'
+              }`}
+              title="Refresh server status"
+            >
+              <RefreshIcon className={`h-4 w-4 ${isChecking ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Refresh Status</span>
+            </button>
+            <button
               onClick={onCreateServer}
               className="inline-flex h-10 items-center gap-3 px-4 bg-v-accent text-white font-semibold text-sm transition-all duration-200 ease-out flex-shrink-0 rounded-md shadow-sm hover:shadow-lg transform hover:-translate-y-0.5 active:scale-95"
             >
@@ -306,7 +336,7 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
     <div className="space-y-2">
       <div
         className="hidden md:grid gap-4 px-4 py-2 border-b border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary text-[11px] uppercase font-bold tracking-[0.2em] items-center"
-        style={{ gridTemplateColumns: '32px minmax(0,1.5fr) minmax(0,0.8fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,0.8fr)' }}
+        style={{ gridTemplateColumns: '32px minmax(0,1.5fr) minmax(0,0.6fr) minmax(0,0.6fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,0.8fr)' }}
       >
         <div className="flex items-center justify-center">
           <input
@@ -319,6 +349,7 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
         </div>
         <div>Name</div>
         <div>Type</div>
+        <div>Status</div>
         <div>Endpoint</div>
         <div>Scope</div>
         <div className="text-right">
@@ -376,7 +407,7 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
           <div
             key={server.id}
             className="grid gap-4 px-4 py-3 items-center border-b border-v-light-border/50 dark:border-v-border/50 hover:bg-v-light-hover dark:hover:bg-v-light-dark/50 transition-colors group"
-            style={{ gridTemplateColumns: '32px minmax(0,1.5fr) minmax(0,0.8fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,0.8fr)' }}
+            style={{ gridTemplateColumns: '32px minmax(0,1.5fr) minmax(0,0.6fr) minmax(0,0.6fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,0.8fr)' }}
           >
             <div className="flex items-center justify-center">
               <input
@@ -411,10 +442,30 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
               </div>
             </div>
 
-            <div>
+            <div className="flex items-center gap-1">
               <span className={`px-2 py-0.5 text-xs font-medium rounded ${getTypeColor(server.type)}`}>
                 {server.type.toUpperCase()}
               </span>
+              {(server.type === 'http' || server.type === 'sse') && getAuthStatus(server.id) !== 'none' && (
+                <span
+                  className={`inline-flex items-center px-1.5 py-0.5 text-xs rounded ${
+                    getAuthStatus(server.id) === 'authenticated'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                      : getAuthStatus(server.id) === 'expired'
+                      ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+                      : getAuthStatus(server.id) === 'error'
+                      ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                      : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                  }`}
+                  title={`Auth: ${getAuthStatus(server.id)}`}
+                >
+                  <LockIcon className="h-3 w-3" unlocked={getAuthStatus(server.id) !== 'authenticated'} />
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center" title={getHealthInfo(server.id)?.errorMessage}>
+              <StatusIndicator status={getStatus(server.id)} size="md" showLabel />
             </div>
 
             <div className="text-sm text-v-light-text-secondary dark:text-v-text-secondary truncate font-mono">
@@ -537,6 +588,22 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
                 <span className={`px-2 py-0.5 text-xs font-medium rounded ${getTypeColor(server.type)}`}>
                   {server.type.toUpperCase()}
                 </span>
+                {(server.type === 'http' || server.type === 'sse') && getAuthStatus(server.id) !== 'none' && (
+                  <span
+                    className={`inline-flex items-center px-1.5 py-0.5 text-xs rounded ${
+                      getAuthStatus(server.id) === 'authenticated'
+                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                        : getAuthStatus(server.id) === 'expired'
+                        ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+                        : getAuthStatus(server.id) === 'error'
+                        ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                        : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                    }`}
+                    title={`Auth: ${getAuthStatus(server.id)}`}
+                  >
+                    <LockIcon className="h-3 w-3" unlocked={getAuthStatus(server.id) !== 'authenticated'} />
+                  </span>
+                )}
                 <span className="text-xs text-v-light-text-secondary dark:text-v-text-secondary flex items-center gap-1">
                   {server.scope === 'user' ? (
                     <GlobeIcon className="h-3 w-3" />
@@ -545,6 +612,7 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
                   )}
                   {getMCPScopeDisplayName(server.scope)}
                 </span>
+                <StatusIndicator status={getStatus(server.id)} size="sm" />
               </div>
 
               <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary truncate font-mono">

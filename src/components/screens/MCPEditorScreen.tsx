@@ -9,6 +9,7 @@ import {
   MCPServerTemplate,
   validateMCPServer,
   createMCPServerId,
+  MCPAuthStatus,
 } from '../../types/mcp';
 import { wizardStepVariants } from '../../animations';
 import { InputField, TextareaField } from '../form';
@@ -20,6 +21,9 @@ import { GlobeIcon } from '../icons/GlobeIcon';
 import { ServerIcon } from '../icons/ServerIcon';
 import { PlusIcon } from '../icons/PlusIcon';
 import { DeleteIcon } from '../icons/DeleteIcon';
+import { EnvVarPreview } from '../EnvVarPreview';
+import { useMCPAuth } from '../../hooks/useMCPAuth';
+import { LockIcon } from '../icons/LockIcon';
 
 interface MCPEditorScreenProps {
   server: MCPServer | null;
@@ -36,6 +40,7 @@ type WizardStepId =
   | 'config'
   | 'args'
   | 'headers'
+  | 'auth'
   | 'env'
   | 'scope'
   | 'review';
@@ -69,6 +74,12 @@ const WIZARD_STEPS: { id: WizardStepId; label: string; description: string; requ
     id: 'headers',
     label: 'HTTP headers',
     description: 'Add custom headers for HTTP/SSE servers.',
+    required: false
+  },
+  {
+    id: 'auth',
+    label: 'Authentication',
+    description: 'Configure OAuth authentication for HTTP/SSE servers.',
     required: false
   },
   {
@@ -112,8 +123,8 @@ const SERVER_TYPE_OPTIONS: { value: MCPServerType; title: string; description: s
 const SCOPE_DETAILS: Record<MCPScope, { title: string; description: string; path: string }> = {
   user: {
     title: 'User (Global)',
-    description: 'Saved to ~/.claude/mcp.json. Available in all your projects.',
-    path: '~/.claude/mcp.json'
+    description: 'Saved to ~/.claude.json. Available in all your projects.',
+    path: '~/.claude.json'
   },
   project: {
     title: 'Project',
@@ -159,6 +170,17 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
   const [headerEntries, setHeaderEntries] = useState<Array<{ key: string; value: string }>>([]);
   const [envEntries, setEnvEntries] = useState<Array<{ key: string; value: string }>>([]);
   const [argsEntries, setArgsEntries] = useState<string[]>([]);
+
+  // OAuth state
+  const [oauthUrl, setOauthUrl] = useState('');
+
+  // Use the auth hook for existing servers (edit mode)
+  const { getAuthStatus, startOAuth, revokeAuth, isCheckingAuth } = useMCPAuth({
+    servers: server ? [server] : [],
+    enabled: mode === 'edit' && (server?.type === 'http' || server?.type === 'sse'),
+  });
+
+  const currentAuthStatus: MCPAuthStatus = server ? getAuthStatus(server.id) : 'none';
 
   const isWizard = mode === 'create';
 
@@ -273,6 +295,8 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
         return true; // Optional step
       case 'headers':
         return true; // Optional step
+      case 'auth':
+        return true; // Optional step
       case 'env':
         return true; // Optional step
       case 'scope':
@@ -311,6 +335,7 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
       // Skip steps that aren't visible for this server type
       if (step.id === 'args' && formData.type !== 'stdio') continue;
       if (step.id === 'headers' && formData.type === 'stdio') continue;
+      if (step.id === 'auth' && formData.type === 'stdio') continue;
       // Check if this visited step is complete (required steps must be complete, optional are always ok)
       if (!step.required || isStepComplete(step.id)) {
         highestCompletedVisitedIndex = i;
@@ -330,6 +355,10 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
         continue;
       }
       if (nextStep.id === 'headers' && formData.type === 'stdio') {
+        nextValidIndex++;
+        continue;
+      }
+      if (nextStep.id === 'auth' && formData.type === 'stdio') {
         nextValidIndex++;
         continue;
       }
@@ -392,6 +421,10 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
         nextIndex++;
         continue;
       }
+      if (nextStep.id === 'auth' && formData.type === 'stdio') {
+        nextIndex++;
+        continue;
+      }
       break;
     }
 
@@ -407,6 +440,10 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
         continue;
       }
       if (prevStep.id === 'headers' && formData.type === 'stdio') {
+        prevIndex--;
+        continue;
+      }
+      if (prevStep.id === 'auth' && formData.type === 'stdio') {
         prevIndex--;
         continue;
       }
@@ -444,6 +481,7 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
   const visibleSteps = WIZARD_STEPS.filter(step => {
     if (step.id === 'args' && formData.type !== 'stdio') return false;
     if (step.id === 'headers' && formData.type === 'stdio') return false;
+    if (step.id === 'auth' && formData.type === 'stdio') return false;
     return true;
   });
 
@@ -592,14 +630,17 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
                 hint="The command to execute"
               />
             ) : (
-              <InputField
-                id="server-url"
-                label="URL"
-                value={formData.url || ''}
-                onChange={e => setFormData(prev => ({ ...prev, url: e.target.value }))}
-                placeholder="https://your-server.com/mcp"
-                hint="Server endpoint URL"
-              />
+              <>
+                <InputField
+                  id="server-url"
+                  label="URL"
+                  value={formData.url || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, url: e.target.value }))}
+                  placeholder="https://your-server.com/mcp"
+                  hint="Server endpoint URL"
+                />
+                {formData.url && <EnvVarPreview value={formData.url} />}
+              </>
             )}
           </div>
         );
@@ -682,6 +723,122 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
               <PlusIcon className="h-4 w-4" />
               Add header
             </button>
+            {/* Show env var preview for all header values */}
+            {headerEntries.some(e => e.value.includes('${')) && (
+              <div className="mt-2 p-3 bg-v-light-hover dark:bg-v-light-dark rounded-lg">
+                <p className="text-xs font-medium text-v-light-text-secondary dark:text-v-text-secondary mb-1">
+                  Environment variables detected:
+                </p>
+                <EnvVarPreview value={headerEntries.map(e => e.value).join(' ')} />
+              </div>
+            )}
+          </div>
+        );
+
+      case 'auth':
+        return (
+          <div className="space-y-4">
+            <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
+              Configure OAuth authentication for HTTP servers that require it.
+            </p>
+
+            {/* Current Auth Status (for edit mode) */}
+            {mode === 'edit' && server && (
+              <div className="p-4 rounded-lg border border-v-light-border dark:border-v-border bg-v-light-surface dark:bg-v-mid-dark">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <LockIcon
+                      className={`h-5 w-5 ${
+                        currentAuthStatus === 'authenticated'
+                          ? 'text-green-500'
+                          : currentAuthStatus === 'pending'
+                          ? 'text-yellow-500'
+                          : currentAuthStatus === 'expired'
+                          ? 'text-orange-500'
+                          : currentAuthStatus === 'error'
+                          ? 'text-red-500'
+                          : 'text-v-light-text-secondary dark:text-v-text-secondary'
+                      }`}
+                      unlocked={currentAuthStatus !== 'authenticated'}
+                    />
+                    <div>
+                      <p className="font-medium text-v-light-text-primary dark:text-v-text-primary">
+                        Authentication Status
+                      </p>
+                      <p className={`text-sm ${
+                        currentAuthStatus === 'authenticated'
+                          ? 'text-green-600 dark:text-green-400'
+                          : currentAuthStatus === 'pending'
+                          ? 'text-yellow-600 dark:text-yellow-400'
+                          : currentAuthStatus === 'expired'
+                          ? 'text-orange-600 dark:text-orange-400'
+                          : currentAuthStatus === 'error'
+                          ? 'text-red-600 dark:text-red-400'
+                          : 'text-v-light-text-secondary dark:text-v-text-secondary'
+                      }`}>
+                        {currentAuthStatus === 'authenticated' && 'Authenticated'}
+                        {currentAuthStatus === 'pending' && 'Authentication in progress...'}
+                        {currentAuthStatus === 'expired' && 'Token expired - re-authenticate'}
+                        {currentAuthStatus === 'error' && 'Authentication error'}
+                        {currentAuthStatus === 'none' && 'Not authenticated'}
+                      </p>
+                    </div>
+                  </div>
+                  {currentAuthStatus === 'authenticated' ? (
+                    <button
+                      type="button"
+                      onClick={() => void revokeAuth(server.name)}
+                      className="px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    >
+                      Revoke
+                    </button>
+                  ) : isCheckingAuth ? (
+                    <span className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
+                      Checking...
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
+            {/* OAuth URL Input for Manual Authentication */}
+            <div className="p-4 rounded-lg border border-v-light-border dark:border-v-border">
+              <h4 className="font-medium text-v-light-text-primary dark:text-v-text-primary mb-2">
+                Manual OAuth Authentication
+              </h4>
+              <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary mb-3">
+                If the server provides an OAuth URL, enter it below to authenticate.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={oauthUrl}
+                  onChange={e => setOauthUrl(e.target.value)}
+                  placeholder="https://example.com/oauth/authorize?..."
+                  className="flex-1 px-3 py-2 bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-md text-sm text-v-light-text-primary dark:text-v-text-primary focus:border-v-accent focus:ring-1 focus:ring-v-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (oauthUrl && server) {
+                      void startOAuth(server, oauthUrl);
+                    }
+                  }}
+                  disabled={!oauthUrl || !server || currentAuthStatus === 'pending'}
+                  className="px-4 py-2 text-sm font-medium bg-v-accent text-white rounded-md hover:bg-v-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Authenticate
+                </button>
+              </div>
+            </div>
+
+            {/* Info Note */}
+            <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>Note:</strong> OAuth authentication is only needed for servers that require it.
+                Most MCP servers don't require authentication.
+              </p>
+            </div>
           </div>
         );
 
@@ -726,6 +883,15 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
               <PlusIcon className="h-4 w-4" />
               Add environment variable
             </button>
+            {/* Show env var preview for all env values */}
+            {envEntries.some(e => e.value.includes('${')) && (
+              <div className="mt-2 p-3 bg-v-light-hover dark:bg-v-light-dark rounded-lg">
+                <p className="text-xs font-medium text-v-light-text-secondary dark:text-v-text-secondary mb-1">
+                  Environment variable references:
+                </p>
+                <EnvVarPreview value={envEntries.map(e => e.value).join(' ')} />
+              </div>
+            )}
           </div>
         );
 

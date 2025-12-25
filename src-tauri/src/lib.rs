@@ -2154,7 +2154,7 @@ fn get_mcp_config_path(scope: &str, project_path: Option<String>) -> Result<Path
         "user" => {
             let home_dir =
                 dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
-            Ok(home_dir.join(".claude").join("mcp.json"))
+            Ok(home_dir.join(".claude.json"))
         }
         "project" => {
             if let Some(proj_path) = project_path {
@@ -2324,6 +2324,215 @@ async fn remove_mcp_server(
 
     write_mcp_config_to_file(&config_path, &config)?;
     Ok(config_path.to_string_lossy().to_string())
+}
+
+/// Get environment variable values for the specified variable names
+#[tauri::command]
+async fn get_env_vars(var_names: Vec<String>) -> Result<std::collections::HashMap<String, Option<String>>, String> {
+    let mut result = std::collections::HashMap::new();
+    for name in var_names {
+        result.insert(name.clone(), std::env::var(&name).ok());
+    }
+    Ok(result)
+}
+
+/// Result of an MCP server health check
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MCPHealthCheckResult {
+    server_name: String,
+    status: String,
+    latency_ms: Option<u64>,
+    error_message: Option<String>,
+}
+
+/// Check the health/connectivity of an MCP server
+#[tauri::command]
+async fn check_mcp_server_health(
+    server_type: String,
+    server_name: String,
+    url: Option<String>,
+    command: Option<String>,
+    timeout_ms: u64,
+) -> Result<MCPHealthCheckResult, String> {
+    use std::time::{Duration, Instant};
+
+    match server_type.as_str() {
+        "http" | "sse" => {
+            let url = url.ok_or("URL required for HTTP/SSE server")?;
+            let client = reqwest::Client::builder()
+                .timeout(Duration::from_millis(timeout_ms))
+                .build()
+                .map_err(|e| e.to_string())?;
+
+            let start = Instant::now();
+            match client.head(&url).send().await {
+                Ok(response) => {
+                    let latency = start.elapsed().as_millis() as u64;
+                    // Accept success codes and 405 Method Not Allowed (server doesn't support HEAD)
+                    if response.status().is_success() || response.status() == 405 {
+                        Ok(MCPHealthCheckResult {
+                            server_name,
+                            status: "connected".to_string(),
+                            latency_ms: Some(latency),
+                            error_message: None,
+                        })
+                    } else {
+                        Ok(MCPHealthCheckResult {
+                            server_name,
+                            status: "error".to_string(),
+                            latency_ms: Some(latency),
+                            error_message: Some(format!("HTTP {}", response.status())),
+                        })
+                    }
+                }
+                Err(e) => {
+                    let error_msg = if e.is_timeout() {
+                        "Connection timeout".to_string()
+                    } else if e.is_connect() {
+                        "Connection refused".to_string()
+                    } else {
+                        e.to_string()
+                    };
+                    Ok(MCPHealthCheckResult {
+                        server_name,
+                        status: "disconnected".to_string(),
+                        latency_ms: None,
+                        error_message: Some(error_msg),
+                    })
+                }
+            }
+        }
+        "stdio" => {
+            let command = command.ok_or("Command required for stdio server")?;
+            let cmd_parts: Vec<&str> = command.split_whitespace().collect();
+            if cmd_parts.is_empty() {
+                return Err("Empty command".to_string());
+            }
+
+            // Check if the command is available via `which`
+            let result = tokio::process::Command::new("which")
+                .arg(cmd_parts[0])
+                .output()
+                .await;
+
+            match result {
+                Ok(output) if output.status.success() => Ok(MCPHealthCheckResult {
+                    server_name,
+                    status: "connected".to_string(),
+                    latency_ms: None,
+                    error_message: None,
+                }),
+                _ => Ok(MCPHealthCheckResult {
+                    server_name,
+                    status: "disconnected".to_string(),
+                    latency_ms: None,
+                    error_message: Some(format!("Command '{}' not found in PATH", cmd_parts[0])),
+                }),
+            }
+        }
+        _ => Err(format!("Unknown server type: {}", server_type)),
+    }
+}
+
+// ============================================================================
+// OAuth Authentication Commands
+// ============================================================================
+
+const KEYRING_SERVICE: &str = "vinsly-mcp-oauth";
+
+/// Get the authentication status for an MCP server
+#[tauri::command]
+async fn get_mcp_auth_status(server_name: String) -> Result<String, String> {
+    use keyring::Entry;
+
+    let entry = Entry::new(KEYRING_SERVICE, &server_name)
+        .map_err(|e| format!("Failed to access keyring: {}", e))?;
+
+    match entry.get_password() {
+        Ok(token_json) => {
+            // Parse the token to check expiration
+            if let Ok(token_data) = serde_json::from_str::<serde_json::Value>(&token_json) {
+                if let Some(expires_at) = token_data.get("expires_at").and_then(|v| v.as_i64()) {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    if now >= expires_at {
+                        return Ok("expired".to_string());
+                    }
+                }
+                Ok("authenticated".to_string())
+            } else {
+                Ok("authenticated".to_string())
+            }
+        }
+        Err(_) => Ok("none".to_string()),
+    }
+}
+
+/// Store OAuth token in the OS keychain
+#[tauri::command]
+async fn store_mcp_oauth_token(
+    server_name: String,
+    access_token: String,
+    refresh_token: Option<String>,
+    expires_at: Option<i64>,
+    token_type: String,
+) -> Result<(), String> {
+    use keyring::Entry;
+
+    let token_data = serde_json::json!({
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "expires_at": expires_at,
+        "token_type": token_type,
+    });
+
+    let entry = Entry::new(KEYRING_SERVICE, &server_name)
+        .map_err(|e| format!("Failed to access keyring: {}", e))?;
+
+    entry
+        .set_password(&token_data.to_string())
+        .map_err(|e| format!("Failed to store token: {}", e))?;
+
+    Ok(())
+}
+
+/// Get OAuth token from the OS keychain
+#[tauri::command]
+async fn get_mcp_oauth_token(server_name: String) -> Result<Option<serde_json::Value>, String> {
+    use keyring::Entry;
+
+    let entry = Entry::new(KEYRING_SERVICE, &server_name)
+        .map_err(|e| format!("Failed to access keyring: {}", e))?;
+
+    match entry.get_password() {
+        Ok(token_json) => {
+            let token_data: serde_json::Value = serde_json::from_str(&token_json)
+                .map_err(|e| format!("Failed to parse token: {}", e))?;
+            Ok(Some(token_data))
+        }
+        Err(_) => Ok(None),
+    }
+}
+
+/// Revoke (delete) OAuth credentials from the keychain
+#[tauri::command]
+async fn revoke_mcp_oauth(server_name: String) -> Result<(), String> {
+    use keyring::Entry;
+
+    let entry = Entry::new(KEYRING_SERVICE, &server_name)
+        .map_err(|e| format!("Failed to access keyring: {}", e))?;
+
+    // Try to delete, but don't error if not found
+    let _ = entry.delete_password();
+    Ok(())
+}
+
+/// Open URL in default browser (for OAuth flow)
+#[tauri::command]
+async fn open_oauth_url(url: String) -> Result<(), String> {
+    open::that(&url).map_err(|e| format!("Failed to open browser: {}", e))
 }
 
 // ============================================================================
@@ -4006,6 +4215,14 @@ pub fn run() {
             write_mcp_config,
             add_mcp_server,
             remove_mcp_server,
+            get_env_vars,
+            check_mcp_server_health,
+            // MCP OAuth commands
+            get_mcp_auth_status,
+            store_mcp_oauth_token,
+            get_mcp_oauth_token,
+            revoke_mcp_oauth,
+            open_oauth_url,
             // Hooks commands
             list_hooks,
             read_hooks_config,

@@ -14,6 +14,49 @@ export type MCPServerType = 'http' | 'stdio' | 'sse';
 export type MCPScope = 'user' | 'project' | 'local';
 
 /**
+ * Health/connection status of an MCP server
+ */
+export type MCPServerStatus = 'unknown' | 'checking' | 'connected' | 'disconnected' | 'error';
+
+/**
+ * Result of a health check for an MCP server
+ */
+export interface MCPHealthResult {
+  serverName: string;
+  status: MCPServerStatus;
+  latencyMs?: number;
+  errorMessage?: string;
+  checkedAt: number;
+}
+
+/**
+ * OAuth 2.0 configuration for remote MCP servers
+ */
+export interface MCPOAuthConfig {
+  provider: string;                    // OAuth provider identifier
+  authorizationUrl: string;            // OAuth authorization endpoint
+  tokenUrl: string;                    // Token exchange endpoint
+  clientId: string;                    // OAuth client ID
+  scopes?: string[];                   // Required OAuth scopes
+  redirectUri?: string;                // Override default redirect URI
+}
+
+/**
+ * Authentication status for MCP servers
+ */
+export type MCPAuthStatus = 'none' | 'pending' | 'authenticated' | 'expired' | 'error';
+
+/**
+ * OAuth token data (stored in OS keychain, not in config)
+ */
+export interface MCPOAuthToken {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: number;                  // Unix timestamp
+  tokenType: string;                   // Usually 'Bearer'
+}
+
+/**
  * Raw MCP server configuration as stored in .mcp.json files
  */
 export interface MCPServerConfig {
@@ -143,7 +186,7 @@ export function getMCPScopeDisplayName(scope: MCPScope): string {
 export function getMCPConfigPath(scope: MCPScope, projectPath?: string): string {
   switch (scope) {
     case 'user':
-      return '~/.claude/mcp.json';
+      return '~/.claude.json';
     case 'project':
       return projectPath ? `${projectPath}/.mcp.json` : '.mcp.json';
     case 'local':
