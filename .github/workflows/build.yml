@@ -233,6 +233,18 @@ jobs:
           VERSION="${GITHUB_REF#refs/tags/v}"
           REPO="${GITHUB_REPOSITORY}"
 
+          # Extract release notes from the tag's commit message (bullet points only)
+          # This looks for lines starting with "- " in the commit message
+          RELEASE_NOTES=$(git log -1 --format=%B $GITHUB_REF | grep "^- " | head -3 | tr '\n' '\\n' | sed 's/\\n$//')
+
+          # Fallback if no bullet points found
+          if [ -z "$RELEASE_NOTES" ]; then
+            RELEASE_NOTES="See GitHub release for details"
+          fi
+
+          echo "Release notes extracted:"
+          echo "$RELEASE_NOTES"
+
           echo "Listing artifacts (recursive)..."
           find artifacts/ -type f | sort
 
@@ -267,7 +279,7 @@ jobs:
           cat > latest.json <<EOF
           {
             "version": "$VERSION",
-            "notes": "Release v$VERSION - See GitHub release for details",
+            "notes": "$RELEASE_NOTES",
             "pub_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "platforms": {
               "darwin-aarch64": {

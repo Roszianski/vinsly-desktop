@@ -265,15 +265,22 @@ Vinsly Desktop includes an update notification system:
 ```bash
 # 1. Bump version in src-tauri/tauri.conf.json (e.g., "0.1.0" -> "0.1.1")
 
-# 2. Commit the version change
-git add src-tauri/tauri.conf.json
-git commit -m "Bump version to 0.1.1"
+# 2. Commit with bullet points for release notes (max 3 shown in update modal)
+#    The CI extracts lines starting with "- " from the commit message
+git add -A
+git commit -m "Release v0.1.1 - Brief description
+
+- First change shown in update modal
+- Second change shown in update modal
+- Third change shown in update modal"
 
 # 3. Create and push version tag to trigger automated workflow
 git tag v0.1.1
-git push origin main  # or your branch name
+git push origin main
 git push origin v0.1.1
 ```
+
+**Important**: The update modal shows bullet points from your commit message. Always include 3 lines starting with `- ` in your release commit message. These are automatically extracted and shown to users in the "What's New" section.
 
 The GitHub Actions workflow will automatically:
 - Build for macOS, Windows (NSIS), and Linux (deb, AppImage)
