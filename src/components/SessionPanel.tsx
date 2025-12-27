@@ -4,6 +4,7 @@ import {
   ClaudeSession,
   formatUptime,
   formatMemoryUsage,
+  formatTokenCount,
   getProjectName,
 } from '../types/session';
 import { FolderIcon } from './icons/FolderIcon';
@@ -12,6 +13,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { killClaudeSession } from '../utils/tauriCommands';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { useToast } from '../contexts/ToastContext';
+import { useTerminal } from '../contexts/TerminalContext';
 
 type SortOption = 'name' | 'uptime' | 'cpu' | 'ram';
 
@@ -174,6 +176,7 @@ interface SessionCardProps {
 
 const SessionCard: React.FC<SessionCardProps> = ({ session, onRefresh, isMacPlatform }) => {
   const { showToast } = useToast();
+  const { createNewTerminal } = useTerminal();
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
   const projectName = getProjectName(session.workingDirectory);
@@ -184,6 +187,17 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, onRefresh, isMacPlat
       await revealItemInDir(session.workingDirectory);
     } catch (error) {
       showToast('error', `Failed to open folder: ${error}`);
+    } finally {
+      setIsActionLoading(null);
+    }
+  };
+
+  const handleOpenTerminal = async () => {
+    setIsActionLoading('terminal');
+    try {
+      await createNewTerminal(session.workingDirectory);
+    } catch (error) {
+      showToast('error', `Failed to open terminal: ${error}`);
     } finally {
       setIsActionLoading(null);
     }
@@ -208,9 +222,19 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, onRefresh, isMacPlat
       <div className="flex items-center gap-2">
         <div className="w-2 h-2 rounded-full flex-shrink-0 bg-v-accent" />
         <div className="flex-1 min-w-0">
-          <span className="font-medium text-v-light-text-primary dark:text-v-text-primary truncate block">
-            {projectName}
-          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-v-light-text-primary dark:text-v-text-primary truncate">
+              {projectName}
+            </span>
+            {session.tokenUsage !== undefined && session.tokenUsage > 0 && (
+              <span
+                className="flex-shrink-0 text-xs font-medium text-v-accent bg-v-accent/10 px-1.5 py-0.5 rounded"
+                title={`${session.tokenUsage.toLocaleString()} tokens used`}
+              >
+                Tokens {formatTokenCount(session.tokenUsage)}
+              </span>
+            )}
+          </div>
           <p
             className="text-xs text-v-light-text-secondary dark:text-v-text-secondary truncate font-mono"
             title={session.workingDirectory}
@@ -252,6 +276,17 @@ const SessionCard: React.FC<SessionCardProps> = ({ session, onRefresh, isMacPlat
             <path fillRule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clipRule="evenodd" />
           </svg>
           Open Folder
+        </button>
+        <button
+          onClick={handleOpenTerminal}
+          disabled={isActionLoading === 'terminal'}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-accent transition-colors disabled:opacity-50"
+          title="Open terminal in this directory"
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M3.25 3A2.25 2.25 0 001 5.25v9.5A2.25 2.25 0 003.25 17h13.5A2.25 2.25 0 0019 14.75v-9.5A2.25 2.25 0 0016.75 3H3.25zM2.5 5.25a.75.75 0 01.75-.75h13.5a.75.75 0 01.75.75v9.5a.75.75 0 01-.75.75H3.25a.75.75 0 01-.75-.75v-9.5zM5.28 7.72a.75.75 0 00-1.06 1.06l2.5 2.5a.75.75 0 001.06 0l2.5-2.5a.75.75 0 00-1.06-1.06L7.5 9.44 5.78 7.72zM11 12.25a.75.75 0 01.75-.75h3.5a.75.75 0 010 1.5h-3.5a.75.75 0 01-.75-.75z" clipRule="evenodd" />
+          </svg>
+          Terminal
         </button>
         {isMacPlatform && (
           <button

@@ -291,7 +291,7 @@ describe('MCP Server Types', () => {
 
   describe('getMCPConfigPath', () => {
     it('should return correct paths', () => {
-      expect(getMCPConfigPath('user')).toBe('~/.claude/mcp.json');
+      expect(getMCPConfigPath('user')).toBe('~/.claude.json');
       expect(getMCPConfigPath('project', '/my/project')).toBe('/my/project/.mcp.json');
       expect(getMCPConfigPath('local', '/my/project')).toBe('/my/project/.claude/settings.local.json');
     });

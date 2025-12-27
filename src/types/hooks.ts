@@ -218,48 +218,15 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
     }
   },
   {
-    id: 'post-tool-notify',
-    name: 'tool-complete-notify',
-    displayName: 'Tool Completion Notifier',
-    description: 'Notify when a tool completes',
-    eventType: 'PostToolUse',
-    executionType: 'command',
-    config: {
-      command: 'osascript -e \'display notification "Tool completed: $TOOL_NAME" with title "Claude Code"\''
-    }
-  },
-  {
     id: 'bash-safety',
     name: 'bash-command-validator',
     displayName: 'Bash Command Validator',
-    description: 'Validate bash commands before execution',
+    description: 'Block dangerous commands like rm -rf or sudo',
     eventType: 'PreToolUse',
     executionType: 'command',
     config: {
       matcher: 'Bash',
       command: 'echo "$TOOL_INPUT" | jq -r ".command" | grep -qE "^(rm -rf|sudo|shutdown)" && exit 1 || exit 0'
-    }
-  },
-  {
-    id: 'notification-log',
-    name: 'notification-logger',
-    displayName: 'Notification Logger',
-    description: 'Log all Claude notifications',
-    eventType: 'Notification',
-    executionType: 'command',
-    config: {
-      command: 'echo "[$(date)] $MESSAGE" >> ~/.claude/notifications.log'
-    }
-  },
-  {
-    id: 'stop-cleanup',
-    name: 'session-cleanup',
-    displayName: 'Session Cleanup',
-    description: 'Clean up temporary files when session stops',
-    eventType: 'Stop',
-    executionType: 'command',
-    config: {
-      command: 'rm -rf /tmp/claude-session-*'
     }
   },
   {
@@ -286,17 +253,6 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
     }
   },
   {
-    id: 'prompt-validation',
-    name: 'prompt-validator',
-    displayName: 'Prompt Validator',
-    description: 'Validate user prompts before submission',
-    eventType: 'UserPromptSubmit',
-    executionType: 'command',
-    config: {
-      command: 'echo "$PROMPT" | grep -qiE "(password|secret|api.?key)" && echo "Warning: prompt may contain sensitive data" >&2'
-    }
-  },
-  {
     id: 'permission-auto-approve',
     name: 'auto-approve-reads',
     displayName: 'Auto-approve Read Operations',
@@ -306,43 +262,6 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
     config: {
       matcher: 'Read',
       command: 'python3 -c "import json,sys;d=json.load(sys.stdin);p=d.get(\'tool_input\',{}).get(\'file_path\',\'\');print(json.dumps({\'decision\':\'approve\'}) if p.endswith((\'.md\',\'.txt\',\'.json\')) else \'\')"'
-    }
-  },
-  // Prompt-based templates (LLM evaluation)
-  {
-    id: 'intelligent-stop',
-    name: 'intelligent-stop-check',
-    displayName: 'Intelligent Stop Check',
-    description: 'Use LLM to evaluate if Claude should stop',
-    eventType: 'Stop',
-    executionType: 'prompt',
-    config: {
-      prompt: 'Evaluate if Claude should stop. Context: $ARGUMENTS\n\nRespond with JSON: {"decision": "approve" or "block", "reason": "explanation"}',
-      timeout: 30
-    }
-  },
-  {
-    id: 'code-review-prompt',
-    name: 'code-review-prompt',
-    displayName: 'Code Review (LLM)',
-    description: 'LLM-based code review after file edits',
-    eventType: 'PostToolUse',
-    executionType: 'prompt',
-    config: {
-      matcher: 'Write|Edit',
-      prompt: 'Review the code changes. Check for: security issues, performance problems, best practices. Context: $ARGUMENTS\n\nRespond with JSON: {"decision": "approve" or "block", "reason": "issues found or approval reason"}',
-      timeout: 60
-    }
-  },
-  {
-    id: 'pre-compact-summary',
-    name: 'pre-compact-summary',
-    displayName: 'Pre-Compaction Summary',
-    description: 'Summarize important context before compaction',
-    eventType: 'PreCompact',
-    executionType: 'command',
-    config: {
-      command: 'echo "Context being compacted at $(date)" >> ~/.claude/compaction-log.txt'
     }
   }
 ];

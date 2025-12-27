@@ -612,6 +612,16 @@ export async function killClaudeSession(pid: number): Promise<void> {
   return await invoke('kill_claude_session', { pid });
 }
 
+// Get total token usage for a Claude session by working directory and start time
+export async function getSessionTokenUsage(workingDirectory: string, sessionStartTime: number): Promise<number> {
+  return await invoke<number>('get_session_token_usage', {
+    workingDirectory,
+    working_directory: workingDirectory,
+    sessionStartTime,
+    session_start_time: sessionStartTime,
+  });
+}
+
 // ============================================================================
 // Claude Code CLI Integration (Headless Mode)
 // ============================================================================

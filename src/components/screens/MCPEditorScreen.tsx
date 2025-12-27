@@ -10,7 +10,10 @@ import {
   validateMCPServer,
   createMCPServerId,
   MCPAuthStatus,
+  MCPHealthResult,
+  MCPServerStatus,
 } from '../../types/mcp';
+import { checkMCPServerHealth } from '../../utils/tauriCommands';
 import { wizardStepVariants } from '../../animations';
 import { InputField, TextareaField } from '../form';
 import { WizardStepHeader } from '../wizard';
@@ -173,6 +176,10 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
 
   // OAuth state
   const [oauthUrl, setOauthUrl] = useState('');
+
+  // Test connection state
+  const [testResult, setTestResult] = useState<MCPHealthResult | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
 
   // Use the auth hook for existing servers (edit mode)
   const { getAuthStatus, startOAuth, revokeAuth, isCheckingAuth } = useMCPAuth({
@@ -472,6 +479,38 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
     }
 
     onSave(finalServer, formData.scope === 'project' ? projectFolderPath : undefined);
+  };
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+
+    try {
+      const result = await checkMCPServerHealth(
+        formData.type,
+        formData.name || 'test-server',
+        formData.url,
+        formData.command,
+        10000 // 10 second timeout for test
+      );
+
+      setTestResult({
+        serverName: formData.name,
+        status: result.status as MCPServerStatus,
+        latencyMs: result.latency_ms ?? undefined,
+        errorMessage: result.error_message ?? undefined,
+        checkedAt: Date.now(),
+      });
+    } catch (error) {
+      setTestResult({
+        serverName: formData.name,
+        status: 'error',
+        errorMessage: error instanceof Error ? error.message : 'Connection failed',
+        checkedAt: Date.now(),
+      });
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   const currentStep = WIZARD_STEPS[currentStepIndex];
@@ -1033,6 +1072,59 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
                   </div>
                 )}
               </dl>
+
+              {/* Test Connection Section */}
+              <div className="mt-4 pt-4 border-t border-v-light-border dark:border-v-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                      Test Connection
+                    </h4>
+                    <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                      Verify server is reachable before saving
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleTestConnection()}
+                    disabled={isTesting}
+                    className="px-4 py-2 text-sm font-medium bg-v-light-hover dark:bg-v-light-dark hover:bg-v-light-border dark:hover:bg-v-border text-v-light-text-primary dark:text-v-text-primary rounded-md transition-colors disabled:opacity-50"
+                  >
+                    {isTesting ? 'Testing...' : 'Test Connection'}
+                  </button>
+                </div>
+
+                {/* Test Result Display */}
+                {testResult && (
+                  <div className={`mt-3 p-3 rounded-lg flex items-center gap-3 ${
+                    testResult.status === 'connected'
+                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                      : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                  }`}>
+                    {testResult.status === 'connected' ? (
+                      <CheckIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    ) : (
+                      <WarningIcon className="h-5 w-5 text-red-600 dark:text-red-400" />
+                    )}
+                    <div className="flex-1">
+                      <p className={`text-sm font-medium ${
+                        testResult.status === 'connected'
+                          ? 'text-green-700 dark:text-green-300'
+                          : 'text-red-700 dark:text-red-300'
+                      }`}>
+                        {testResult.status === 'connected'
+                          ? `Connected${testResult.latencyMs ? ` (${testResult.latencyMs}ms)` : ''}`
+                          : 'Connection Failed'}
+                      </p>
+                      {testResult.errorMessage && (
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                          {testResult.errorMessage}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         );

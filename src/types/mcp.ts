@@ -138,21 +138,6 @@ export const MCP_SERVER_TEMPLATES: MCPServerTemplate[] = [
     }
   },
   {
-    id: 'postgres',
-    name: 'postgres',
-    displayName: 'PostgreSQL',
-    description: 'Query PostgreSQL databases',
-    type: 'stdio',
-    packageName: '@modelcontextprotocol/server-postgres',
-    config: {
-      command: 'npx',
-      args: ['-y', '@modelcontextprotocol/server-postgres'],
-      env: {
-        POSTGRES_CONNECTION_STRING: '${DATABASE_URL}'
-      }
-    }
-  },
-  {
     id: 'custom-http',
     name: 'custom-server',
     displayName: 'Custom HTTP Server',

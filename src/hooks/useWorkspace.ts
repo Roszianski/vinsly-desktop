@@ -243,14 +243,16 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
     // Use path-only deduplication - same file path = same agent regardless of scope
     // This prevents duplicates when the same file is discovered via multiple scan methods
     const idPart = agent.path || agent.id || agent.name;
-    return idPart;
+    // Normalize path separators to forward slashes for consistent deduplication on Windows
+    return idPart.replace(/\\/g, '/');
   }, []);
 
   const makeSkillKey = useCallback((skill: Skill) => {
     // Use path-only deduplication - same file path = same skill regardless of scope
     // This prevents duplicates when the same file is discovered via multiple scan methods
     const idPart = skill.directoryPath || skill.path || skill.name;
-    return idPart;
+    // Normalize path separators to forward slashes for consistent deduplication on Windows
+    return idPart.replace(/\\/g, '/');
   }, []);
 
   const refreshGlobalSkills = useCallback(async () => {

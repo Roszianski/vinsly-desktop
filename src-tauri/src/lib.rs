@@ -171,12 +171,44 @@ fn find_claude_in_common_paths() -> Option<PathBuf> {
     // Build list of candidate paths
     let mut candidates: Vec<PathBuf> = Vec::new();
 
-    // System paths
-    candidates.push(PathBuf::from("/usr/local/bin/claude"));
-    candidates.push(PathBuf::from("/opt/homebrew/bin/claude")); // Apple Silicon Homebrew
-    candidates.push(PathBuf::from("/usr/bin/claude"));
+    #[cfg(target_os = "windows")]
+    {
+        // Windows-specific npm global paths
+        // npm installs global packages to %APPDATA%\npm on Windows
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let appdata_path = PathBuf::from(&appdata);
+            candidates.push(appdata_path.join("npm/claude.cmd"));
+            candidates.push(appdata_path.join("npm/claude"));
+            candidates.push(appdata_path.join("npm/node_modules/.bin/claude.cmd"));
+            candidates.push(appdata_path.join("npm/node_modules/.bin/claude"));
+        }
+        if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
+            let localappdata_path = PathBuf::from(&localappdata);
+            candidates.push(localappdata_path.join("npm/claude.cmd"));
+            candidates.push(localappdata_path.join("npm/claude"));
+        }
+        // User-specific npm paths on Windows
+        candidates.push(home.join("AppData/Roaming/npm/claude.cmd"));
+        candidates.push(home.join("AppData/Roaming/npm/claude"));
+        candidates.push(home.join("AppData/Local/npm/claude.cmd"));
+        candidates.push(home.join("AppData/Local/npm/claude"));
+        // Scoop package manager
+        candidates.push(home.join("scoop/shims/claude.cmd"));
+        candidates.push(home.join("scoop/shims/claude"));
+        // Program Files locations
+        candidates.push(PathBuf::from("C:/Program Files/nodejs/claude.cmd"));
+        candidates.push(PathBuf::from("C:/Program Files/nodejs/claude"));
+    }
 
-    // User-specific npm global paths
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Unix system paths
+        candidates.push(PathBuf::from("/usr/local/bin/claude"));
+        candidates.push(PathBuf::from("/opt/homebrew/bin/claude")); // Apple Silicon Homebrew
+        candidates.push(PathBuf::from("/usr/bin/claude"));
+    }
+
+    // User-specific npm global paths (cross-platform)
     candidates.push(home.join(".npm/bin/claude"));
     candidates.push(home.join(".npm-global/bin/claude"));
     candidates.push(home.join("npm-global/bin/claude"));
@@ -2986,6 +3018,86 @@ async fn kill_claude_session(app: tauri::AppHandle, pid: u32) -> Result<(), Stri
     }
 }
 
+/// Get token usage for a Claude session by reading JSONL files
+/// Claude stores session data in ~/.claude/projects/[encoded-path]/[sessionId].jsonl
+/// Path encoding: /Users/foo/bar -> -Users-foo-bar
+#[tauri::command]
+async fn get_session_token_usage(working_directory: String, session_start_time: u64) -> Result<u64, String> {
+    use std::fs;
+    use std::io::{BufRead, BufReader};
+    use std::time::UNIX_EPOCH;
+
+    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
+    let projects_dir = home.join(".claude").join("projects");
+
+    if !projects_dir.exists() {
+        return Ok(0);
+    }
+
+    // Claude encodes paths: /Users/foo/bar -> -Users-foo-bar
+    // Leading slash becomes leading dash, all slashes become dashes
+    // Use lowercase for case-insensitive matching (macOS is case-insensitive)
+    let encoded_path = format!("-{}", working_directory.trim_start_matches('/').replace('/', "-"));
+    let encoded_path_lower = encoded_path.to_lowercase();
+
+    let mut total_tokens: u64 = 0;
+
+    // Iterate through project directories looking for matches
+    let entries = fs::read_dir(&projects_dir).map_err(|e| e.to_string())?;
+
+    for entry in entries.flatten() {
+        let dir_name = entry.file_name().to_string_lossy().to_string();
+        let dir_name_lower = dir_name.to_lowercase();
+
+        // Check if this directory matches our encoded working directory (case-insensitive)
+        // Use starts_with to handle cases where Claude might add suffixes
+        if dir_name_lower == encoded_path_lower || dir_name_lower.starts_with(&format!("{}-", encoded_path_lower)) {
+            // Read only JSONL files modified after the session started
+            if let Ok(files) = fs::read_dir(entry.path()) {
+                for file in files.flatten() {
+                    let path = file.path();
+                    if path.extension().map_or(false, |ext| ext == "jsonl") {
+                        // Check if file was modified after session started
+                        if let Ok(metadata) = fs::metadata(&path) {
+                            if let Ok(modified) = metadata.modified() {
+                                let modified_secs = modified.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+                                // Only read files modified after the session started
+                                if modified_secs < session_start_time {
+                                    continue;
+                                }
+                            }
+                        }
+
+                        if let Ok(f) = fs::File::open(&path) {
+                            let reader = BufReader::new(f);
+                            for line in reader.lines().flatten() {
+                                // Parse each line as JSON and extract token usage
+                                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
+                                    // Token usage is in message.usage for assistant messages
+                                    if let Some(message) = json.get("message") {
+                                        if let Some(usage) = message.get("usage") {
+                                            // Only count actual new tokens, not cached context
+                                            // cache_read_input_tokens are reused context and shouldn't be counted
+                                            if let Some(input) = usage.get("input_tokens").and_then(|v| v.as_u64()) {
+                                                total_tokens += input;
+                                            }
+                                            if let Some(output) = usage.get("output_tokens").and_then(|v| v.as_u64()) {
+                                                total_tokens += output;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(total_tokens)
+}
+
 // ============================================================================
 // Claude Code CLI Integration
 // ============================================================================
@@ -4232,6 +4344,7 @@ pub fn run() {
             // Session detection and actions
             detect_claude_sessions,
             kill_claude_session,
+            get_session_token_usage,
             // Claude Code CLI integration
             check_claude_cli_installed,
             invoke_claude_code,

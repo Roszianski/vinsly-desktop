@@ -19,6 +19,7 @@ export interface ClaudeSession {
   cpuUsage?: number;                    // CPU usage percentage (0-100)
   memoryUsage?: number;                 // Memory usage in bytes
   commandLine?: string;                 // Full command line
+  tokenUsage?: number;                  // Total tokens used (input + output)
 }
 
 /**
@@ -120,4 +121,19 @@ export function getStatusBgColor(status: SessionStatus): string {
     default:
       return 'bg-gray-500';
   }
+}
+
+/**
+ * Format token count for display (e.g., "79k", "1.2M")
+ */
+export function formatTokenCount(tokens?: number): string {
+  if (!tokens || tokens === 0) return '0';
+
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`;
+  }
+  if (tokens >= 1_000) {
+    return `${Math.round(tokens / 1_000)}k`;
+  }
+  return tokens.toString();
 }

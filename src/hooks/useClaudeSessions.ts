@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
-import { detectClaudeSessions, ClaudeSessionRaw } from '../utils/tauriCommands';
+import { detectClaudeSessions, ClaudeSessionRaw, getSessionTokenUsage } from '../utils/tauriCommands';
 import { ClaudeSession, rawToSession } from '../types/session';
 import { devLog } from '../utils/devLogger';
 
@@ -48,7 +48,22 @@ export function useClaudeSessions(options?: UseClaudeSessionsOptions): UseClaude
       const rawSessions = await detectClaudeSessions();
       if (!isMountedRef.current) return;
       const convertedSessions = rawSessions.map(rawToSession);
-      setSessions(convertedSessions);
+
+      // Fetch token usage for each session in parallel
+      const sessionsWithTokens = await Promise.all(
+        convertedSessions.map(async (session) => {
+          try {
+            const tokenUsage = await getSessionTokenUsage(session.workingDirectory, session.startTime);
+            return { ...session, tokenUsage };
+          } catch {
+            // If token fetch fails, return session without tokens
+            return session;
+          }
+        })
+      );
+
+      if (!isMountedRef.current) return;
+      setSessions(sessionsWithTokens);
     } catch (err) {
       if (!isMountedRef.current) return;
       const errorMessage = err instanceof Error ? err.message : String(err);
