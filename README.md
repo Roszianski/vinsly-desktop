@@ -282,7 +282,7 @@ git push origin v0.1.1
 
 **Important**: The update modal shows bullet points from your commit message. Always include 3 lines starting with `- ` in your release commit message. These are automatically extracted and shown to users in the "What's New" section. Keep bullet points concise (3-5 words each) as space in the modal is limited.
 
-**Note**: The `notes` field in `latest.json` must use `\n` for newlines (e.g., `"- First\n- Second\n- Third"`). Invalid escaping like `\-` will break JSON parsing and cause "error decoding response body" in the app. If this happens, manually fix the escaping in the [vinsly-updates repo](https://github.com/Roszianski/vinsly-updates).
+**Known Issue (fixed in v0.11.2)**: The `notes` field in `latest.json` must use `\n` for newlines (e.g., `"- First\n- Second\n- Third"`). Prior to v0.11.2, the workflow used `tr '\n' '\\n'` which doesn't work for multi-character replacement, producing invalid escapes like `\-` instead of `\n-`. This broke JSON parsing in the Tauri updater, causing "no update available" even when updates existed. The workflow now uses `sed ':a;N;$!ba;s/\n/\\n/g'` for proper escaping. If you encounter this issue with older releases, manually fix the escaping in the [vinsly-updates repo](https://github.com/Roszianski/vinsly-updates).
 
 The GitHub Actions workflow will automatically:
 - Build for macOS, Windows (NSIS), and Linux (deb, AppImage)

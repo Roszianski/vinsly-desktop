@@ -235,7 +235,8 @@ jobs:
 
           # Extract release notes from the tag's commit message (bullet points only)
           # This looks for lines starting with "- " in the commit message
-          RELEASE_NOTES=$(git log -1 --format=%B $GITHUB_REF | grep "^- " | head -3 | tr '\n' '\\n' | sed 's/\\n$//')
+          # Use sed to properly escape newlines for JSON (tr doesn't work for multi-char replacement)
+          RELEASE_NOTES=$(git log -1 --format=%B $GITHUB_REF | grep "^- " | head -3 | sed ':a;N;$!ba;s/\n/\\n/g')
 
           # Fallback if no bullet points found
           if [ -z "$RELEASE_NOTES" ]; then
