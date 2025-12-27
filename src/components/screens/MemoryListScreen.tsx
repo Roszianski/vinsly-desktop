@@ -22,6 +22,7 @@ import { ConfirmDialog } from '../ConfirmDialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { getStorageItem, setStorageItem } from '../../utils/storage';
 import { devLog } from '../../utils/devLogger';
+import { SkeletonList } from '../shared/Skeleton';
 
 type LayoutMode = 'table' | 'grid';
 type Filter = 'All' | AgentScope;
@@ -580,11 +581,8 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
       {/* Table/Grid */}
       <div className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg overflow-hidden">
         {isLoading && memories.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <SpinnerIcon className="w-8 h-8 mb-4 animate-spin text-v-accent" />
-            <p className="text-v-light-text-secondary dark:text-v-text-secondary">
-              Scanning for memory files...
-            </p>
+          <div className="p-4">
+            <SkeletonList count={layoutMode === 'grid' ? 6 : 8} variant={layoutMode === 'grid' ? 'card' : 'list'} />
           </div>
         ) : filteredMemories.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
@@ -669,10 +667,10 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
                         </label>
                         <button
                           onClick={() => onToggleFavorite(memory)}
-                          className={`flex items-center justify-center h-8 w-8 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-v-accent/50 focus:ring-offset-0 ${
+                          className={`flex items-center justify-center h-8 w-8 rounded-md border transition-colors focus:outline-none focus:ring-2 focus:ring-v-accent/50 focus:ring-offset-0 ${
                             memory.isFavorite
-                              ? 'border-v-accent bg-v-accent/10 text-v-accent'
-                              : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent hover:border-v-accent/40'
+                              ? 'border-v-accent bg-v-accent/10 text-v-accent hover:bg-v-accent/15'
+                              : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-white/80 dark:bg-white/5 hover:bg-v-light-hover dark:hover:bg-v-light-dark'
                           }`}
                           title={memory.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                         >
@@ -709,7 +707,7 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
             {/* Table header */}
             <div
               className="grid gap-4 px-4 py-2 border-b border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary text-xs uppercase font-bold tracking-wider items-center"
-              style={{ gridTemplateColumns: '40px minmax(0,1.5fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,2fr) 92px' }}
+              style={{ gridTemplateColumns: '40px minmax(0,1.5fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,2fr) 140px' }}
             >
               <div className="flex items-center justify-center">
                 <input
@@ -773,7 +771,7 @@ export const MemoryListScreen: React.FC<MemoryListScreenProps> = ({
                   className={`grid gap-4 px-4 py-3 items-center text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover/50 dark:hover:bg-v-light-dark/40 transition-colors group ${
                     isSelected ? 'bg-v-accent/10' : ''
                   }`}
-                  style={{ gridTemplateColumns: '40px minmax(0,1.5fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,2fr) 92px' }}
+                  style={{ gridTemplateColumns: '40px minmax(0,1.5fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,2fr) 140px' }}
                 >
                   <div className="flex items-center justify-center">
                     <input

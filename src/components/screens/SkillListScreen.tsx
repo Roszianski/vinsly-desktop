@@ -21,6 +21,7 @@ import { ConfirmDialog } from '../ConfirmDialog';
 import { getStorageItem, setStorageItem } from '../../utils/storage';
 import { fuzzyMatch } from '../../utils/fuzzyMatch';
 import { useToast } from '../../contexts/ToastContext';
+import { SkeletonList } from '../shared/Skeleton';
 
 type LayoutMode = 'table' | 'grid';
 type Filter = 'All' | AgentScope;
@@ -68,6 +69,7 @@ interface SkillListScreenProps {
   activeView: 'subagents' | 'skills' | 'memory' | 'commands' | 'mcp' | 'hooks';
   onToggleFavorite: (skill: Skill) => void;
   shortcutHint?: string;
+  isLoading?: boolean;
 }
 
 export const SkillListScreen: React.FC<SkillListScreenProps> = ({
@@ -88,6 +90,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
   activeView,
   onToggleFavorite,
   shortcutHint,
+  isLoading = false,
 }) => {
   const { showToast } = useToast();
   const [filter, setFilter] = useState<Filter>('All');
@@ -345,7 +348,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
             type="checkbox"
             checked={areAllSelected}
             onChange={handleSelectAll}
-            disabled={filteredSkills.length === 0}
+            disabled={filteredSkills.length === 0 || isLoading}
             aria-label="Select all skills"
             className="h-4 w-4 bg-v-light-surface dark:bg-v-mid-dark border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent rounded"
           />
@@ -355,7 +358,9 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
         </div>
       </div>
       <div className="p-4">
-        {filteredSkills.length === 0 ? (
+        {isLoading ? (
+          <SkeletonList count={6} variant="card" />
+        ) : filteredSkills.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
             <LayersIcon className="w-12 h-12 mb-4 opacity-50" />
             <p className="text-lg font-medium mb-2">No skills found</p>
@@ -400,11 +405,13 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
     </div>
   );
 
+  const SKILL_LIST_GRID_TEMPLATE = '60px minmax(0,1.5fr) minmax(0,2fr) minmax(0,1.4fr) minmax(0,1.6fr) 140px';
+
   const renderTable = () => (
     <div className="divide-y divide-v-light-border dark:divide-v-border">
       <div
         className="grid gap-4 px-4 py-2 border-b border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary text-xs uppercase font-bold tracking-wider items-center"
-        style={{ gridTemplateColumns: '60px minmax(0,1.5fr) minmax(0,2fr) minmax(0,1.4fr) minmax(0,1.6fr) 140px' }}
+        style={{ gridTemplateColumns: SKILL_LIST_GRID_TEMPLATE }}
       >
         <div className="flex justify-center">
           <input
@@ -412,7 +419,7 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
             type="checkbox"
             checked={areAllSelected}
             onChange={handleSelectAll}
-            disabled={filteredSkills.length === 0}
+            disabled={filteredSkills.length === 0 || isLoading}
             aria-label="Select all skills"
             className="h-4 w-4 bg-v-light-surface dark:bg-v-mid-dark border-v-light-border dark:border-v-border text-v-accent focus:ring-v-accent rounded"
           />
@@ -446,7 +453,9 @@ export const SkillListScreen: React.FC<SkillListScreenProps> = ({
           </div>
         </div>
       </div>
-      {filteredSkills.length > 0 ? (
+      {isLoading ? (
+        <SkeletonList count={8} variant="list" gridTemplateColumns={SKILL_LIST_GRID_TEMPLATE} />
+      ) : filteredSkills.length > 0 ? (
         <motion.div
           key={`skill-table-${filter}`}
           variants={listContainer}
@@ -665,10 +674,10 @@ const SkillGridCard: React.FC<SkillGridCardProps> = ({
             </span>
             <button
               onClick={onToggleFavorite}
-              className={`flex-shrink-0 flex items-center justify-center h-8 w-8 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-v-accent/50 focus:ring-offset-0 ${
+              className={`flex-shrink-0 flex items-center justify-center h-8 w-8 rounded-md border transition-colors focus:outline-none focus:ring-2 focus:ring-v-accent/50 focus:ring-offset-0 ${
                 skill.isFavorite
-                  ? 'border-v-accent bg-v-accent/10 text-v-accent'
-                  : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent hover:border-v-accent/40'
+                  ? 'border-v-accent bg-v-accent/10 text-v-accent hover:bg-v-accent/15'
+                  : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-white/80 dark:bg-white/5 hover:bg-v-light-hover dark:hover:bg-v-light-dark'
               }`}
               title={skill.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
               aria-label={skill.isFavorite ? 'Unpin skill' : 'Pin skill'}

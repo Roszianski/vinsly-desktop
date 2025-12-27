@@ -361,7 +361,18 @@ export const AppContent: React.FC = () => {
   };
 
   const handleDeleteMCP = async (server: MCPServer) => {
-    await removeMCPServer(server.name, server.scope);
+    // For project/local scoped servers, derive projectPath from sourcePath
+    let projectPath: string | undefined;
+    if ((server.scope === 'project' || server.scope === 'local') && server.sourcePath) {
+      if (server.scope === 'project') {
+        // Remove /.mcp.json from end to get project path
+        projectPath = server.sourcePath.replace(/[/\\][^/\\]+$/, '');
+      } else {
+        // Remove /.claude/settings.local.json from end to get project path
+        projectPath = server.sourcePath.replace(/[/\\]\.claude[/\\][^/\\]+$/, '');
+      }
+    }
+    await removeMCPServer(server.name, server.scope, projectPath);
   };
 
   const handleDeleteHook = async (hook: Hook) => {

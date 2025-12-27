@@ -210,6 +210,13 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
       setCurrentStepIndex(0);
       setVisitedSteps(new Set([0]));
       setHasReachedReview(false);
+    } else {
+      // In edit mode, start at the config step (skip template selection)
+      const configStepIndex = WIZARD_STEPS.findIndex(s => s.id === 'config');
+      setCurrentStepIndex(configStepIndex);
+      // Mark all steps as visited in edit mode for free navigation
+      setVisitedSteps(new Set(WIZARD_STEPS.map((_, i) => i)));
+      setHasReachedReview(true);
     }
   }, [mode]);
 
@@ -1277,24 +1284,80 @@ export const MCPEditorScreen: React.FC<MCPEditorScreenProps> = ({
           </div>
         </div>
       ) : (
-        /* Edit mode - simpler layout without sidebar */
-        <div className="space-y-6">
-          <div className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-6">
-            {renderStepContent()}
-          </div>
-          <div className="flex items-center justify-between">
-            <button
-              onClick={onCancel}
-              className="px-4 py-2 bg-transparent border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary rounded-md text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 bg-v-accent hover:bg-v-accent-hover text-white font-semibold text-sm rounded-md"
-            >
-              {saveLabel}
-            </button>
+        /* Edit mode - use same sidebar layout for consistent navigation */
+        <div className="grid gap-6 md:grid-cols-[260px,1fr]" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.5rem' }}>
+          {/* Sidebar for Edit Mode */}
+          <aside className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-5 space-y-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-v-light-text-secondary dark:text-v-text-secondary">Sections</p>
+              <p className="text-base font-semibold text-v-light-text-primary dark:text-v-text-primary">Edit configuration</p>
+            </div>
+
+            <div className="space-y-2">
+              {sidebarSteps
+                .filter(step => step.id !== 'template' && step.id !== 'review') // Skip template and review in edit mode
+                .map(step => {
+                  const isClickable = true; // All steps navigable in edit mode
+                  return (
+                    <button
+                      type="button"
+                      key={step.id}
+                      onClick={() => goToStep(step.originalIndex)}
+                      className={`w-full text-left flex items-start gap-4 rounded-xl border px-4 py-3 transition-all duration-150 ${
+                        step.isActive
+                          ? 'border-v-accent/80 bg-v-accent/5'
+                          : 'border-v-light-border/70 dark:border-v-border/70 hover:border-v-accent/50'
+                      }`}
+                      aria-current={step.isActive ? 'step' : undefined}
+                    >
+                      <div className="flex-1">
+                        <p className={`text-sm font-semibold ${step.isActive ? 'text-v-accent' : 'text-v-light-text-primary dark:text-v-text-primary'}`}>
+                          {step.label}
+                        </p>
+                        <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-0.5">
+                          {step.description}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+          </aside>
+
+          {/* Main Content */}
+          <div className="space-y-6">
+            <AnimatePresence mode="wait" custom={direction}>
+              <motion.div
+                key={currentStep.id}
+                custom={direction}
+                variants={wizardStepVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                className="bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-2xl p-6 shadow-xl backdrop-blur-xl"
+              >
+                <h3 className="text-lg font-semibold text-v-light-text-primary dark:text-v-text-primary mb-4">
+                  {currentStep.label}
+                </h3>
+                {renderStepContent()}
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Save/Cancel Buttons */}
+            <div className="flex items-center justify-between">
+              <button
+                onClick={onCancel}
+                className="px-4 py-2 bg-transparent border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary rounded-md text-sm transition-transform duration-150 active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-4 py-2 bg-v-accent hover:bg-v-accent-hover text-white font-semibold text-sm rounded-md transition-transform duration-150 active:scale-95"
+              >
+                {saveLabel}
+              </button>
+            </div>
           </div>
         </div>
       )}

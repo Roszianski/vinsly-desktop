@@ -25,6 +25,7 @@ import { getStorageItem, setStorageItem } from '../../utils/storage';
 import { useToast } from '../../contexts/ToastContext';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { devLog } from '../../utils/devLogger';
+import { SkeletonList } from '../shared/Skeleton';
 
 interface AgentListScreenProps {
   agents: Agent[];
@@ -44,6 +45,7 @@ interface AgentListScreenProps {
   onToggleFavorite: (agent: Agent) => void;
   onImport?: (agents: Agent[], errors: string[]) => void;
   shortcutHint?: string;
+  isLoading?: boolean;
 }
 
 type Filter = 'All' | AgentScope;
@@ -76,7 +78,8 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
   activeView,
   onToggleFavorite,
   onImport,
-  shortcutHint
+  shortcutHint,
+  isLoading = false
 }) => {
   const { showToast } = useToast();
   const [filter, setFilter] = useState<Filter>('All');
@@ -605,7 +608,11 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
                 </div>
               </div>
             </div>
-            {processedAgents.length > 0 ? (
+            {isLoading ? (
+              <div className="p-4">
+                <SkeletonList count={6} variant="card" />
+              </div>
+            ) : processedAgents.length > 0 ? (
               <div className="p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {processedAgents.map(agent => (
@@ -690,7 +697,9 @@ export const AgentListScreen: React.FC<AgentListScreenProps> = ({
                 </div>
               </div>
             </div>
-            {processedAgents.length > 0 ? (
+            {isLoading ? (
+              <SkeletonList count={8} variant="list" gridTemplateColumns={LIST_GRID_TEMPLATE} />
+            ) : processedAgents.length > 0 ? (
               shouldVirtualize ? (
                 <div className="relative">
                   <div

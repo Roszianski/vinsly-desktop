@@ -17,6 +17,7 @@ import { iconButtonVariants, themeToggleVariants } from '../animations';
 import { getStorageItem, setStorageItem } from '../utils/storage';
 import { useToast } from '../contexts/ToastContext';
 import { PendingUpdateDetails } from '../types/updater';
+import { Breadcrumb } from './shared/Breadcrumb';
 
 const ScanSpinner: React.FC = () => (
   <svg
@@ -376,6 +377,8 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
         </div>
+        {/* Breadcrumb navigation */}
+        <Breadcrumb className="pb-3" />
       </div>
 
       {/* Settings Modal */}

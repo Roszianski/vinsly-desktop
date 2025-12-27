@@ -49,7 +49,7 @@ interface WorkspaceContextType {
   isMCPLoading: boolean;
   addMCPServer: (server: MCPServer, projectPath?: string) => Promise<void>;
   updateMCPServer: (server: MCPServer, oldServer: MCPServer, projectPath?: string) => Promise<void>;
-  removeMCPServer: (name: string, scope: MCPScope) => Promise<void>;
+  removeMCPServer: (name: string, scope: MCPScope, projectPath?: string) => Promise<void>;
   toggleMCPFavorite: (server: MCPServer) => void;
 
   // Hooks
@@ -435,8 +435,8 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     await updateMCPServerToBackend(server, oldServer, projectPath);
   }, [updateMCPServerToBackend]);
 
-  const removeMCPServer = useCallback(async (name: string, scope: MCPScope) => {
-    await removeMCPServerFromBackend(name, scope);
+  const removeMCPServer = useCallback(async (name: string, scope: MCPScope, projectPath?: string) => {
+    await removeMCPServerFromBackend(name, scope, projectPath);
   }, [removeMCPServerFromBackend]);
 
   // Hook operations

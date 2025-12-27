@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { MCPServer, MCPScope, getMCPScopeDisplayName } from '../../types/mcp';
 import { listContainer } from '../../animations';
@@ -16,6 +17,7 @@ import { ServerIcon } from '../icons/ServerIcon';
 import { RefreshIcon } from '../icons/RefreshIcon';
 import { StatusIndicator } from '../icons/StatusIndicator';
 import { LockIcon } from '../icons/LockIcon';
+import { SpinnerIcon } from '../icons/SpinnerIcon';
 import { NavigationTabs, TabView } from '../NavigationTabs';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { getStorageItem, setStorageItem } from '../../utils/storage';
@@ -23,6 +25,9 @@ import { fuzzyMatch } from '../../utils/fuzzyMatch';
 import { useToast } from '../../contexts/ToastContext';
 import { useMCPHealth } from '../../hooks/useMCPHealth';
 import { useMCPAuth } from '../../hooks/useMCPAuth';
+import { SkeletonList } from '../shared/Skeleton';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { devLog } from '../../utils/devLogger';
 
 type LayoutMode = 'table' | 'grid';
 type Filter = 'All' | 'user' | 'project';
@@ -66,6 +71,133 @@ const getTypeColor = (type: string): string => {
   }
 };
 
+// Get the config file path to reveal for the MCP server
+const getRevealPath = (server: MCPServer): string | null => {
+  // Always reveal the source config file (e.g., ~/.claude.json or .mcp.json)
+  return server.sourcePath || null;
+};
+
+// Action menu component for each row
+interface ActionMenuProps {
+  server: MCPServer;
+  onEdit: (server: MCPServer) => void;
+  onDelete: (server: MCPServer) => void;
+}
+
+const ActionMenu: React.FC<ActionMenuProps> = ({ server, onEdit, onDelete }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isRevealing, setIsRevealing] = useState(false);
+  const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  const revealPath = getRevealPath(server);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setIsOpen(false);
+      setMenuCoords(null);
+    };
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const menuHeight = 160;
+    const menuWidth = 180;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow >= menuHeight ? rect.bottom + 4 : rect.top - menuHeight - 4;
+    let left = rect.right - menuWidth;
+    if (left < 8) left = 8;
+    setMenuCoords({ top, left });
+  }, [isOpen]);
+
+  const handleAction = (action: () => void) => {
+    action();
+    setIsOpen(false);
+  };
+
+  const handleReveal = async () => {
+    if (!revealPath || isRevealing) return;
+    setIsRevealing(true);
+    try {
+      await revealItemInDir(revealPath);
+    } catch (error) {
+      devLog.error('Error revealing file:', error);
+    } finally {
+      setIsRevealing(false);
+      setIsOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        ref={buttonRef}
+        onClick={() => setIsOpen(!isOpen)}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-white/80 dark:bg-white/5 hover:bg-v-light-hover dark:hover:bg-v-light-dark transition-colors"
+        aria-label="More actions"
+      >
+        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="5" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="12" cy="19" r="2" />
+        </svg>
+      </button>
+      {isOpen && menuCoords && createPortal(
+        <motion.div
+          ref={menuRef}
+          initial={{ opacity: 0, y: -10, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.15 }}
+          style={{ position: 'fixed', top: menuCoords.top, left: menuCoords.left, zIndex: 1000 }}
+          className="w-48 bg-v-light-surface dark:bg-v-mid-dark border border-v-light-border dark:border-v-border rounded-lg shadow-lg overflow-hidden"
+        >
+          <button
+            onClick={() => handleAction(() => onEdit(server))}
+            className="w-full px-4 py-2.5 text-left text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark transition-colors flex items-center gap-3"
+          >
+            <EditIcon className="h-4 w-4" />
+            <span>Edit</span>
+          </button>
+          {revealPath && (
+            <button
+              onClick={handleReveal}
+              disabled={isRevealing}
+              className="w-full px-4 py-2.5 text-left text-sm text-v-light-text-primary dark:text-v-text-primary hover:bg-v-light-hover dark:hover:bg-v-light-dark transition-colors flex items-center gap-3 disabled:opacity-60"
+            >
+              {isRevealing ? (
+                <>
+                  <SpinnerIcon className="h-4 w-4" />
+                  <span>Opening…</span>
+                </>
+              ) : (
+                <>
+                  <FolderIcon className="h-4 w-4" />
+                  <span>Reveal in Folder</span>
+                </>
+              )}
+            </button>
+          )}
+          <div className="border-t border-v-light-border dark:border-v-border" />
+          <button
+            onClick={() => handleAction(() => onDelete(server))}
+            className="w-full px-4 py-2.5 text-left text-sm text-v-danger hover:bg-v-danger/10 transition-colors flex items-center gap-3"
+          >
+            <DeleteIcon className="h-4 w-4" />
+            <span>Delete</span>
+          </button>
+        </motion.div>,
+        document.body
+      )}
+    </div>
+  );
+};
+
 interface MCPListScreenProps {
   servers: MCPServer[];
   onCreateServer: () => void;
@@ -80,6 +212,7 @@ interface MCPListScreenProps {
   activeView: string;
   onToggleFavorite: (server: MCPServer) => void;
   shortcutHint?: string;
+  isLoading?: boolean;
 }
 
 export const MCPListScreen: React.FC<MCPListScreenProps> = ({
@@ -96,6 +229,7 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
   activeView,
   onToggleFavorite,
   shortcutHint,
+  isLoading = false,
 }) => {
   const { showToast } = useToast();
   const [filter, setFilter] = useState<Filter>('All');
@@ -333,10 +467,10 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
   );
 
   const renderTable = () => (
-    <div className="space-y-2">
+    <div className="divide-y divide-v-light-border dark:divide-v-border">
       <div
-        className="hidden md:grid gap-4 px-4 py-2 border-b border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary text-[11px] uppercase font-bold tracking-[0.2em] items-center"
-        style={{ gridTemplateColumns: '32px minmax(0,1.5fr) minmax(0,0.6fr) minmax(0,0.6fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,0.8fr)' }}
+        className="hidden md:grid gap-4 px-4 py-2 text-v-light-text-secondary dark:text-v-text-secondary text-[11px] uppercase font-bold tracking-[0.2em] items-center"
+        style={{ gridTemplateColumns: '32px minmax(0,1.5fr) minmax(0,0.6fr) minmax(0,0.6fr) minmax(0,2fr) minmax(0,0.8fr) 92px' }}
       >
         <div className="flex items-center justify-center">
           <input
@@ -352,7 +486,7 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
         <div>Status</div>
         <div>Endpoint</div>
         <div>Scope</div>
-        <div className="text-right">
+        <div className="text-right pr-1">
           <label htmlFor="mcp-sort" className="sr-only">Sort servers by</label>
           <div className="relative inline-flex items-center">
             <select
@@ -379,7 +513,9 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
         </div>
       </div>
 
-      {filteredServers.length === 0 ? (
+      {isLoading ? (
+        <SkeletonList count={6} variant="list" gridTemplateColumns="32px minmax(0,1.5fr) minmax(0,0.6fr) minmax(0,0.6fr) minmax(0,2fr) minmax(0,0.8fr) 92px" />
+      ) : filteredServers.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
           <ServerIcon className="w-12 h-12 mb-4 opacity-50" />
           <p className="text-lg font-medium mb-2">No MCP servers found</p>
@@ -406,8 +542,8 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
         {filteredServers.map(server => (
           <div
             key={server.id}
-            className="grid gap-4 px-4 py-3 items-center border-b border-v-light-border/50 dark:border-v-border/50 hover:bg-v-light-hover dark:hover:bg-v-light-dark/50 transition-colors group"
-            style={{ gridTemplateColumns: '32px minmax(0,1.5fr) minmax(0,0.6fr) minmax(0,0.6fr) minmax(0,2fr) minmax(0,0.8fr) minmax(0,0.8fr)' }}
+            className="grid gap-4 px-4 py-3 items-center hover:bg-v-light-hover dark:hover:bg-v-light-dark/50 transition-colors"
+            style={{ gridTemplateColumns: '32px minmax(0,1.5fr) minmax(0,0.6fr) minmax(0,0.6fr) minmax(0,2fr) minmax(0,0.8fr) 92px' }}
           >
             <div className="flex items-center justify-center">
               <input
@@ -419,16 +555,6 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
             </div>
 
             <div className="flex items-center gap-2 min-w-0">
-              <button
-                onClick={() => onToggleFavorite(server)}
-                className={`flex-shrink-0 p-1 rounded transition-colors ${
-                  server.isFavorite
-                    ? 'text-yellow-500'
-                    : 'text-v-light-text-secondary dark:text-v-text-secondary hover:text-yellow-500'
-                }`}
-              >
-                <StarIcon className="h-4 w-4" filled={server.isFavorite} />
-              </button>
               <div className="relative group/name min-w-0">
                 <span
                   className="font-medium text-v-light-text-primary dark:text-v-text-primary truncate cursor-pointer hover:text-v-accent block"
@@ -483,21 +609,25 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
               </span>
             </div>
 
-            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Actions - favorite button + menu */}
+            <div className="flex items-center justify-end gap-2">
               <button
-                onClick={() => onEditServer(server)}
-                className="p-1.5 rounded hover:bg-v-light-surface dark:hover:bg-v-mid-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent transition-colors"
-                title="Edit server"
+                type="button"
+                onClick={() => onToggleFavorite(server)}
+                aria-label={server.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                className={`inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-v-accent/60 ${
+                  server.isFavorite
+                    ? 'border-v-accent text-v-accent bg-v-accent/10 hover:bg-v-accent/15'
+                    : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-white/80 dark:bg-white/5 hover:bg-v-light-hover dark:hover:bg-v-light-dark'
+                }`}
               >
-                <EditIcon className="h-4 w-4" />
+                <StarIcon className="h-4 w-4" filled={server.isFavorite} />
               </button>
-              <button
-                onClick={() => handleDeleteClick(server)}
-                className="p-1.5 rounded hover:bg-v-light-surface dark:hover:bg-v-mid-dark text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-danger transition-colors"
-                title="Delete server"
-              >
-                <DeleteIcon className="h-4 w-4" />
-              </button>
+              <ActionMenu
+                server={server}
+                onEdit={onEditServer}
+                onDelete={handleDeleteClick}
+              />
             </div>
           </div>
         ))}
@@ -508,7 +638,11 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
 
   const renderGrid = () => (
     <>
-      {filteredServers.length === 0 ? (
+      {isLoading ? (
+        <div className="p-4">
+          <SkeletonList count={6} variant="card" />
+        </div>
+      ) : filteredServers.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-v-light-text-secondary dark:text-v-text-secondary">
           <ServerIcon className="w-12 h-12 mb-4 opacity-50" />
           <p className="text-lg font-medium mb-2">No MCP servers found</p>
@@ -556,8 +690,7 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
             {filteredServers.map(server => (
             <div
               key={server.id}
-              className="p-4 rounded-2xl border border-v-light-border/80 dark:border-v-border/70 bg-v-light-surface dark:bg-v-mid-dark/90 shadow-[0_6px_20px_rgba(15,23,42,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:border-v-accent/60 transition-all cursor-pointer group"
-              onClick={() => onEditServer(server)}
+              className="p-4 rounded-2xl border border-v-light-border/80 dark:border-v-border/70 bg-v-light-surface dark:bg-v-mid-dark/90 shadow-[0_6px_20px_rgba(15,23,42,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.35)] hover:border-v-accent/60 transition-all flex flex-col"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="relative group/name flex items-center gap-2 min-w-0">
@@ -570,14 +703,11 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
                   </span>
                 </div>
                 <button
-                  onClick={e => {
-                    e.stopPropagation();
-                    onToggleFavorite(server);
-                  }}
-                  className={`flex items-center justify-center h-8 w-8 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-v-accent/50 focus:ring-offset-0 ${
+                  onClick={() => onToggleFavorite(server)}
+                  className={`flex items-center justify-center h-8 w-8 rounded-md border transition-colors focus:outline-none focus:ring-2 focus:ring-v-accent/50 focus:ring-offset-0 ${
                     server.isFavorite
-                      ? 'border-v-accent bg-v-accent/10 text-v-accent'
-                      : 'border-transparent text-v-light-text-secondary dark:text-v-text-secondary hover:text-v-accent hover:border-v-accent/40'
+                      ? 'border-v-accent bg-v-accent/10 text-v-accent hover:bg-v-accent/15'
+                      : 'border-v-light-border dark:border-v-border text-v-light-text-secondary dark:text-v-text-secondary bg-white/80 dark:bg-white/5 hover:bg-v-light-hover dark:hover:bg-v-light-dark'
                   }`}
                 >
                   <StarIcon className="h-4 w-4" filled={server.isFavorite} />
@@ -615,9 +745,25 @@ export const MCPListScreen: React.FC<MCPListScreenProps> = ({
                 <StatusIndicator status={getStatus(server.id)} size="sm" />
               </div>
 
-              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary truncate font-mono">
+              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary truncate font-mono mb-3">
                 {server.type === 'stdio' ? server.command : server.url || '-'}
               </p>
+
+              {/* Action footer */}
+              <div className="flex items-center justify-between gap-3 pt-2 border-t border-dashed border-v-light-border/70 dark:border-v-border/70 mt-auto">
+                <button
+                  onClick={() => onEditServer(server)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-v-light-border dark:border-v-border text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent whitespace-nowrap"
+                >
+                  <EditIcon className="h-3.5 w-3.5" />
+                  Edit
+                </button>
+                <ActionMenu
+                  server={server}
+                  onEdit={onEditServer}
+                  onDelete={handleDeleteClick}
+                />
+              </div>
             </div>
           ))}
           </motion.div>
