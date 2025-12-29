@@ -56,7 +56,7 @@ pub fn scan_project_directories(
 
     let walker = WalkDir::new(&home_dir)
         .max_depth(depth)
-        .follow_links(false)
+        .follow_links(true)
         .into_iter()
         .filter_entry(|entry| {
             let path = entry.path();
@@ -167,7 +167,7 @@ pub fn scan_directory(
 
     let walker = WalkDir::new(&root_dir)
         .max_depth(depth)
-        .follow_links(false)
+        .follow_links(true)
         .into_iter()
         .filter_entry(|entry| {
             let path = entry.path();
