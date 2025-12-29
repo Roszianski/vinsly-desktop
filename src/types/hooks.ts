@@ -106,13 +106,15 @@ export interface HookSpecificOutput {
 
 /**
  * Event types that support matcher patterns
- * Per official Claude Code docs: only tool-related events support matchers
+ * Per official Claude Code docs: tool-related events plus PreCompact and SessionStart
  */
 export const EVENTS_WITH_MATCHER_SUPPORT: HookEventType[] = [
   'PreToolUse',
   'PostToolUse',
   'PermissionRequest',
   'Notification',
+  'PreCompact',
+  'SessionStart',
 ];
 
 /**

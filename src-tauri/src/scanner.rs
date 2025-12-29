@@ -31,12 +31,40 @@ fn protected_docs_dirs(home_dir: &Path) -> Vec<PathBuf> {
     ]
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Linux-specific directories to skip (never contain code projects)
+#[cfg(target_os = "linux")]
+fn always_skip_dirs(home_dir: &Path) -> Vec<PathBuf> {
+    vec![
+        home_dir.join(".local").join("share").join("Trash"),
+        home_dir.join("snap"),
+        home_dir.join(".steam"),
+        home_dir.join(".wine"),
+    ]
+}
+
+#[cfg(target_os = "linux")]
+fn protected_docs_dirs(_home_dir: &Path) -> Vec<PathBuf> {
+    Vec::new()
+}
+
+/// Windows has no special skip directories (handled via path validation)
+#[cfg(target_os = "windows")]
 fn always_skip_dirs(_home_dir: &Path) -> Vec<PathBuf> {
     Vec::new()
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+fn protected_docs_dirs(_home_dir: &Path) -> Vec<PathBuf> {
+    Vec::new()
+}
+
+/// Fallback for other platforms
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+fn always_skip_dirs(_home_dir: &Path) -> Vec<PathBuf> {
+    Vec::new()
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 fn protected_docs_dirs(_home_dir: &Path) -> Vec<PathBuf> {
     Vec::new()
 }

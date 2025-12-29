@@ -33,6 +33,8 @@ import {
   getHookConfigPath,
   getHookEnvVariables,
   getHookStdinFields,
+  eventSupportsMatchers,
+  eventSupportsPromptHooks,
   HOOK_ENV_VARIABLES,
 } from '../../types/hooks';
 
@@ -572,6 +574,45 @@ describe('Hook Types', () => {
       expect(getHookConfigPath('user')).toBe('~/.claude/settings.json');
       expect(getHookConfigPath('project', '/my/project')).toBe('/my/project/.claude/settings.json');
       expect(getHookConfigPath('local', '/my/project')).toBe('/my/project/.claude/settings.local.json');
+    });
+  });
+
+  describe('eventSupportsMatchers', () => {
+    it('should return true for tool-related events', () => {
+      expect(eventSupportsMatchers('PreToolUse')).toBe(true);
+      expect(eventSupportsMatchers('PostToolUse')).toBe(true);
+      expect(eventSupportsMatchers('PermissionRequest')).toBe(true);
+      expect(eventSupportsMatchers('Notification')).toBe(true);
+    });
+
+    it('should return true for PreCompact and SessionStart', () => {
+      expect(eventSupportsMatchers('PreCompact')).toBe(true);
+      expect(eventSupportsMatchers('SessionStart')).toBe(true);
+    });
+
+    it('should return false for events without matcher support', () => {
+      expect(eventSupportsMatchers('UserPromptSubmit')).toBe(false);
+      expect(eventSupportsMatchers('Stop')).toBe(false);
+      expect(eventSupportsMatchers('SubagentStop')).toBe(false);
+      expect(eventSupportsMatchers('SessionEnd')).toBe(false);
+    });
+  });
+
+  describe('eventSupportsPromptHooks', () => {
+    it('should return true for events with prompt support', () => {
+      expect(eventSupportsPromptHooks('PreToolUse')).toBe(true);
+      expect(eventSupportsPromptHooks('PermissionRequest')).toBe(true);
+      expect(eventSupportsPromptHooks('UserPromptSubmit')).toBe(true);
+      expect(eventSupportsPromptHooks('Stop')).toBe(true);
+      expect(eventSupportsPromptHooks('SubagentStop')).toBe(true);
+    });
+
+    it('should return false for events without prompt support', () => {
+      expect(eventSupportsPromptHooks('PostToolUse')).toBe(false);
+      expect(eventSupportsPromptHooks('Notification')).toBe(false);
+      expect(eventSupportsPromptHooks('PreCompact')).toBe(false);
+      expect(eventSupportsPromptHooks('SessionStart')).toBe(false);
+      expect(eventSupportsPromptHooks('SessionEnd')).toBe(false);
     });
   });
 });

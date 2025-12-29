@@ -47,8 +47,9 @@ const getSkillDirectoryFromFilePath = (filePath?: string | null): string => {
     return '';
   }
   const normalized = filePath.replace(/\\/g, '/');
+  // Case-insensitive check for SKILL.md (handles both SKILL.md and skill.md)
   return normalized.toLowerCase().endsWith('/skill.md')
-    ? normalized.slice(0, -'/skill.md'.length)
+    ? normalized.slice(0, -'/SKILL.md'.length)
     : normalized;
 };
 

@@ -2256,7 +2256,7 @@ fn infer_server_type(config: &MCPServerConfig) -> String {
 async fn list_mcp_servers(project_path: Option<String>) -> Result<Vec<MCPServerInfo>, String> {
     let mut servers = Vec::new();
 
-    // Read user-level config (~/.claude/mcp.json)
+    // Read user-level config (~/.claude.json)
     let user_path = get_mcp_config_path("user", None)?;
     if let Ok(config) = read_mcp_config_from_file(&user_path) {
         for (name, server_config) in config.mcp_servers {
