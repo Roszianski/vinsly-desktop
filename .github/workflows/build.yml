@@ -10,7 +10,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS Apple Silicon (M1/M2/M3)
+          # macOS Apple Silicon
           - platform: macos-latest
             target: aarch64-apple-darwin
             artifact_name: Vinsly-macOS-arm64
@@ -198,13 +198,13 @@ jobs:
 
             | Platform | Download |
             |----------|----------|
-            | **macOS (Apple Silicon)** | [Download for M1/M2/M3/M4](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_macOS-Apple-Silicon.dmg) |
+            | **macOS (Apple Silicon)** | [Download for Apple Silicon](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_macOS-Apple-Silicon.dmg) |
             | **macOS (Intel)** | [Download for Intel Mac](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_macOS-Intel.dmg) |
             | **Windows** | [Download Installer](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_Windows-Setup.exe) |
             | **Linux (deb)** | [Download .deb](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_Linux.deb) |
             | **Linux (AppImage)** | [Download AppImage](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Vinsly_${{ steps.version.outputs.VERSION }}_Linux.AppImage) |
 
-            > 💡 **Not sure which Mac?** Click  → "About This Mac". If it says "Chip: Apple M1/M2/M3/M4" use the first option.
+            > 💡 **Not sure which Mac?** Click  → "About This Mac". If it says "Chip: Apple M..." use the first option.
 
             ---
 
