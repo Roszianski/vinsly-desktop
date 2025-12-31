@@ -13,16 +13,17 @@ import {
   getHookEventDisplayName,
   getHookEventDescription,
   getHookExecutionTypeDisplayName,
-  getHookExecutionTypeDescription,
   getHookEnvVariables,
   getHookStdinFields,
   eventSupportsMatchers,
   eventSupportsPromptHooks,
+  getMatchersForEvent,
   PROMPT_HOOK_VARIABLES,
   STDIN_FIELD_DESCRIPTIONS,
+  EXIT_CODE_BEHAVIORS,
 } from '../../types/hooks';
 import { wizardStepVariants } from '../../animations';
-import { InputField, TextareaField } from '../form';
+import { InputField, MultiSelectChips } from '../form';
 import { WizardStepHeader } from '../wizard';
 import { CheckIcon } from '../icons/CheckIcon';
 import { WarningIcon } from '../icons/WarningIcon';
@@ -42,7 +43,7 @@ interface HooksEditorScreenProps {
 type WizardStepId =
   | 'template'
   | 'event'
-  | 'execution'
+  | 'matcher'
   | 'config'
   | 'scope'
   | 'review';
@@ -61,15 +62,15 @@ const WIZARD_STEPS: { id: WizardStepId; label: string; description: string; requ
     required: true
   },
   {
-    id: 'execution',
-    label: 'Execution type',
-    description: 'Choose how the hook executes: bash command or LLM prompt.',
-    required: true
+    id: 'matcher',
+    label: 'Matcher selection',
+    description: 'Filter which events trigger this hook.',
+    required: false
   },
   {
     id: 'config',
     label: 'Hook configuration',
-    description: 'Configure the hook name, command/prompt, and optional matcher.',
+    description: 'Configure the hook name, command/prompt, and execution type.',
     required: true
   },
   {
@@ -89,73 +90,87 @@ const WIZARD_STEPS: { id: WizardStepId; label: string; description: string; requ
 const EVENT_TYPE_OPTIONS: { value: HookEventType; title: string; description: string; supportsMatcher: boolean; supportsPrompt: boolean }[] = [
   {
     value: 'PreToolUse',
-    title: 'Before Tool Use',
-    description: 'Runs before Claude uses a tool. Can block execution or modify input.',
+    title: 'PreToolUse',
+    description: 'Before tool execution',
     supportsMatcher: true,
     supportsPrompt: true
   },
   {
     value: 'PostToolUse',
-    title: 'After Tool Use',
-    description: 'Runs after Claude uses a tool. Receives tool output.',
+    title: 'PostToolUse',
+    description: 'After tool execution',
     supportsMatcher: true,
     supportsPrompt: false
   },
   {
-    value: 'PermissionRequest',
-    title: 'Permission Request',
-    description: 'Runs when a permission dialog is shown. Can auto-approve or deny.',
+    value: 'PostToolUseFailure',
+    title: 'PostToolUseFailure',
+    description: 'After tool execution fails',
     supportsMatcher: true,
-    supportsPrompt: true
+    supportsPrompt: false
   },
   {
     value: 'Notification',
-    title: 'On Notification',
-    description: 'Runs when Claude sends a notification message.',
+    title: 'Notification',
+    description: 'When notifications are sent',
     supportsMatcher: true,
     supportsPrompt: false
   },
   {
     value: 'UserPromptSubmit',
-    title: 'User Prompt Submit',
-    description: 'Runs when user submits a prompt. Can add context or block.',
+    title: 'UserPromptSubmit',
+    description: 'When the user submits a prompt',
     supportsMatcher: false,
     supportsPrompt: true
+  },
+  {
+    value: 'SessionStart',
+    title: 'SessionStart',
+    description: 'When a new session is started',
+    supportsMatcher: true,
+    supportsPrompt: false
   },
   {
     value: 'Stop',
-    title: 'Session Stop',
-    description: 'Runs when the Claude Code session ends. Can prevent stopping.',
+    title: 'Stop',
+    description: 'Right before Claude concludes its response',
     supportsMatcher: false,
     supportsPrompt: true
   },
   {
+    value: 'SubagentStart',
+    title: 'SubagentStart',
+    description: 'When a subagent (Task tool call) is started',
+    supportsMatcher: false,
+    supportsPrompt: false
+  },
+  {
     value: 'SubagentStop',
-    title: 'Subagent Stop',
-    description: 'Runs when a subagent completes execution.',
+    title: 'SubagentStop',
+    description: 'Right before a subagent (Task tool call) concludes its response',
     supportsMatcher: false,
     supportsPrompt: true
   },
   {
     value: 'PreCompact',
-    title: 'Before Compaction',
-    description: 'Runs before context is compacted. Preserve important information.',
-    supportsMatcher: false,
-    supportsPrompt: false
-  },
-  {
-    value: 'SessionStart',
-    title: 'Session Start',
-    description: 'Runs when a session starts. Set up environment and context.',
-    supportsMatcher: false,
+    title: 'PreCompact',
+    description: 'Before conversation compaction',
+    supportsMatcher: true,
     supportsPrompt: false
   },
   {
     value: 'SessionEnd',
-    title: 'Session End',
-    description: 'Runs when a session terminates.',
+    title: 'SessionEnd',
+    description: 'When a session is ending',
     supportsMatcher: false,
     supportsPrompt: false
+  },
+  {
+    value: 'PermissionRequest',
+    title: 'PermissionRequest',
+    description: 'When a permission dialog is displayed',
+    supportsMatcher: true,
+    supportsPrompt: true
   }
 ];
 
@@ -215,6 +230,7 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
   const [commandError, setCommandError] = useState('');
   const [promptError, setPromptError] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<HookTemplate | null>(null);
+  const [selectedMatchers, setSelectedMatchers] = useState<Set<string>>(new Set());
   const [projectFolderPath, setProjectFolderPath] = useState(projectPath || '');
   const [projectFolderError, setProjectFolderError] = useState('');
   const [isPickingProjectFolder, setIsPickingProjectFolder] = useState(false);
@@ -236,8 +252,29 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
       setCurrentStepIndex(0);
       setVisitedSteps(new Set([0]));
       setHasReachedReview(false);
+      setSelectedMatchers(new Set());
     }
   }, [mode]);
+
+  // Sync selectedMatchers with formData.matcher
+  useEffect(() => {
+    if (selectedMatchers.size > 0) {
+      setFormData(prev => ({
+        ...prev,
+        matcher: Array.from(selectedMatchers).join('|')
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, matcher: undefined }));
+    }
+  }, [selectedMatchers]);
+
+  // Initialize selectedMatchers from existing matcher (for edit mode)
+  useEffect(() => {
+    if (hook?.matcher && mode === 'edit') {
+      const matchers = hook.matcher.split('|').filter(m => m.trim());
+      setSelectedMatchers(new Set(matchers));
+    }
+  }, [hook?.matcher, mode]);
 
   const validateName = useCallback(
     (nameValue: string) => {
@@ -284,7 +321,9 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
   };
 
   const handleEventTypeChange = (eventType: HookEventType) => {
-    setFormData(prev => ({ ...prev, eventType }));
+    setFormData(prev => ({ ...prev, eventType, matcher: undefined }));
+    // Clear matchers when changing event type since available matchers differ
+    setSelectedMatchers(new Set());
   };
 
   const handleExecutionTypeChange = (executionType: HookExecutionType) => {
@@ -317,6 +356,16 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
         matcher: template.config.matcher,
         timeout: template.config.timeout,
       }));
+      // Sync selectedMatchers with template's matcher
+      if (template.config.matcher) {
+        const matchers = template.config.matcher.split('|').filter(m => m.trim());
+        setSelectedMatchers(new Set(matchers));
+      } else {
+        setSelectedMatchers(new Set());
+      }
+    } else {
+      // Starting from scratch - clear matchers
+      setSelectedMatchers(new Set());
     }
   };
 
@@ -340,14 +389,15 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
         return true; // Optional step
       case 'event':
         return Boolean(formData.eventType);
-      case 'execution':
-        return Boolean(formData.executionType);
+      case 'matcher':
+        return true; // Optional step - matchers are not required
       case 'config': {
         const hasName = Boolean(formData.name);
+        const hasExecutionType = Boolean(formData.executionType);
         const hasCommandOrPrompt = formData.executionType === 'command'
           ? Boolean(formData.command)
           : Boolean(formData.prompt);
-        return hasName && hasCommandOrPrompt;
+        return hasName && hasExecutionType && hasCommandOrPrompt;
       }
       case 'scope':
         if ((formData.scope === 'project' || formData.scope === 'local') && !projectFolderPath) return false;
@@ -439,10 +489,30 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
       }
     }
 
+    // If we're on event step and going to matcher step, check if event supports matchers
+    if (currentStep.id === 'event') {
+      const nextStep = WIZARD_STEPS[currentStepIndex + 1];
+      if (nextStep?.id === 'matcher' && !eventSupportsMatchers(formData.eventType)) {
+        // Skip matcher step entirely - go to config step
+        goToStep(currentStepIndex + 2);
+        return;
+      }
+    }
+
     goToStep(currentStepIndex + 1);
   };
 
   const handlePrevStep = () => {
+    const currentStep = WIZARD_STEPS[currentStepIndex];
+    const prevStep = WIZARD_STEPS[currentStepIndex - 1];
+
+    // If we're on config step and previous is matcher, check if we should skip matcher
+    if (currentStep?.id === 'config' && prevStep?.id === 'matcher' && !eventSupportsMatchers(formData.eventType)) {
+      // Skip matcher step - go back to event step
+      goToStep(currentStepIndex - 2);
+      return;
+    }
+
     goToStep(currentStepIndex - 1);
   };
 
@@ -579,65 +649,87 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
           </div>
         );
 
-      case 'execution':
-        return (
-          <div className="space-y-3">
-            {EXECUTION_TYPE_OPTIONS.map(option => {
-              const isPromptDisabled = option.value === 'prompt' && !supportsPromptHooks;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => !isPromptDisabled && handleExecutionTypeChange(option.value)}
-                  disabled={isPromptDisabled}
-                  className={`w-full p-4 rounded-lg border text-left transition-all ${
-                    formData.executionType === option.value
-                      ? 'border-v-accent bg-v-accent/10'
-                      : isPromptDisabled
-                        ? 'border-v-light-border dark:border-v-border opacity-50 cursor-not-allowed'
-                        : 'border-v-light-border dark:border-v-border hover:border-v-accent/50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                        {option.title}
-                      </span>
-                      {isPromptDisabled && (
-                        <span className="px-1.5 py-0.5 text-[10px] bg-orange-500/20 text-orange-600 dark:text-orange-400 rounded">
-                          Not supported
-                        </span>
-                      )}
-                    </div>
-                    {formData.executionType === option.value && (
-                      <CheckIcon className="h-5 w-5 text-v-accent" />
-                    )}
-                  </div>
-                  <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
-                    {isPromptDisabled
-                      ? `Prompt hooks are not available for ${getHookEventDisplayName(formData.eventType)}`
-                      : option.description}
-                  </p>
-                </button>
-              );
-            })}
+      case 'matcher': {
+        const matcherInfo = getMatchersForEvent(formData.eventType);
 
-            <div className="mt-4 p-4 rounded-lg bg-v-light-hover dark:bg-v-light-dark border border-v-light-border dark:border-v-border">
-              <h4 className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary mb-2">
-                {formData.executionType === 'command' ? 'Command Hook' : 'Prompt Hook'}
-              </h4>
-              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
-                {formData.executionType === 'command'
-                  ? 'Executes a shell command. Return exit code 0 for success, exit code 2 to block the operation.'
-                  : 'Uses an LLM (Haiku) to evaluate the context. Return JSON with decision (approve/block) and reason.'}
-              </p>
+        if (!matcherInfo) {
+          // Event doesn't support matchers - show info
+          return (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-v-light-hover dark:bg-v-light-dark border border-v-light-border dark:border-v-border">
+                <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
+                  The <strong className="text-v-light-text-primary dark:text-v-text-primary">{formData.eventType}</strong> event does not support matchers.
+                  Click "Next" to continue.
+                </p>
+              </div>
             </div>
+          );
+        }
+
+        return (
+          <div className="space-y-6">
+            <MultiSelectChips
+              label={matcherInfo.label}
+              hint={matcherInfo.hint}
+              options={matcherInfo.matchers}
+              selectedValues={selectedMatchers}
+              onSelectionChange={setSelectedMatchers}
+              showSelectAll={matcherInfo.category === 'tool'}
+              columns={matcherInfo.category === 'tool' ? 4 : 2}
+              size={matcherInfo.category === 'tool' ? 'sm' : 'md'}
+            />
+
+            <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+              Leave empty to match all. Click "Next" to continue.
+            </p>
           </div>
         );
+      }
 
       case 'config':
         return (
           <div className="space-y-6">
+            {/* Execution Type Selection - Inline at top */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-v-light-text-primary dark:text-v-text-primary">
+                Execution type
+              </label>
+              <div className="flex gap-3">
+                {EXECUTION_TYPE_OPTIONS.map(option => {
+                  const isPromptDisabled = option.value === 'prompt' && !supportsPromptHooks;
+                  const isSelected = formData.executionType === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => !isPromptDisabled && handleExecutionTypeChange(option.value)}
+                      disabled={isPromptDisabled}
+                      className={`flex-1 p-3 rounded-lg border text-left transition-all ${
+                        isSelected
+                          ? 'border-v-accent bg-v-accent/10'
+                          : isPromptDisabled
+                            ? 'border-v-light-border dark:border-v-border opacity-50 cursor-not-allowed'
+                            : 'border-v-light-border dark:border-v-border hover:border-v-accent/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isSelected && <CheckIcon className="h-4 w-4 text-v-accent flex-shrink-0" />}
+                        <span className="font-medium text-sm text-v-light-text-primary dark:text-v-text-primary">
+                          {option.title}
+                        </span>
+                      </div>
+                      <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
+                        {isPromptDisabled
+                          ? `Not supported for ${formData.eventType}`
+                          : option.description
+                        }
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <InputField
               id="hook-name"
               label="Hook name"
@@ -694,17 +786,6 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
               </div>
             )}
 
-            {supportsMatchers && (
-              <InputField
-                id="hook-matcher"
-                label="Matcher (optional)"
-                value={formData.matcher || ''}
-                onChange={e => setFormData(prev => ({ ...prev, matcher: e.target.value || undefined }))}
-                placeholder="e.g., Bash|Write|Edit"
-                hint="Regex pattern to filter which tools trigger this hook"
-              />
-            )}
-
             <InputField
               id="hook-timeout"
               label="Timeout (optional)"
@@ -719,6 +800,27 @@ export const HooksEditorScreen: React.FC<HooksEditorScreenProps> = ({
               placeholder="60"
               hint="Timeout in seconds (default: 60)"
             />
+
+            {/* Exit Code Behavior Info */}
+            {formData.executionType === 'command' && (
+              <div className="p-4 rounded-lg bg-v-light-hover dark:bg-v-light-dark border border-v-light-border dark:border-v-border">
+                <h4 className="text-sm font-medium text-v-light-text-primary dark:text-v-text-primary mb-3">
+                  Exit Code Behavior
+                </h4>
+                <div className="space-y-2">
+                  {EXIT_CODE_BEHAVIORS.map(behavior => (
+                    <div key={String(behavior.code)} className="flex items-start gap-3">
+                      <code className={`px-2 py-0.5 text-xs ${behavior.colorClass} rounded font-mono`}>
+                        {behavior.code}
+                      </code>
+                      <span className="text-xs text-v-light-text-secondary dark:text-v-text-secondary">
+                        {behavior.behavior}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {formData.executionType === 'command' && (
               <div className="space-y-4">

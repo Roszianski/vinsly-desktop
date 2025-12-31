@@ -195,7 +195,7 @@ interface SlashCommandListScreenProps {
   onShowCommands: () => void;
   onShowMCP: () => void;
   onShowHooks: () => void;
-  activeView: 'subagents' | 'skills' | 'memory' | 'commands' | 'mcp' | 'hooks';
+  activeView: TabView;
   shortcutHint?: string;
 }
 

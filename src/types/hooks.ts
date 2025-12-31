@@ -11,19 +11,21 @@
 
 /**
  * Hook event types that trigger hook execution
- * Complete list from Claude Code official documentation
+ * Complete list from Claude Code official documentation (12 events)
  */
 export type HookEventType =
-  | 'PreToolUse'        // Before tool execution (supports matchers)
-  | 'PostToolUse'       // After tool completes (supports matchers)
-  | 'PermissionRequest' // Permission dialog handling (supports matchers)
-  | 'Notification'      // Notification events (supports matchers)
-  | 'UserPromptSubmit'  // User prompt submission (no matchers)
-  | 'Stop'              // Agent stopping (no matchers)
-  | 'SubagentStop'      // Subagent stopping (no matchers)
-  | 'PreCompact'        // Before context compaction (supports matchers)
-  | 'SessionStart'      // Session initialization (supports matchers)
-  | 'SessionEnd';       // Session termination (no matchers)
+  | 'PreToolUse'           // Before tool execution
+  | 'PostToolUse'          // After tool execution
+  | 'PostToolUseFailure'   // After tool execution fails
+  | 'PermissionRequest'    // When a permission dialog is displayed
+  | 'Notification'         // When notifications are sent
+  | 'UserPromptSubmit'     // When the user submits a prompt
+  | 'Stop'                 // Right before Claude concludes its response
+  | 'SubagentStart'        // When a subagent (Task tool call) is started
+  | 'SubagentStop'         // Right before a subagent concludes its response
+  | 'PreCompact'           // Before conversation compaction
+  | 'SessionStart'         // When a new session is started
+  | 'SessionEnd';          // When a session is ending
 
 /**
  * Hook type - command (bash) or prompt (LLM-based)
@@ -111,6 +113,7 @@ export interface HookSpecificOutput {
 export const EVENTS_WITH_MATCHER_SUPPORT: HookEventType[] = [
   'PreToolUse',
   'PostToolUse',
+  'PostToolUseFailure',
   'PermissionRequest',
   'Notification',
   'PreCompact',
@@ -142,6 +145,132 @@ export function eventSupportsPromptHooks(eventType: HookEventType): boolean {
 export function eventSupportsMatchers(eventType: HookEventType): boolean {
   return EVENTS_WITH_MATCHER_SUPPORT.includes(eventType);
 }
+
+/**
+ * Tool matchers - available tools that can be matched
+ * Used for PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest
+ */
+export const TOOL_MATCHERS = [
+  'Task',
+  'TaskOutput',
+  'Bash',
+  'Glob',
+  'Grep',
+  'ExitPlanMode',
+  'Read',
+  'Edit',
+  'Write',
+  'NotebookEdit',
+  'WebFetch',
+  'TodoWrite',
+  'WebSearch',
+  'KillShell',
+  'AskUserQuestion',
+  'Skill',
+  'EnterPlanMode',
+] as const;
+
+/**
+ * Notification matchers - notification types that can be matched
+ */
+export const NOTIFICATION_MATCHERS = [
+  'permission_prompt',
+  'idle_prompt',
+  'auth_success',
+  'elicitation_dialog',
+] as const;
+
+/**
+ * PreCompact matchers - compaction triggers
+ */
+export const PRECOMPACT_MATCHERS = ['manual', 'auto'] as const;
+
+/**
+ * SessionStart matchers - session start sources
+ */
+export const SESSION_START_MATCHERS = ['startup', 'resume', 'clear', 'compact'] as const;
+
+/**
+ * Matcher category types
+ */
+export type MatcherCategory = 'tool' | 'notification' | 'precompact' | 'session_start';
+
+/**
+ * Get matchers available for an event type
+ */
+export function getMatchersForEvent(eventType: HookEventType): {
+  category: MatcherCategory;
+  matchers: readonly string[];
+  label: string;
+  hint: string;
+} | null {
+  switch (eventType) {
+    case 'PreToolUse':
+    case 'PostToolUse':
+    case 'PostToolUseFailure':
+    case 'PermissionRequest':
+      return {
+        category: 'tool',
+        matchers: TOOL_MATCHERS,
+        label: 'Select tools to match',
+        hint: 'Choose which tools will trigger this hook. Leave empty to match all tools.',
+      };
+    case 'Notification':
+      return {
+        category: 'notification',
+        matchers: NOTIFICATION_MATCHERS,
+        label: 'Select notification types',
+        hint: 'Choose which notification types will trigger this hook.',
+      };
+    case 'PreCompact':
+      return {
+        category: 'precompact',
+        matchers: PRECOMPACT_MATCHERS,
+        label: 'Select compaction triggers',
+        hint: 'Choose which compaction triggers will run this hook.',
+      };
+    case 'SessionStart':
+      return {
+        category: 'session_start',
+        matchers: SESSION_START_MATCHERS,
+        label: 'Select session start sources',
+        hint: 'Choose which session start sources will trigger this hook.',
+      };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Exit code behaviors for hooks
+ */
+export interface ExitCodeBehavior {
+  code: number | string;
+  description: string;
+  behavior: string;
+  colorClass: string;
+}
+
+export const EXIT_CODE_BEHAVIORS: ExitCodeBehavior[] = [
+  {
+    code: 0,
+    description: 'Success',
+    behavior: 'stdout/stderr not shown (or added to context for some events)',
+    colorClass: 'bg-green-500/10 text-green-600 dark:text-green-400',
+  },
+  {
+    code: 2,
+    description: 'Block operation',
+    behavior: 'Show stderr to model and block the operation',
+    colorClass: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  },
+  {
+    code: 'Other',
+    description: 'Continue with warning',
+    behavior: 'Show stderr to user only but continue execution',
+    colorClass: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
+  },
+];
 
 /**
  * Hooks configuration in settings file
@@ -270,59 +399,43 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
 
 /**
  * Get display name for hook event type
+ * Uses the exact event type names from Claude Code
  */
 export function getHookEventDisplayName(type: HookEventType): string {
-  switch (type) {
-    case 'PreToolUse':
-      return 'Before Tool Use';
-    case 'PostToolUse':
-      return 'After Tool Use';
-    case 'PermissionRequest':
-      return 'Permission Request';
-    case 'Notification':
-      return 'On Notification';
-    case 'UserPromptSubmit':
-      return 'User Prompt Submit';
-    case 'Stop':
-      return 'Session Stop';
-    case 'SubagentStop':
-      return 'Subagent Stop';
-    case 'PreCompact':
-      return 'Before Compaction';
-    case 'SessionStart':
-      return 'Session Start';
-    case 'SessionEnd':
-      return 'Session End';
-    default:
-      return type;
-  }
+  // Return the exact event type name (matching Claude Code)
+  return type;
 }
 
 /**
  * Get description for hook event type
+ * Matches Claude Code's exact descriptions
  */
 export function getHookEventDescription(type: HookEventType): string {
   switch (type) {
     case 'PreToolUse':
-      return 'Runs before Claude uses a tool. Can block tool execution or modify input.';
+      return 'Before tool execution';
     case 'PostToolUse':
-      return 'Runs after Claude uses a tool. Receives tool output.';
+      return 'After tool execution';
+    case 'PostToolUseFailure':
+      return 'After tool execution fails';
     case 'PermissionRequest':
-      return 'Runs when a permission dialog is shown. Can auto-approve or deny.';
+      return 'When a permission dialog is displayed';
     case 'Notification':
-      return 'Runs when Claude sends a notification message.';
+      return 'When notifications are sent';
     case 'UserPromptSubmit':
-      return 'Runs when user submits a prompt. Can add context or block.';
+      return 'When the user submits a prompt';
     case 'Stop':
-      return 'Runs when the Claude Code session ends. Can prevent stopping.';
+      return 'Right before Claude concludes its response';
+    case 'SubagentStart':
+      return 'When a subagent (Task tool call) is started';
     case 'SubagentStop':
-      return 'Runs when a subagent completes execution.';
+      return 'Right before a subagent (Task tool call) concludes its response';
     case 'PreCompact':
-      return 'Runs before context is compacted. Preserve important information.';
+      return 'Before conversation compaction';
     case 'SessionStart':
-      return 'Runs when a session starts. Set up environment and context.';
+      return 'When a new session is started';
     case 'SessionEnd':
-      return 'Runs when a session terminates.';
+      return 'When a session is ending';
     default:
       return '';
   }
@@ -577,10 +690,12 @@ export function getHookStdinFields(type: HookEventType): string[] {
   const eventSpecificFields: Record<HookEventType, string[]> = {
     PreToolUse: ['tool_name', 'tool_input', 'tool_use_id'],
     PostToolUse: ['tool_name', 'tool_input', 'tool_response', 'tool_use_id'],
+    PostToolUseFailure: ['tool_name', 'tool_input', 'tool_error', 'tool_use_id'],
     PermissionRequest: ['tool_name', 'tool_input', 'tool_use_id'],
     Notification: ['message', 'notification_type'],
     UserPromptSubmit: ['prompt'],
     Stop: ['stop_hook_active'],
+    SubagentStart: ['subagent_id', 'task'],
     SubagentStop: ['stop_hook_active'],
     PreCompact: ['trigger', 'custom_instructions'],
     SessionStart: ['source'],
@@ -602,11 +717,14 @@ export const STDIN_FIELD_DESCRIPTIONS: Record<string, string> = {
   tool_name: 'Name of the tool being used',
   tool_input: 'JSON object with tool parameters',
   tool_response: 'Tool execution result (PostToolUse)',
+  tool_error: 'Error message from failed tool execution (PostToolUseFailure)',
   tool_use_id: 'Unique identifier for this tool use',
   message: 'Notification message text',
   notification_type: 'Type: permission_prompt|idle_prompt|auth_success|elicitation_dialog',
   prompt: 'User\'s submitted prompt text',
   stop_hook_active: 'true if continuing from a previous stop hook',
+  subagent_id: 'Unique identifier for the subagent',
+  task: 'The task description passed to the subagent',
   trigger: 'Compaction trigger: manual|auto',
   custom_instructions: 'Optional custom instructions for compaction',
   source: 'Session source: startup|resume|clear|compact',

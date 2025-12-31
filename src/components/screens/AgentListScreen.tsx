@@ -41,7 +41,7 @@ interface AgentListScreenProps {
   onShowCommands: () => void;
   onShowMCP: () => void;
   onShowHooks: () => void;
-  activeView: 'subagents' | 'skills' | 'team' | 'memory' | 'commands' | 'mcp' | 'hooks';
+  activeView: TabView;
   onToggleFavorite: (agent: Agent) => void;
   onImport?: (agents: Agent[], errors: string[]) => void;
   shortcutHint?: string;

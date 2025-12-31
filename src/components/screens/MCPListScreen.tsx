@@ -209,7 +209,7 @@ interface MCPListScreenProps {
   onShowCommands: () => void;
   onShowMCP: () => void;
   onShowHooks: () => void;
-  activeView: string;
+  activeView: TabView;
   onToggleFavorite: (server: MCPServer) => void;
   shortcutHint?: string;
   isLoading?: boolean;
