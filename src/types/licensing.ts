@@ -7,4 +7,5 @@ export interface LicenseInfo {
   instanceName: string;       // Device name shown in LS dashboard
   activationLimit: number;    // Max number of devices
   activationUsage: number;    // Current number of active devices
+  lastValidated?: string;    // ISO timestamp of last successful API validation
 }

@@ -9,6 +9,26 @@ import { devLog } from '../utils/devLogger';
 const GRACE_PERIOD_KEY = 'vinsly-license-grace-expires';
 const GRACE_PERIOD_DAYS = 7;
 
+// Network error handling constants
+const LAST_VALIDATED_KEY = 'vinsly-license-last-validated';
+const SOFT_FAILURE_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes
+const HARD_FAILURE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Helper to check if an error is a network/timeout error
+function isNetworkError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return msg.includes('timeout') || msg.includes('network') || msg.includes('fetch');
+  }
+  return false;
+}
+
+// Helper to check if a validation response indicates a network error
+function isNetworkValidationError(validation: { error?: string }): boolean {
+  const error = validation.error?.toLowerCase() ?? '';
+  return error.includes('timeout') || error.includes('network') || error.includes('fetch');
+}
+
 export interface UseLicenseOptions {
   showToast: (type: ToastType, message: string) => void;
   platformIdentifier?: string;
@@ -73,21 +93,28 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
         );
 
         if (!validation.valid || validation.status !== 'active') {
-          // License is invalid or not active
+          // Check if this is a network error rather than an actual license issue
+          if (isNetworkValidationError(validation)) {
+            throw new Error(`Network error during validation: ${validation.error}`);
+          }
+          // License is actually invalid or not active
           throw new Error(`License validation failed: ${validation.error || validation.status}`);
         }
 
         // Validation successful - clear any grace period and update license
         await removeStorageItem(GRACE_PERIOD_KEY);
+        const now = new Date().toISOString();
         const refreshed: LicenseInfo = {
           ...storedLicense,
           status: 'active',
-          lastChecked: new Date().toISOString(),
+          lastChecked: now,
+          lastValidated: now, // Track successful API validation
           // Update with latest data from Lemon Squeezy
           activationLimit: validation.licenseKey?.activation_limit ?? storedLicense.activationLimit,
           activationUsage: validation.licenseKey?.activation_usage ?? storedLicense.activationUsage,
         };
         await setStorageItem('vinsly-license-info', refreshed);
+        await setStorageItem(LAST_VALIDATED_KEY, now);
 
         if (!cancelled) {
           setLicenseInfo(refreshed);
@@ -97,9 +124,43 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
       } catch (error) {
         devLog.error('License validation failed:', error);
 
+        const now = new Date();
+        const networkError = isNetworkError(error);
+
+        // If it's a network error, check when we last successfully validated
+        if (networkError) {
+          const lastValidatedStr = await getStorageItem<string>(LAST_VALIDATED_KEY);
+          if (lastValidatedStr) {
+            const lastValidated = new Date(lastValidatedStr);
+            const timeSinceValidation = now.getTime() - lastValidated.getTime();
+
+            if (timeSinceValidation < SOFT_FAILURE_THRESHOLD_MS) {
+              // Recently validated (< 3 min) - silently continue without any toast
+              devLog.log('Network error but recently validated, continuing silently');
+              if (!cancelled) {
+                setLicenseInfo(storedLicense);
+                setIsOnboardingComplete(true);
+              }
+              return;
+            }
+
+            if (timeSinceValidation < HARD_FAILURE_THRESHOLD_MS) {
+              // Validated within 24 hours - show info toast but don't enter grace period
+              devLog.log('Network error but validated within 24h, showing info toast');
+              if (!cancelled) {
+                setLicenseInfo(storedLicense);
+                setIsOnboardingComplete(true);
+                showToastRef.current?.('info', 'Unable to verify license. Will retry later.');
+              }
+              return;
+            }
+          }
+          // No recent validation or > 24 hours - fall through to grace period logic
+          devLog.warn('Network error with stale or no previous validation, entering grace period');
+        }
+
         // Check if we're within grace period
         const storedGraceExpiry = await getStorageItem<string>(GRACE_PERIOD_KEY);
-        const now = new Date();
 
         if (storedGraceExpiry) {
           // Grace period was already set - check if it's expired
@@ -119,6 +180,7 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
             // Grace period expired - remove license
             await removeStorageItem('vinsly-license-info');
             await removeStorageItem(GRACE_PERIOD_KEY);
+            await removeStorageItem(LAST_VALIDATED_KEY);
 
             if (!cancelled) {
               setLicenseInfo(null);
@@ -172,6 +234,7 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
     setGraceExpiresAt(null);
     await removeStorageItem('vinsly-license-info');
     await removeStorageItem(GRACE_PERIOD_KEY);
+    await removeStorageItem(LAST_VALIDATED_KEY);
     if (onResetCompleteRef.current) {
       await onResetCompleteRef.current();
     }

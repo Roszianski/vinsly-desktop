@@ -15,7 +15,23 @@ jest.mock('../../utils/lemonLicensingClient', () => ({
   validateLicenseWithLemon: jest.fn(),
 }));
 
+jest.mock('../../utils/devLogger', () => ({
+  devLog: {
+    log: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
 const mockShowToast = jest.fn<void, [ToastType, string]>();
+
+// Helper to create a mock for getStorageItem that returns values based on keys
+function createStorageMock(values: Record<string, unknown>) {
+  return jest.fn().mockImplementation((key: string) => {
+    return Promise.resolve(values[key] ?? null);
+  });
+}
 
 describe('useLicense', () => {
   const baseLicense: LicenseInfo = {
@@ -98,10 +114,12 @@ describe('useLicense', () => {
     expect(storage.removeStorageItem).toHaveBeenCalledWith('vinsly-license-info');
   });
 
-  test('enters grace period when validation fails', async () => {
-    (storage.getStorageItem as jest.Mock)
-      .mockResolvedValueOnce(baseLicense) // First call: license info
-      .mockResolvedValueOnce(null); // Second call: grace period key
+  test('enters grace period when validation fails with no recent validation', async () => {
+    (storage.getStorageItem as jest.Mock).mockImplementation(createStorageMock({
+      'vinsly-license-info': baseLicense,
+      'vinsly-license-last-validated': null,
+      'vinsly-license-grace-expires': null,
+    }));
 
     (lemonLicensingClient.validateLicenseWithLemon as jest.Mock).mockRejectedValue(
       new Error('Network error')
@@ -113,6 +131,131 @@ describe('useLicense', () => {
     // Should still be onboarding complete (grace period active)
     expect(result.current.isOnboardingComplete).toBe(true);
     expect(result.current.licenseInfo).toEqual(baseLicense);
-    expect(mockShowToast).toHaveBeenCalled();
+    expect(mockShowToast).toHaveBeenCalledWith('info', expect.stringContaining('grace period'));
+  });
+
+  test('network error with recent validation (< 3 min) - no toast, no grace period', async () => {
+    const recentTimestamp = new Date(Date.now() - 60 * 1000).toISOString(); // 1 minute ago
+
+    (storage.getStorageItem as jest.Mock).mockImplementation(createStorageMock({
+      'vinsly-license-info': baseLicense,
+      'vinsly-license-last-validated': recentTimestamp,
+    }));
+
+    (lemonLicensingClient.validateLicenseWithLemon as jest.Mock).mockRejectedValue(
+      new Error('Network timeout')
+    );
+
+    const { result } = renderHook(() => useLicense({ showToast: mockShowToast }));
+    await waitFor(() => expect(result.current.licenseBootstrapComplete).toBe(true));
+
+    expect(result.current.isOnboardingComplete).toBe(true);
+    expect(result.current.licenseInfo).toEqual(baseLicense);
+    // Should NOT show any toast for recent validation
+    expect(mockShowToast).not.toHaveBeenCalled();
+  });
+
+  test('network error with validation < 24h - info toast, no grace period', async () => {
+    const recentTimestamp = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(); // 2 hours ago
+
+    (storage.getStorageItem as jest.Mock).mockImplementation(createStorageMock({
+      'vinsly-license-info': baseLicense,
+      'vinsly-license-last-validated': recentTimestamp,
+    }));
+
+    (lemonLicensingClient.validateLicenseWithLemon as jest.Mock).mockRejectedValue(
+      new Error('Network error')
+    );
+
+    const { result } = renderHook(() => useLicense({ showToast: mockShowToast }));
+    await waitFor(() => expect(result.current.licenseBootstrapComplete).toBe(true));
+
+    expect(result.current.isOnboardingComplete).toBe(true);
+    expect(result.current.licenseInfo).toEqual(baseLicense);
+    // Should show info toast but NOT grace period message
+    expect(mockShowToast).toHaveBeenCalledWith('info', 'Unable to verify license. Will retry later.');
+    expect(mockShowToast).not.toHaveBeenCalledWith('info', expect.stringContaining('grace period'));
+  });
+
+  test('network error with stale validation (> 24h) - enters grace period', async () => {
+    const staleTimestamp = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(); // 25 hours ago
+
+    (storage.getStorageItem as jest.Mock).mockImplementation(createStorageMock({
+      'vinsly-license-info': baseLicense,
+      'vinsly-license-last-validated': staleTimestamp,
+      'vinsly-license-grace-expires': null,
+    }));
+
+    (lemonLicensingClient.validateLicenseWithLemon as jest.Mock).mockRejectedValue(
+      new Error('Network timeout')
+    );
+
+    const { result } = renderHook(() => useLicense({ showToast: mockShowToast }));
+    await waitFor(() => expect(result.current.licenseBootstrapComplete).toBe(true));
+
+    expect(result.current.isOnboardingComplete).toBe(true);
+    expect(result.current.licenseInfo).toEqual(baseLicense);
+    // Should enter grace period
+    expect(mockShowToast).toHaveBeenCalledWith('info', expect.stringContaining('grace period'));
+    expect(storage.setStorageItem).toHaveBeenCalledWith(
+      'vinsly-license-grace-expires',
+      expect.any(String)
+    );
+  });
+
+  test('actual invalid license - immediately enters grace period regardless of recent validation', async () => {
+    (storage.getStorageItem as jest.Mock).mockImplementation(createStorageMock({
+      'vinsly-license-info': baseLicense,
+      'vinsly-license-last-validated': null,
+      'vinsly-license-grace-expires': null,
+    }));
+
+    // Return invalid status (not a network error)
+    (lemonLicensingClient.validateLicenseWithLemon as jest.Mock).mockResolvedValue({
+      valid: false,
+      status: 'expired',
+      error: 'License has expired',
+    });
+
+    const { result } = renderHook(() => useLicense({ showToast: mockShowToast }));
+    await waitFor(() => expect(result.current.licenseBootstrapComplete).toBe(true));
+
+    // Should enter grace period
+    expect(result.current.isOnboardingComplete).toBe(true);
+    expect(mockShowToast).toHaveBeenCalledWith('info', expect.stringContaining('grace period'));
+  });
+
+  test('successful validation stores lastValidated timestamp', async () => {
+    (storage.getStorageItem as jest.Mock).mockImplementation(createStorageMock({
+      'vinsly-license-info': baseLicense,
+    }));
+
+    const { result } = renderHook(() => useLicense({ showToast: mockShowToast }));
+    await waitFor(() => expect(result.current.licenseBootstrapComplete).toBe(true));
+
+    // Should store lastValidated in both license info and separate key
+    expect(storage.setStorageItem).toHaveBeenCalledWith(
+      'vinsly-license-info',
+      expect.objectContaining({ lastValidated: expect.any(String) })
+    );
+    expect(storage.setStorageItem).toHaveBeenCalledWith(
+      'vinsly-license-last-validated',
+      expect.any(String)
+    );
+  });
+
+  test('resetLicense clears lastValidated key', async () => {
+    const { result } = renderHook(() => useLicense({ showToast: mockShowToast }));
+    await waitFor(() => expect(result.current.licenseBootstrapComplete).toBe(true));
+
+    await act(async () => {
+      await result.current.setLicense(baseLicense);
+    });
+
+    await act(async () => {
+      await result.current.resetLicense();
+    });
+
+    expect(storage.removeStorageItem).toHaveBeenCalledWith('vinsly-license-last-validated');
   });
 });
