@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LicenseInfo } from '../types/licensing';
 import { getStorageItem, removeStorageItem, setStorageItem } from '../utils/storage';
-import { validateLicenseWithLemon } from '../utils/lemonLicensingClient';
+import { validateLicenseWithLemon, LemonLicenseValidationResult } from '../utils/lemonLicensingClient';
 import { ToastType } from '../components/Toast';
 import { devLog } from '../utils/devLogger';
 
@@ -24,7 +24,7 @@ function isNetworkError(error: unknown): boolean {
 }
 
 // Helper to check if a validation response indicates a network error
-function isNetworkValidationError(validation: { error?: string }): boolean {
+function isNetworkValidationError(validation: LemonLicenseValidationResult): boolean {
   const error = validation.error?.toLowerCase() ?? '';
   return error.includes('timeout') || error.includes('network') || error.includes('fetch');
 }
