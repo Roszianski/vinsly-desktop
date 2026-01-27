@@ -3590,6 +3590,313 @@ fn set_title_bar_theme(window: tauri::WebviewWindow, dark: bool) {
 }
 
 // ============================================================================
+// Licensing (Lemon Squeezy)
+// ============================================================================
+
+const LEMON_LICENSE_API_BASE: &str = "https://api.lemonsqueezy.com/v1/licenses";
+const LEMON_LICENSE_REQUEST_TIMEOUT_MS: u64 = 15000;
+const LEMON_LICENSE_MAX_RETRIES: usize = 3;
+const LEMON_LICENSE_INITIAL_RETRY_DELAY_MS: u64 = 1000;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LemonLicenseValidationResult {
+    valid: bool,
+    error: Option<String>,
+    status: Option<String>,
+    meta: Option<serde_json::Value>,
+    #[serde(rename = "licenseKey")]
+    license_key: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LemonLicenseActivationResult {
+    activated: bool,
+    error: Option<String>,
+    instance: Option<serde_json::Value>,
+    #[serde(rename = "licenseKey")]
+    license_key: Option<serde_json::Value>,
+    meta: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LemonLicenseDeactivationResult {
+    deactivated: bool,
+    error: Option<String>,
+}
+
+async fn lemon_post_form_with_retry(
+    url: &str,
+    form_data: &std::collections::HashMap<String, String>,
+) -> Result<(reqwest::StatusCode, serde_json::Value), String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(LEMON_LICENSE_REQUEST_TIMEOUT_MS))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut delay_ms = LEMON_LICENSE_INITIAL_RETRY_DELAY_MS;
+    let mut last_status: Option<reqwest::StatusCode> = None;
+    let mut last_error_kind: Option<&'static str> = None;
+
+    for attempt in 0..=LEMON_LICENSE_MAX_RETRIES {
+        match client
+            .post(url)
+            .header("Accept", "application/json")
+            .form(form_data)
+            .send()
+            .await
+        {
+            Ok(response) => {
+                let status = response.status();
+                let payload = response
+                    .json::<serde_json::Value>()
+                    .await
+                    .unwrap_or(serde_json::Value::Null);
+
+                if status.is_success() || status.is_client_error() {
+                    return Ok((status, payload));
+                }
+
+                // Server error (5xx) - retry like the frontend client does.
+                last_status = Some(status);
+                last_error_kind = Some("network_error");
+            }
+            Err(e) => {
+                // Network/timeout error - retry.
+                last_error_kind = Some(if e.is_timeout() { "timeout" } else { "network_error" });
+            }
+        }
+
+        if attempt < LEMON_LICENSE_MAX_RETRIES {
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            delay_ms *= 2;
+        }
+    }
+
+    // If we exhausted retries due to server errors, mirror the frontend behavior by returning a
+    // network-style failure instead of a structured 5xx payload.
+    Err(last_error_kind
+        .map(|k| k.to_string())
+        .unwrap_or_else(|| {
+            format!(
+                "server_error{}",
+                last_status
+                    .map(|s| format!(":{}", s.as_u16()))
+                    .unwrap_or_default()
+            )
+        }))
+}
+
+#[tauri::command]
+async fn lemon_validate_license(
+    license_key: String,
+    instance_id: Option<String>,
+) -> LemonLicenseValidationResult {
+    let trimmed_key = license_key.trim().to_string();
+    let instance_id = instance_id.and_then(|s| {
+        let trimmed = s.trim().to_string();
+        if trimmed.is_empty() { None } else { Some(trimmed) }
+    });
+
+    let mut form_data = std::collections::HashMap::<String, String>::new();
+    form_data.insert("license_key".to_string(), trimmed_key);
+    if let Some(id) = instance_id {
+        form_data.insert("instance_id".to_string(), id);
+    }
+
+    let url = format!("{}/validate", LEMON_LICENSE_API_BASE);
+    let response = lemon_post_form_with_retry(&url, &form_data).await;
+
+    match response {
+        Ok((status, payload)) => {
+            let license_key_value = payload.get("license_key").cloned();
+            let meta_value = payload.get("meta").cloned();
+            let status_value = payload
+                .get("license_key")
+                .and_then(|lk| lk.get("status"))
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+
+            if !status.is_success() {
+                let error = payload
+                    .get("error")
+                    .and_then(|e| e.as_str())
+                    .map(|s| s.to_string())
+                    .or(Some("request_failed".to_string()));
+
+                return LemonLicenseValidationResult {
+                    valid: false,
+                    error,
+                    status: status_value,
+                    meta: meta_value,
+                    license_key: license_key_value,
+                };
+            }
+
+            let valid = payload.get("valid").and_then(|v| v.as_bool()).unwrap_or(false);
+            let error = if valid {
+                None
+            } else {
+                payload
+                    .get("error")
+                    .and_then(|e| e.as_str())
+                    .map(|s| s.to_string())
+                    .or(Some("invalid".to_string()))
+            };
+
+            LemonLicenseValidationResult {
+                valid,
+                error,
+                status: status_value,
+                meta: meta_value,
+                license_key: license_key_value,
+            }
+        }
+        Err(error) => {
+            let normalized = if error.contains("timeout") {
+                "timeout"
+            } else {
+                "network_error"
+            };
+            LemonLicenseValidationResult {
+                valid: false,
+                error: Some(normalized.to_string()),
+                status: None,
+                meta: None,
+                license_key: None,
+            }
+        }
+    }
+}
+
+#[tauri::command]
+async fn lemon_activate_license(license_key: String, instance_name: String) -> LemonLicenseActivationResult {
+    let trimmed_key = license_key.trim().to_string();
+    let trimmed_name = instance_name.trim().to_string();
+
+    let mut form_data = std::collections::HashMap::<String, String>::new();
+    form_data.insert("license_key".to_string(), trimmed_key);
+    form_data.insert("instance_name".to_string(), trimmed_name);
+
+    let url = format!("{}/activate", LEMON_LICENSE_API_BASE);
+    let response = lemon_post_form_with_retry(&url, &form_data).await;
+
+    match response {
+        Ok((status, payload)) => {
+            let instance_value = payload.get("instance").cloned();
+            let license_key_value = payload.get("license_key").cloned();
+            let meta_value = payload.get("meta").cloned();
+
+            if !status.is_success() {
+                let error = payload
+                    .get("error")
+                    .and_then(|e| e.as_str())
+                    .map(|s| s.to_string())
+                    .or(Some("request_failed".to_string()));
+                return LemonLicenseActivationResult {
+                    activated: false,
+                    error,
+                    instance: instance_value,
+                    license_key: license_key_value,
+                    meta: meta_value,
+                };
+            }
+
+            let activated = payload
+                .get("activated")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let error = if activated {
+                None
+            } else {
+                payload
+                    .get("error")
+                    .and_then(|e| e.as_str())
+                    .map(|s| s.to_string())
+                    .or(Some("activation_failed".to_string()))
+            };
+
+            LemonLicenseActivationResult {
+                activated,
+                error,
+                instance: instance_value,
+                license_key: license_key_value,
+                meta: meta_value,
+            }
+        }
+        Err(error) => {
+            let normalized = if error.contains("timeout") {
+                "timeout"
+            } else {
+                "network_error"
+            };
+            LemonLicenseActivationResult {
+                activated: false,
+                error: Some(normalized.to_string()),
+                instance: None,
+                license_key: None,
+                meta: None,
+            }
+        }
+    }
+}
+
+#[tauri::command]
+async fn lemon_deactivate_license(license_key: String, instance_id: String) -> LemonLicenseDeactivationResult {
+    let trimmed_key = license_key.trim().to_string();
+    let trimmed_id = instance_id.trim().to_string();
+
+    let mut form_data = std::collections::HashMap::<String, String>::new();
+    form_data.insert("license_key".to_string(), trimmed_key);
+    form_data.insert("instance_id".to_string(), trimmed_id);
+
+    let url = format!("{}/deactivate", LEMON_LICENSE_API_BASE);
+    let response = lemon_post_form_with_retry(&url, &form_data).await;
+
+    match response {
+        Ok((status, payload)) => {
+            if !status.is_success() {
+                let error = payload
+                    .get("error")
+                    .and_then(|e| e.as_str())
+                    .map(|s| s.to_string())
+                    .or(Some("request_failed".to_string()));
+                return LemonLicenseDeactivationResult {
+                    deactivated: false,
+                    error,
+                };
+            }
+
+            let deactivated = payload
+                .get("deactivated")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let error = if deactivated {
+                None
+            } else {
+                payload
+                    .get("error")
+                    .and_then(|e| e.as_str())
+                    .map(|s| s.to_string())
+                    .or(Some("deactivation_failed".to_string()))
+            };
+
+            LemonLicenseDeactivationResult { deactivated, error }
+        }
+        Err(error) => {
+            let normalized = if error.contains("timeout") {
+                "timeout"
+            } else {
+                "network_error"
+            };
+            LemonLicenseDeactivationResult {
+                deactivated: false,
+                error: Some(normalized.to_string()),
+            }
+        }
+    }
+}
+
+// ============================================================================
 // Feedback Command
 // ============================================================================
 
@@ -4357,6 +4664,10 @@ pub fn run() {
             set_title_bar_theme,
             // Feedback
             send_feedback,
+            // Licensing (Lemon Squeezy)
+            lemon_validate_license,
+            lemon_activate_license,
+            lemon_deactivate_license,
             // Config Bundle
             export_config_bundle,
             import_config_bundle,

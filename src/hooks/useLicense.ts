@@ -26,7 +26,14 @@ function isNetworkError(error: unknown): boolean {
 // Helper to check if a validation response indicates a network error
 function isNetworkValidationError(validation: LemonLicenseValidationResult): boolean {
   const error = validation.error?.toLowerCase() ?? '';
-  return error.includes('timeout') || error.includes('network') || error.includes('fetch');
+  return (
+    error.includes('timeout') ||
+    error.includes('network') ||
+    error.includes('fetch') ||
+    error.startsWith('server_error') ||
+    error.startsWith('request_failed') ||
+    error === 'tauri_invoke_failed'
+  );
 }
 
 export interface UseLicenseOptions {
@@ -92,7 +99,10 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
           storedLicense.instanceId
         );
 
-        if (!validation.valid || validation.status !== 'active') {
+        const statusLower = validation.status?.toLowerCase();
+        const isBadStatus = statusLower === 'revoked' || statusLower === 'expired' || statusLower === 'disabled';
+
+        if (!validation.valid || isBadStatus) {
           // Check if this is a network error rather than an actual license issue
           if (isNetworkValidationError(validation)) {
             throw new Error(`Network error during validation: ${validation.error}`);

@@ -896,24 +896,39 @@ export const AppContent: React.FC = () => {
         onValidateLicense={async ({ licenseKey }) => {
           const result = await validateLicenseWithLemon(licenseKey);
           const status = result.status?.toLowerCase();
+          const error = result.error?.toLowerCase() ?? null;
 
           // Reject if not valid, or if status is explicitly bad (revoked, expired, disabled)
           // Allow "inactive" status - licenses start inactive until first activation
           const isBadStatus = status === 'revoked' || status === 'expired' || status === 'disabled';
 
-          if (!result.valid || isBadStatus) {
-            const message =
-              result.error === 'invalid'
-                ? 'This licence key was not recognised.'
-                : status === 'revoked'
-                  ? 'This licence has been revoked or refunded.'
-                  : status === 'expired'
-                    ? 'This licence has expired.'
-                    : status === 'disabled'
-                      ? 'This licence has been disabled.'
-                      : 'Unable to validate your licence right now.';
-            throw new Error(message);
-          }
+	          if (!result.valid || isBadStatus) {
+	            let message: string;
+	            if (error === 'invalid') {
+	              message = 'This licence key was not recognised.';
+	            } else if (status === 'revoked') {
+	              message = 'This licence has been revoked or refunded.';
+	            } else if (status === 'expired') {
+	              message = 'This licence has expired.';
+	            } else if (status === 'disabled') {
+	              message = 'This licence has been disabled.';
+	            } else if (error === 'network_error') {
+	              message = 'Unable to reach the licence server. Please try again.';
+	            } else if (error === 'timeout') {
+	              message = 'The licence server took too long to respond. Please try again.';
+	            } else if (error === 'tauri_invoke_failed') {
+	              message = 'Internal error while validating your licence. Please restart Vinsly and try again. (tauri_invoke_failed)';
+	            } else if (error?.startsWith('request_failed')) {
+	              message = result.error
+	                ? `The licence server returned an unexpected response. (${result.error})`
+	                : 'The licence server returned an unexpected response.';
+	            } else {
+	              message = result.error
+	                ? `Unable to validate your licence right now. (${result.error})`
+	                : 'Unable to validate your licence right now.';
+	            }
+	            throw new Error(message);
+	          }
         }}
         onComplete={async ({ licenseKey, displayName, autoScanGlobal, autoScanWatched, autoScanHome, fullDiskAccessEnabled }) => {
           const trimmedLicenseKey = licenseKey.trim();
@@ -1000,21 +1015,36 @@ export const AppContent: React.FC = () => {
         onValidateLicense={async ({ licenseKey }) => {
           const result = await validateLicenseWithLemon(licenseKey);
           const status = result.status?.toLowerCase();
+          const error = result.error?.toLowerCase() ?? null;
           const isBadStatus = status === 'revoked' || status === 'expired' || status === 'disabled';
 
-          if (!result.valid || isBadStatus) {
-            const message =
-              result.error === 'invalid'
-                ? 'This licence key was not recognised.'
-                : status === 'revoked'
-                  ? 'This licence has been revoked or refunded.'
-                  : status === 'expired'
-                    ? 'This licence has expired.'
-                    : status === 'disabled'
-                      ? 'This licence has been disabled.'
-                      : 'Unable to validate your licence right now.';
-            throw new Error(message);
-          }
+	          if (!result.valid || isBadStatus) {
+	            let message: string;
+	            if (error === 'invalid') {
+	              message = 'This licence key was not recognised.';
+	            } else if (status === 'revoked') {
+	              message = 'This licence has been revoked or refunded.';
+	            } else if (status === 'expired') {
+	              message = 'This licence has expired.';
+	            } else if (status === 'disabled') {
+	              message = 'This licence has been disabled.';
+	            } else if (error === 'network_error') {
+	              message = 'Unable to reach the licence server. Please try again.';
+	            } else if (error === 'timeout') {
+	              message = 'The licence server took too long to respond. Please try again.';
+	            } else if (error === 'tauri_invoke_failed') {
+	              message = 'Internal error while validating your licence. Please restart Vinsly and try again. (tauri_invoke_failed)';
+	            } else if (error?.startsWith('request_failed')) {
+	              message = result.error
+	                ? `The licence server returned an unexpected response. (${result.error})`
+	                : 'The licence server returned an unexpected response.';
+	            } else {
+	              message = result.error
+	                ? `Unable to validate your licence right now. (${result.error})`
+	                : 'Unable to validate your licence right now.';
+	            }
+	            throw new Error(message);
+	          }
         }}
         onComplete={async ({ licenseKey }) => {
           const trimmedLicenseKey = licenseKey.trim();

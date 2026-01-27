@@ -287,7 +287,10 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
         proceedToProfile();
       } catch (error) {
         devLog.error('Licence validation failed:', error);
-        setLicenseStepError('Something went wrong while validating your licence. Please try again.');
+        const message = error instanceof Error && error.message
+          ? error.message
+          : 'Something went wrong while validating your licence. Please try again.';
+        setLicenseStepError(message);
         setValidationState('idle');
         return;
       }

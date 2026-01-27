@@ -1,7 +1,7 @@
 {
   "name": "vinsly-desktop",
   "private": true,
-  "version": "0.12.2",
+  "version": "0.12.3",
   "type": "module",
   "description": "Vinsly - Agent Studio Desktop Application",
   "scripts": {

@@ -8,6 +8,7 @@
  */
 
 import { devLog } from './devLogger';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 
 const LICENSE_API_BASE = 'https://api.lemonsqueezy.com/v1/licenses';
 
@@ -15,6 +16,11 @@ const LICENSE_API_BASE = 'https://api.lemonsqueezy.com/v1/licenses';
 const REQUEST_TIMEOUT_MS = 15000; // 15 second timeout
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 1000; // 1 second initial delay, doubles each retry
+
+function isTauriRuntime(): boolean {
+  if (isTauri()) return true;
+  return typeof window !== 'undefined' && typeof (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== 'undefined';
+}
 
 /**
  * Fetch with timeout support using AbortController.
@@ -86,7 +92,7 @@ async function fetchWithRetry(
 export interface LemonLicenseValidationResult {
   valid: boolean;
   error: string | null;
-  status?: string;
+  status?: string | null;
   meta?: {
     store_id: number;
     product_id: number;
@@ -143,6 +149,23 @@ export async function validateLicenseWithLemon(
   instanceId?: string
 ): Promise<LemonLicenseValidationResult> {
   const trimmedKey = licenseKey.trim();
+
+  if (isTauriRuntime()) {
+    try {
+      return await invoke<LemonLicenseValidationResult>('lemon_validate_license', {
+        licenseKey: trimmedKey,
+        license_key: trimmedKey,
+        instanceId: instanceId ?? null,
+        instance_id: instanceId ?? null,
+      });
+    } catch (err) {
+      devLog.error('[Lemon] tauri license validation invoke error', err);
+      return {
+        valid: false,
+        error: 'tauri_invoke_failed',
+      };
+    }
+  }
 
   const body = new URLSearchParams();
   body.append('license_key', trimmedKey);
@@ -204,6 +227,23 @@ export async function activateLicenseWithLemon(
 ): Promise<LemonLicenseActivationResult> {
   const trimmedKey = licenseKey.trim();
 
+  if (isTauriRuntime()) {
+    try {
+      return await invoke<LemonLicenseActivationResult>('lemon_activate_license', {
+        licenseKey: trimmedKey,
+        license_key: trimmedKey,
+        instanceName: instanceName,
+        instance_name: instanceName,
+      });
+    } catch (err) {
+      devLog.error('[Lemon] tauri license activation invoke error', err);
+      return {
+        activated: false,
+        error: 'tauri_invoke_failed',
+      };
+    }
+  }
+
   const body = new URLSearchParams();
   body.append('license_key', trimmedKey);
   body.append('instance_name', instanceName);
@@ -260,6 +300,23 @@ export async function deactivateLicenseWithLemon(
   instanceId: string
 ): Promise<LemonLicenseDeactivationResult> {
   const trimmedKey = licenseKey.trim();
+
+  if (isTauriRuntime()) {
+    try {
+      return await invoke<LemonLicenseDeactivationResult>('lemon_deactivate_license', {
+        licenseKey: trimmedKey,
+        license_key: trimmedKey,
+        instanceId: instanceId,
+        instance_id: instanceId,
+      });
+    } catch (err) {
+      devLog.error('[Lemon] tauri license deactivation invoke error', err);
+      return {
+        deactivated: false,
+        error: 'tauri_invoke_failed',
+      };
+    }
+  }
 
   const body = new URLSearchParams();
   body.append('license_key', trimmedKey);

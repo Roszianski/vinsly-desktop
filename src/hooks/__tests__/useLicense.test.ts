@@ -81,6 +81,37 @@ describe('useLicense', () => {
     expect(result.current.isOnboardingComplete).toBe(true);
   });
 
+  test('accepts valid license even when status is null', async () => {
+    (storage.getStorageItem as jest.Mock).mockResolvedValue(baseLicense);
+
+    // Simulates Rust Option<String>::None serialized as null.
+    (lemonLicensingClient.validateLicenseWithLemon as jest.Mock).mockResolvedValue({
+      valid: true,
+      error: null,
+      status: null,
+      licenseKey: {
+        activation_limit: 3,
+        activation_usage: 1,
+      },
+    });
+
+    const { result } = renderHook(() => useLicense({ showToast: mockShowToast }));
+    await waitFor(() => expect(result.current.licenseBootstrapComplete).toBe(true));
+
+    expect(result.current.isOnboardingComplete).toBe(true);
+    expect(result.current.licenseInfo).toEqual(expect.objectContaining({
+      ...baseLicense,
+      status: 'active',
+      lastChecked: expect.any(String),
+      lastValidated: expect.any(String),
+    }));
+    // Should not enter grace period for a valid license.
+    expect(storage.setStorageItem).not.toHaveBeenCalledWith(
+      'vinsly-license-grace-expires',
+      expect.any(String)
+    );
+  });
+
   test('setLicense persists and marks onboarding complete', async () => {
     const { result } = renderHook(() => useLicense({ showToast: mockShowToast }));
     await waitFor(() => expect(result.current.licenseBootstrapComplete).toBe(true));
