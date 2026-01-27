@@ -187,16 +187,32 @@ export function useLicense(options: UseLicenseOptions): UseLicenseResult {
               showToastRef.current?.('info', `License validation failed. ${daysRemaining} day(s) remaining in grace period.`);
             }
           } else {
-            // Grace period expired - remove license
-            await removeStorageItem('vinsly-license-info');
-            await removeStorageItem(GRACE_PERIOD_KEY);
-            await removeStorageItem(LAST_VALIDATED_KEY);
+            if (networkError) {
+              // Grace period expired, but we still can't validate due to network/internal issues.
+              // Keep the stored license and extend the grace period so users aren't forced to re-activate
+              // during outages or app-side regressions.
+              const extendedExpiry = new Date(now.getTime() + (GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000));
+              const extendedExpiryISO = extendedExpiry.toISOString();
+              await setStorageItem(GRACE_PERIOD_KEY, extendedExpiryISO);
 
-            if (!cancelled) {
-              setLicenseInfo(null);
-              setIsOnboardingComplete(false);
-              setGraceExpiresAt(null);
-              showToastRef.current?.('error', 'License grace period expired. Please reactivate.');
+              if (!cancelled) {
+                setLicenseInfo(storedLicense);
+                setIsOnboardingComplete(true);
+                setGraceExpiresAt(extendedExpiryISO);
+                showToastRef.current?.('info', 'Unable to verify license right now. Please check your connection and try again later.');
+              }
+            } else {
+              // Grace period expired - remove license
+              await removeStorageItem('vinsly-license-info');
+              await removeStorageItem(GRACE_PERIOD_KEY);
+              await removeStorageItem(LAST_VALIDATED_KEY);
+
+              if (!cancelled) {
+                setLicenseInfo(null);
+                setIsOnboardingComplete(false);
+                setGraceExpiresAt(null);
+                showToastRef.current?.('error', 'License grace period expired. Please reactivate.');
+              }
             }
           }
         } else {

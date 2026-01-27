@@ -234,6 +234,40 @@ describe('useLicense', () => {
     );
   });
 
+  test('expired grace period + network error - extends grace and keeps license', async () => {
+    const expiredGrace = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // 1 hour ago
+
+    (storage.getStorageItem as jest.Mock).mockImplementation(createStorageMock({
+      'vinsly-license-info': baseLicense,
+      'vinsly-license-last-validated': null,
+      'vinsly-license-grace-expires': expiredGrace,
+    }));
+
+    (lemonLicensingClient.validateLicenseWithLemon as jest.Mock).mockRejectedValue(
+      new Error('Network error')
+    );
+
+    const { result } = renderHook(() => useLicense({ showToast: mockShowToast }));
+    await waitFor(() => expect(result.current.licenseBootstrapComplete).toBe(true));
+
+    expect(result.current.isOnboardingComplete).toBe(true);
+    expect(result.current.licenseInfo).toEqual(baseLicense);
+
+    // Should NOT remove license on a transient failure.
+    expect(storage.removeStorageItem).not.toHaveBeenCalledWith('vinsly-license-info');
+
+    // Should extend grace instead.
+    expect(storage.setStorageItem).toHaveBeenCalledWith(
+      'vinsly-license-grace-expires',
+      expect.any(String)
+    );
+
+    expect(mockShowToast).toHaveBeenCalledWith(
+      'info',
+      'Unable to verify license right now. Please check your connection and try again later.'
+    );
+  });
+
   test('actual invalid license - immediately enters grace period regardless of recent validation', async () => {
     (storage.getStorageItem as jest.Mock).mockImplementation(createStorageMock({
       'vinsly-license-info': baseLicense,
