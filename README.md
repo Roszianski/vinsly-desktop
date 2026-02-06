@@ -18,7 +18,7 @@ A Tauri-powered desktop application for designing, organising, and analysing Cla
 - 💾 **Persistent Storage** – Settings, layout preferences, and local account details are stored using Tauri Store.
 - 🎨 **Light/Dark Themes** – System-aware theming with a dedicated appearance section in Settings.
 - 📥 **Import/Export** – Import agents from `.md` and `.zip` bundles, export individual agents or curated sets.
-- 🔐 **Licensing & Account** – In-app licence key + email activation flow (backed by Lemon Squeezy), plus a local display name used across the UI (e.g. "[Name] Organisation").
+- 👤 **Display Name** – Set a local display name used across the UI (e.g. "[Name] Organisation").
 
 ## Platform Support
 
@@ -102,16 +102,14 @@ vinsly-desktop/
 │   │   ├── icons/               # Icon components
 │   │   ├── tools/               # Tool selector components
 │   │   └── wizard/              # Wizard step components
-│   ├── contexts/                # App/Workspace/License/Navigation/Toast providers
+│   ├── contexts/                # App/Workspace/Navigation/Toast providers
 │   ├── utils/                   # Utility functions
-│   │   ├── storage.ts           # Tauri Store wrapper (settings, licence, display name)
+│   │   ├── storage.ts           # Tauri Store wrapper (settings, display name)
 │   │   ├── tauriCommands.ts     # Rust command wrappers (agents, skills, memory, commands, MCP, hooks, sessions)
 │   │   ├── agentImport.ts       # Agent import from files / zip
 │   │   ├── agentExport.ts       # Agent export to zip
-│   │   ├── lemonLicensingClient.ts # Lemon Squeezy License API client
 │   │   └── fuzzyMatch.ts        # Search functionality
 │   ├── types.ts                 # Core TypeScript type definitions
-│   ├── types/licensing.ts       # Licence-related types
 │   ├── constants.ts             # Application constants
 │   ├── animations.ts            # Framer Motion animations
 │   └── App.tsx                  # Main application shell (routing, tours, activation)
@@ -120,7 +118,6 @@ vinsly-desktop/
 │       ├── usePlatformInfo.ts   # Platform detection + macOS version
 │       ├── useUserProfile.ts    # Display name persistence
 │       ├── useNavigation.ts     # View/selection routing + templates
-│       ├── useLicense.ts        # Licence bootstrap/reset + heartbeat
 │       ├── useScanSettings.ts   # Scan settings state + ref
 │       ├── useWorkspace.ts      # Agents/skills scan + CRUD + cache
 │       └── useUpdater.ts        # Updater (existing)
@@ -217,11 +214,11 @@ The terminal required specific configuration to work correctly in **production b
 - `npm run tauri dev` - Run Tauri app in development mode
 - `npm run tauri build` - Build Tauri app for production
 - `npm test` / `npm run test:watch` - Run Jest tests
-- `npm run reset:user-data` - Remove cached settings/licence data from the OS app-support folder (handy for testing first-run flows)
+- `npm run reset:user-data` - Remove cached settings data from the OS app-support folder (handy for testing first-run flows)
 
 ## Resetting Local Data
 
-Vinsly persists licence details, onboarding flags, and scan preferences via Tauri Store inside the platform app-support directory (`~/Library/Application Support/com.vinsly.desktop` on macOS, `%APPDATA%\com.vinsly.desktop` on Windows, `~/.config/com.vinsly.desktop` on Linux).  
+Vinsly persists onboarding flags and scan preferences via Tauri Store inside the platform app-support directory (`~/Library/Application Support/com.vinsly.desktop` on macOS, `%APPDATA%\com.vinsly.desktop` on Windows, `~/.config/com.vinsly.desktop` on Linux).
 Run `npm run reset:user-data` any time you need to simulate a clean install on your development machine, or delete the folder manually if you prefer.
 
 ## Tauri Commands
@@ -301,17 +298,14 @@ All permissions are configured in `src-tauri/capabilities/default.json`. The app
 
 ## Hook Architecture & Call Order
 
-`App.tsx` wraps providers (`LicenseProvider` → `UpdateProvider` → `WorkspaceProvider` → `NavigationProvider`). `AppContent` composes the custom hooks roughly as:
+`App.tsx` wraps providers (`UpdateProvider` → `WorkspaceProvider` → `NavigationProvider`). `AppContent` composes the custom hooks roughly as:
 - Theme/platform/user profile/navigation boot
-- License bootstrap (activation + onboarding)
 - Update bootstrap
-- Scan settings + workspace loader (agents, skills, commands, memory, MCP, hooks, sessions) once onboarding completes
-
-Integration example: activation completion calls `useLicense.setLicense`, applies scan settings via `useScanSettings`, then triggers `useWorkspace.loadAgents`.
+- Scan settings + workspace loader (agents, skills, commands, memory, MCP, hooks, sessions)
 
 ## Quick Manual QA Checklist
 
-- Activation/onboarding: licence validation, display name, scan defaults, home directory scan gating.
+- Onboarding: display name, scan defaults, home directory scan gating.
 - Theme toggle: header toggle flips DOM class and persists.
 - Agents: create/edit/duplicate/delete, bulk delete, import/export, favorites, watched directory scan.
 - Skills: create/edit/delete, import/export, favorites, reveal/export selected skills.
@@ -346,26 +340,13 @@ This removes all compiled artifacts. They'll rebuild automatically on your next 
 - Verify permissions in capabilities configuration
 - Check Tauri console for Rust backend errors
 
-## Pricing & Licensing
-
-Vinsly Desktop is a **pay‑to‑own** product using Lemon Squeezy for billing and licence key distribution.
-
-- **Pricing** – One-time purchase, including updates.
-- **No subscription required** – A simple, developer‑friendly one‑off purchase rather than a recurring subscription.
-
-**Activation**: Purchase on the landing page, receive a Lemon Squeezy licence key, and activate inside the app using the built‑in licence + email flow.
-
-### Lemon Squeezy API Notes
-
-Vinsly calls Lemon's License API directly from the client to validate/activate keys. Prefer long‑lived licence keys on the Lemon side so older installers remain functional; rotate via normal app updates if you need to change products or variants.
-
 ## Documentation
 
 - [CHANGELOG](./CHANGELOG.md) – Version history and release notes
-- [LICENSE](./LICENSE) – Proprietary software license
+- [LICENSE](./LICENSE) – MIT license
 - [PRIVACY](./PRIVACY.md) – Privacy policy
 - [Tauri Commands Reference](./docs/TAURI_COMMANDS.md) – Full IPC command documentation
 
 ## Support
 
-For questions, issues, or licensing inquiries: **support@vinsly.com**
+For questions or issues: **roszianski@gmail.com**

@@ -5,7 +5,6 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { ScanSettings } from '../types';
 import { getScanSettings, saveScanSettings, addWatchedDirectory, removeWatchedDirectory } from '../utils/scanSettings';
 import { DeleteIcon } from './icons/DeleteIcon';
-import { LicenseInfo } from '../types/licensing';
 import { PendingUpdateDetails } from '../types/updater';
 import { checkFullDiskAccess, openFullDiskAccessSettings, exportConfigBundle, importConfigBundle, readBundleManifest, BundleManifest } from '../utils/tauriCommands';
 import { devLog } from '../utils/devLogger';
@@ -24,10 +23,8 @@ interface SettingsModalProps {
   defaultView: 'table' | 'grid';
   onViewChange: (view: 'table' | 'grid') => Promise<void> | void;
   onResetPreferences: () => Promise<void> | void;
-  licenseInfo: LicenseInfo | null;
   userDisplayName: string;
   onDisplayNameChange: (name: string) => Promise<void> | void;
-  onResetLicense: () => Promise<void> | void;
   onScanSettingsChange?: (settings: ScanSettings) => void;
   scanSettings: ScanSettings;
   onCheckForUpdates: () => Promise<void> | void;
@@ -54,10 +51,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   defaultView,
   onViewChange,
   onResetPreferences,
-  licenseInfo,
   userDisplayName,
   onDisplayNameChange,
-  onResetLicense,
   onScanSettingsChange,
   scanSettings,
   onCheckForUpdates,
@@ -1020,7 +1015,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           Account
                         </h3>
                         <p className="text-sm text-v-light-text-secondary dark:text-v-text-secondary">
-                          Manage your licence and organisation details
+                          Manage your profile and updates
                         </p>
                       </div>
                       <div className="space-y-5">
@@ -1086,44 +1081,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 </svg>
                               )}
                               <span>{isDisplayNameSaved ? 'Saved' : isDisplayNameSaving ? 'Saving…' : 'Save'}</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="border border-v-light-border dark:border-v-border rounded-lg p-5 bg-v-light-bg dark:bg-v-dark">
-                          <div className="flex items-center justify-between mb-4">
-                            <div>
-                              <p className="text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary">
-                                Licence status
-                              </p>
-                              <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary mt-1">
-                                {licenseInfo ? `Last checked ${new Date(licenseInfo.lastChecked).toLocaleDateString()}` : 'Not activated'}
-                              </p>
-                            </div>
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${licenseInfo ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-200'}`}>
-                              {licenseInfo ? licenseInfo.status.toUpperCase() : 'PENDING'}
-                            </span>
-                          </div>
-                          <div className="space-y-2 text-sm">
-                            <div className="flex items-center justify-between">
-                              <span className="text-v-light-text-secondary dark:text-v-text-secondary">Licence key</span>
-                              <span className="font-mono text-v-light-text-primary dark:text-v-text-primary">
-                                {licenseInfo ? `•••• ${licenseInfo.licenseKey.slice(-4)}` : 'Not set'}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-v-light-text-secondary dark:text-v-text-secondary">Email</span>
-                              <span className="text-v-light-text-primary dark:text-v-text-primary">
-                                {licenseInfo?.email || '—'}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="mt-4 flex flex-wrap gap-3">
-                            <button
-                              onClick={onResetLicense}
-                              className="px-4 py-2 text-sm font-semibold border border-v-light-border dark:border-v-border rounded-md text-v-light-text-primary dark:text-v-text-primary hover:border-v-accent transition-colors"
-                            >
-                              Change licence
                             </button>
                           </div>
                         </div>

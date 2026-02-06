@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Agent, AgentScope, ScanSettings, Skill, ClaudeMemory } from '../types';
-import { LicenseInfo } from '../types/licensing';
 import { AgentListScreen } from './screens/AgentListScreen';
 import { SkillListScreen } from './screens/SkillListScreen';
 import { AgentEditorScreen } from './screens/AgentEditorScreen';
@@ -18,15 +17,14 @@ import { HooksEditorScreen } from './screens/HooksEditorScreen';
 import { Header } from './Header';
 import { pageTransition } from '../animations';
 import { ToastContainer } from './Toast';
-import { ActivationModal } from './ActivationModal';
-import { ChangeLicenseModal } from './ChangeLicenseModal';
+import { WelcomeModal } from './WelcomeModal';
 import { UpdateAvailableModal } from './UpdateAvailableModal';
 import { UpdateCompleteModal } from './UpdateCompleteModal';
 import { SplashScreen } from './SplashScreen';
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 import { DocsPanel } from './DocsPanel';
 import { useToast } from '../contexts/ToastContext';
-import { useLicenseContext } from '../contexts/LicenseContext';
+import { useAppBootstrapContext } from '../contexts/AppBootstrapContext';
 import { useUpdateContext } from '../contexts/UpdateContext';
 import { useWorkspaceContext } from '../contexts/WorkspaceContext';
 import { useNavigationContext } from '../contexts/NavigationContext';
@@ -36,8 +34,8 @@ import { useClaudeSessions } from '../hooks/useClaudeSessions';
 import { useKeyboardShortcuts, CommonShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useTerminal } from '../contexts/TerminalContext';
 import { TerminalPanel } from './Terminal';
-import { validateLicenseWithLemon, activateLicenseWithLemon, deactivateLicenseWithLemon } from '../utils/lemonLicensingClient';
 import { saveScanSettings } from '../utils/scanSettings';
+import { setStorageItem } from '../utils/storage';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { exportSkillDirectory, importSkillArchive, exportSkillsArchive, exportSlashCommandsArchive, importSlashCommandsArchive, exportMemoriesArchive, importMemoriesArchive, updateTrayStatus } from '../utils/tauriCommands';
@@ -49,96 +47,24 @@ import { extractProjectRootFromAgentPath } from '../utils/path';
 
 const HOME_DISCOVERY_MAX_DEPTH = DEFAULT_HOME_DISCOVERY_DEPTH;
 
-type LemonValidateResult = Awaited<ReturnType<typeof validateLicenseWithLemon>>;
-type LemonActivateResult = Awaited<ReturnType<typeof activateLicenseWithLemon>>;
-
-function isInvalidLicenseKeyError(error: string | null): boolean {
-  if (!error) return false;
-  const e = error.toLowerCase().trim();
-  if (e === 'invalid' || e === 'license_invalid') return true;
-  if (e.includes('not recognised') || e.includes('not recognized')) return true;
-  if (e.includes('license') && e.includes('key') && e.includes('not found')) return true;
-  if (e.includes('license') && e.includes('key') && e.includes('invalid')) return true;
-  return false;
-}
-
-function getValidateLicenseErrorMessage(result: LemonValidateResult): string {
-  const status = result.status?.toLowerCase();
-  const errorLower = result.error?.toLowerCase() ?? null;
-
-  if (isInvalidLicenseKeyError(result.error)) {
-    return 'This licence key was not recognised.';
-  }
-  if (status === 'revoked') return 'This licence has been revoked or refunded.';
-  if (status === 'expired') return 'This licence has expired.';
-  if (status === 'disabled') return 'This licence has been disabled.';
-  if (errorLower === 'network_error') return 'Unable to reach the licence server. Please try again.';
-  if (errorLower === 'timeout') return 'The licence server took too long to respond. Please try again.';
-  if (errorLower === 'tauri_invoke_failed') {
-    return 'Internal error while validating your licence. Please restart Vinsly and try again. (tauri_invoke_failed)';
-  }
-  if (errorLower?.startsWith('request_failed')) {
-    return result.error
-      ? `The licence server returned an unexpected response. (${result.error})`
-      : 'The licence server returned an unexpected response.';
-  }
-  return result.error
-    ? `Unable to validate your licence right now. (${result.error})`
-    : 'Unable to validate your licence right now.';
-}
-
-function getActivateLicenseErrorMessage(result: LemonActivateResult): string {
-  const errorLower = result.error?.toLowerCase() ?? null;
-
-  if (errorLower === 'activation_limit_exceeded') {
-    return 'This licence is already active on the maximum number of devices.';
-  }
-  if (errorLower === 'license_inactive') {
-    return 'This licence has been revoked, expired, or refunded.';
-  }
-  if (errorLower === 'network_error') {
-    return 'Unable to reach the licence server. Please try again.';
-  }
-  if (errorLower === 'timeout') {
-    return 'The licence server took too long to respond. Please try again.';
-  }
-  if (errorLower === 'tauri_invoke_failed') {
-    return 'Internal error while activating your licence. Please restart Vinsly and try again. (tauri_invoke_failed)';
-  }
-  if (errorLower?.startsWith('request_failed')) {
-    return result.error
-      ? `The licence server returned an unexpected response. (${result.error})`
-      : 'The licence server returned an unexpected response.';
-  }
-  if (errorLower === 'license_invalid' || isInvalidLicenseKeyError(result.error)) {
-    return 'This licence key is invalid.';
-  }
-  return result.error
-    ? `Unable to activate your licence right now. (${result.error})`
-    : 'Unable to activate your licence right now.';
-}
-
 export const AppContent: React.FC = () => {
   const { theme, themeLoaded, toggleTheme } = useTheme();
   const { userDisplayName, setDisplayName } = useUserProfile();
   const { showToast, toasts, removeToast } = useToast();
 
-  // License context
+  // App bootstrap context
   const {
-    licenseInfo,
-    licenseBootstrapComplete,
+    bootstrapComplete,
     isOnboardingComplete,
-    setLicense,
-    resetLicense,
-    isActivationOpen,
-    setIsActivationOpen,
-    activationPresented,
-    setActivationPresented,
+    isWelcomeOpen,
+    setIsWelcomeOpen,
+    welcomePresented,
+    setWelcomePresented,
     appVersion,
     platformIdentifier,
     isMacLike,
     macOSMajorVersion,
-  } = useLicenseContext();
+  } = useAppBootstrapContext();
 
   // Update context
   const {
@@ -250,7 +176,6 @@ export const AppContent: React.FC = () => {
   const [showSplash, setShowSplash] = useState(true);
   const [showShortcutsPanel, setShowShortcutsPanel] = useState(false);
   const [showDocsPanel, setShowDocsPanel] = useState(false);
-  const [isChangeLicenseOpen, setIsChangeLicenseOpen] = useState(false);
 
   // Claude sessions
   const claudeSessions = useClaudeSessions({ autoStart: true, pollInterval: 5000 });
@@ -282,17 +207,16 @@ export const AppContent: React.FC = () => {
     initialCheckComplete &&
     pendingUpdate !== null;
 
-  // Open activation modal when license bootstrap completes (and no update modal is showing)
+  // Open welcome modal when bootstrap completes and onboarding is not done
   useEffect(() => {
-    if (activationPresented || !licenseBootstrapComplete || !initialCheckComplete) return;
-    // Don't open activation if we're showing the update modal
-    if (!showSplash && !licenseInfo && !showUpdateModal) {
-      setIsActivationOpen(true);
+    if (welcomePresented || !bootstrapComplete || !initialCheckComplete) return;
+    if (!showSplash && !isOnboardingComplete && !showUpdateModal) {
+      setIsWelcomeOpen(true);
     }
     if (!showSplash && !showUpdateModal) {
-      setActivationPresented(true);
+      setWelcomePresented(true);
     }
-  }, [licenseInfo, showSplash, activationPresented, licenseBootstrapComplete, initialCheckComplete, showUpdateModal, setIsActivationOpen, setActivationPresented]);
+  }, [isOnboardingComplete, showSplash, welcomePresented, bootstrapComplete, initialCheckComplete, showUpdateModal, setIsWelcomeOpen, setWelcomePresented]);
 
   // Keyboard shortcuts
   useKeyboardShortcuts([
@@ -447,10 +371,6 @@ export const AppContent: React.FC = () => {
   const handleDeleteHook = async (hook: Hook) => {
     await removeHook(hook);
   };
-
-  const handleChangeLicense = useCallback(() => {
-    setIsChangeLicenseOpen(true);
-  }, []);
 
   // Handle skipping pre-activation update
   const handleSkipPreActivationUpdate = useCallback(() => {
@@ -897,8 +817,6 @@ export const AppContent: React.FC = () => {
         onNavigateHome={navigateHome}
         onScan={handleFullScan}
         isScanning={isScanBusy}
-        licenseInfo={licenseInfo}
-        onResetLicense={handleChangeLicense}
         userDisplayName={userDisplayName}
         onDisplayNameChange={setDisplayName}
         scanSettings={scanSettings}
@@ -953,60 +871,17 @@ export const AppContent: React.FC = () => {
         />
       )}
 
-      <ActivationModal
-        isOpen={isActivationOpen}
+      <WelcomeModal
+        isOpen={isWelcomeOpen}
         defaultDisplayName={userDisplayName}
         defaultScanGlobal={scanSettings.autoScanGlobalOnStartup}
         defaultScanWatched={scanSettings.autoScanWatchedOnStartup}
         defaultScanHome={scanSettings.autoScanHomeDirectoryOnStartup}
-	        defaultFullDiskAccess={scanSettings.fullDiskAccessEnabled}
-	        isMacPlatform={isMacLike}
-	        macOSVersionMajor={macOSMajorVersion}
-	        onValidateLicense={async ({ licenseKey }) => {
-	          const result = await validateLicenseWithLemon(licenseKey);
-	          const status = result.status?.toLowerCase();
-
-	          // Reject if not valid, or if status is explicitly bad (revoked, expired, disabled)
-	          // Allow "inactive" status - licenses start inactive until first activation
-	          const isBadStatus = status === 'revoked' || status === 'expired' || status === 'disabled';
-
-	          if (!result.valid || isBadStatus) {
-	            throw new Error(getValidateLicenseErrorMessage(result));
-	          }
-	        }}
-	        onComplete={async ({ licenseKey, displayName, autoScanGlobal, autoScanWatched, autoScanHome, fullDiskAccessEnabled }) => {
-	          const trimmedLicenseKey = licenseKey.trim();
-	          const trimmedDisplayName = displayName.trim();
-
-          // Generate instance name for Lemon Squeezy
-          const instanceName = `${platformIdentifier} - ${new Date().toLocaleDateString()}`;
-
-          let activationResult;
-          try {
-            activationResult = await activateLicenseWithLemon(
-              trimmedLicenseKey,
-              instanceName
-            );
-          } catch (error) {
-            devLog.error('Activation failed:', error);
-            throw new Error('Unable to activate your licence right now. Please check your license key and try again.');
-          }
-
-	          if (!activationResult.activated || !activationResult.instance) {
-	            throw new Error(getActivateLicenseErrorMessage(activationResult));
-	          }
-
-          const licenseRecord: LicenseInfo = {
-            licenseKey: trimmedLicenseKey,
-            email: activationResult.meta?.customer_email,
-            status: 'active',
-            lastChecked: new Date().toISOString(),
-            instanceId: activationResult.instance.id,
-            instanceName: activationResult.instance.name,
-            activationLimit: activationResult.licenseKey?.activation_limit ?? 0,
-            activationUsage: activationResult.licenseKey?.activation_usage ?? 0,
-          };
-          await setLicense(licenseRecord);
+        defaultFullDiskAccess={scanSettings.fullDiskAccessEnabled}
+        isMacPlatform={isMacLike}
+        macOSVersionMajor={macOSMajorVersion}
+        onComplete={async ({ displayName, autoScanGlobal, autoScanWatched, autoScanHome, fullDiskAccessEnabled }) => {
+          const trimmedDisplayName = displayName.trim();
           await setDisplayName(trimmedDisplayName);
 
           const updatedScanSettings: ScanSettings = {
@@ -1024,7 +899,7 @@ export const AppContent: React.FC = () => {
             try {
               onboardingDirectories = await discoverHomeDirectories({
                 maxDepth: HOME_DISCOVERY_MAX_DEPTH,
-                includeProtectedDirs: false, // Never scan Music/Movies/Pictures - no Claude projects there
+                includeProtectedDirs: false,
                 force: true,
               });
             } catch (error) {
@@ -1040,62 +915,13 @@ export const AppContent: React.FC = () => {
             scanWatchedDirectories: shouldScanWatched,
           });
 
-          setIsActivationOpen(false);
+          // Mark onboarding as complete
+          await setStorageItem('vinsly-onboarding-complete', true);
+
+          setIsWelcomeOpen(false);
         }}
         onClose={() => {
-          setIsActivationOpen(false);
-        }}
-      />
-
-	      <ChangeLicenseModal
-	        isOpen={isChangeLicenseOpen}
-	        onValidateLicense={async ({ licenseKey }) => {
-	          const result = await validateLicenseWithLemon(licenseKey);
-	          const status = result.status?.toLowerCase();
-	          const isBadStatus = status === 'revoked' || status === 'expired' || status === 'disabled';
-
-	          if (!result.valid || isBadStatus) {
-	            throw new Error(getValidateLicenseErrorMessage(result));
-	          }
-	        }}
-	        onComplete={async ({ licenseKey }) => {
-	          const trimmedLicenseKey = licenseKey.trim();
-
-          // Deactivate old license instance if exists
-          if (licenseInfo?.licenseKey && licenseInfo?.instanceId) {
-            try {
-              await deactivateLicenseWithLemon(licenseInfo.licenseKey, licenseInfo.instanceId);
-            } catch (error) {
-              // Log but don't fail - the old instance might already be deactivated
-              devLog.warn('Failed to deactivate old license instance:', error);
-            }
-          }
-
-          // Activate new license
-          const instanceName = `${platformIdentifier} - ${new Date().toLocaleDateString()}`;
-	          const activationResult = await activateLicenseWithLemon(trimmedLicenseKey, instanceName);
-
-	          if (!activationResult.activated || !activationResult.instance) {
-	            throw new Error(getActivateLicenseErrorMessage(activationResult));
-	          }
-
-          const licenseRecord: LicenseInfo = {
-            licenseKey: trimmedLicenseKey,
-            email: activationResult.meta?.customer_email,
-            status: 'active',
-            lastChecked: new Date().toISOString(),
-            instanceId: activationResult.instance.id,
-            instanceName: activationResult.instance.name,
-            activationLimit: activationResult.licenseKey?.activation_limit ?? 0,
-            activationUsage: activationResult.licenseKey?.activation_usage ?? 0,
-          };
-          await setLicense(licenseRecord);
-
-          showToast('success', 'Licence changed successfully.');
-          setIsChangeLicenseOpen(false);
-        }}
-        onClose={() => {
-          setIsChangeLicenseOpen(false);
+          setIsWelcomeOpen(false);
         }}
       />
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { LicenseProvider } from './contexts/LicenseContext';
+import { AppBootstrapProvider } from './contexts/AppBootstrapContext';
 import { UpdateProvider } from './contexts/UpdateContext';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { NavigationProvider } from './contexts/NavigationContext';
@@ -38,8 +38,8 @@ const ProviderErrorFallback: React.FC<{ provider: string }> = ({ provider }) => 
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
-      <ErrorBoundary fallback={<ProviderErrorFallback provider="License service" />}>
-        <LicenseProvider>
+      <ErrorBoundary fallback={<ProviderErrorFallback provider="App service" />}>
+        <AppBootstrapProvider>
           <ErrorBoundary fallback={<ProviderErrorFallback provider="Update service" />}>
             <UpdateProvider>
               <ErrorBoundary fallback={<ProviderErrorFallback provider="Workspace" />}>
@@ -57,7 +57,7 @@ const App: React.FC = () => {
               </ErrorBoundary>
             </UpdateProvider>
           </ErrorBoundary>
-        </LicenseProvider>
+        </AppBootstrapProvider>
       </ErrorBoundary>
     </ErrorBoundary>
   );

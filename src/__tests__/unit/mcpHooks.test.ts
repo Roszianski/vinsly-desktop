@@ -496,12 +496,12 @@ describe('Hook Types', () => {
   });
 
   describe('getHookEventDisplayName', () => {
-    it('should return display names', () => {
-      expect(getHookEventDisplayName('PreToolUse')).toBe('Before Tool Use');
-      expect(getHookEventDisplayName('PostToolUse')).toBe('After Tool Use');
-      expect(getHookEventDisplayName('Notification')).toBe('On Notification');
-      expect(getHookEventDisplayName('Stop')).toBe('Session Stop');
-      expect(getHookEventDisplayName('SubagentStop')).toBe('Subagent Stop');
+    it('should return the exact event type name', () => {
+      expect(getHookEventDisplayName('PreToolUse')).toBe('PreToolUse');
+      expect(getHookEventDisplayName('PostToolUse')).toBe('PostToolUse');
+      expect(getHookEventDisplayName('Notification')).toBe('Notification');
+      expect(getHookEventDisplayName('Stop')).toBe('Stop');
+      expect(getHookEventDisplayName('SubagentStop')).toBe('SubagentStop');
     });
   });
 

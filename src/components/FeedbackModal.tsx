@@ -9,7 +9,6 @@ interface FeedbackModalProps {
   isOpen: boolean;
   onClose: () => void;
   appVersion: string;
-  userEmail?: string;
 }
 
 const FEEDBACK_TYPE_LABELS: Record<FeedbackType, string> = {
@@ -25,12 +24,11 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   isOpen,
   onClose,
   appVersion,
-  userEmail = '',
 }) => {
   const { showToast } = useToast();
   const [feedbackType, setFeedbackType] = useState<FeedbackType>('feedback');
   const [message, setMessage] = useState('');
-  const [email, setEmail] = useState(userEmail);
+  const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const trimmedMessage = message.trim();

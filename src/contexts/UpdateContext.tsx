@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
 import { useUpdater, UPDATE_COMPLETED_VERSION_KEY } from '../hooks/useUpdater';
 import { useToast } from './ToastContext';
-import { useLicenseContext } from './LicenseContext';
+import { useAppBootstrapContext } from './AppBootstrapContext';
 import { PendingUpdateDetails, UpdateCompletedInfo } from '../types/updater';
 import { devLog } from '../utils/devLogger';
 import { getStorageItem, removeStorageItem } from '../utils/storage';
@@ -31,7 +31,7 @@ interface UpdateProviderProps {
 
 export const UpdateProvider: React.FC<UpdateProviderProps> = ({ children }) => {
   const { showToast } = useToast();
-  const { licenseInfo, appVersion } = useLicenseContext();
+  const { appVersion } = useAppBootstrapContext();
   const hasCheckedRef = useRef(false);
   const hasCheckedUpdateCompleteRef = useRef(false);
   const [initialCheckComplete, setInitialCheckComplete] = useState(false);

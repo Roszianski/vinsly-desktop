@@ -3,18 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { checkFullDiskAccess, openFullDiskAccessSettings } from '../utils/tauriCommands';
 import { devLog } from '../utils/devLogger';
 
-// Key for saving activation progress (survives app restart)
-const ACTIVATION_PROGRESS_KEY = 'vinsly-activation-progress';
-
-interface SavedActivationProgress {
-  step: Step;
-  licenseKey: string;
-  displayName: string;
-  autoScanGlobal: boolean;
-  autoScanWatched: boolean;
-}
-
-interface ActivationModalProps {
+interface WelcomeModalProps {
   isOpen: boolean;
   defaultDisplayName?: string;
   defaultScanGlobal?: boolean;
@@ -23,9 +12,7 @@ interface ActivationModalProps {
   defaultFullDiskAccess?: boolean;
   isMacPlatform?: boolean;
   macOSVersionMajor?: number | null;
-  onValidateLicense?: (payload: { licenseKey: string }) => Promise<void>;
   onComplete: (payload: {
-    licenseKey: string;
     displayName: string;
     autoScanGlobal: boolean;
     autoScanWatched: boolean;
@@ -35,9 +22,9 @@ interface ActivationModalProps {
   onClose: () => void;
 }
 
-type Step = 'license' | 'profile' | 'scanning';
+type Step = 'profile' | 'scanning';
 
-export const ActivationModal: React.FC<ActivationModalProps> = ({
+export const WelcomeModal: React.FC<WelcomeModalProps> = ({
   isOpen,
   defaultDisplayName = '',
   defaultScanGlobal = true,
@@ -46,12 +33,10 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
   defaultFullDiskAccess = false,
   isMacPlatform = false,
   macOSVersionMajor = null,
-  onValidateLicense,
   onComplete,
   onClose
 }) => {
-  const [step, setStep] = useState<Step>('license');
-  const [licenseKey, setLicenseKey] = useState('');
+  const [step, setStep] = useState<Step>('profile');
   const [displayName, setDisplayName] = useState(defaultDisplayName);
   const [autoScanGlobal, setAutoScanGlobal] = useState(defaultScanGlobal);
   const [autoScanWatched, setAutoScanWatched] = useState(defaultScanWatched);
@@ -62,64 +47,13 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
   const [fullDiskStatusMessage, setFullDiskStatusMessage] = useState<{ tone: 'info' | 'warn'; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [validationState, setValidationState] = useState<'idle' | 'validating' | 'success'>('idle');
-  const [licenseStepError, setLicenseStepError] = useState<string | null>(null);
-  const [errors, setErrors] = useState<{ licenseKey?: string; displayName?: string }>({});
+  const [errors, setErrors] = useState<{ displayName?: string }>({});
   const [showFdaGuide, setShowFdaGuide] = useState(false);
-  const validationSuccessTimer = useRef<number | null>(null);
   const wasOpenRef = useRef(false);
   const postGrantCheckTimeoutRef = useRef<number | null>(null);
-  const progressRestoredRef = useRef(false);
-
-  // Save activation progress to localStorage (survives app restart)
-  const saveProgress = useCallback(() => {
-    const progress: SavedActivationProgress = {
-      step,
-      licenseKey,
-      displayName,
-      autoScanGlobal,
-      autoScanWatched,
-    };
-    localStorage.setItem(ACTIVATION_PROGRESS_KEY, JSON.stringify(progress));
-  }, [step, licenseKey, displayName, autoScanGlobal, autoScanWatched]);
-
-  // Clear saved progress
-  const clearProgress = useCallback(() => {
-    localStorage.removeItem(ACTIVATION_PROGRESS_KEY);
-  }, []);
-
-  // Restore progress from localStorage on mount
-  useEffect(() => {
-    if (isOpen && !progressRestoredRef.current) {
-      progressRestoredRef.current = true;
-      try {
-        const saved = localStorage.getItem(ACTIVATION_PROGRESS_KEY);
-        if (saved) {
-          const progress: SavedActivationProgress = JSON.parse(saved);
-          if (progress.step && progress.licenseKey) {
-            setStep(progress.step);
-            setLicenseKey(progress.licenseKey);
-            setDisplayName(progress.displayName || defaultDisplayName);
-            setAutoScanGlobal(progress.autoScanGlobal ?? defaultScanGlobal);
-            setAutoScanWatched(progress.autoScanWatched ?? defaultScanWatched);
-            // Mark validation as already done since license was saved
-            setValidationState('success');
-            devLog.log('Restored activation progress:', progress.step);
-          }
-        }
-      } catch (err) {
-        devLog.error('Failed to restore activation progress:', err);
-      }
-    }
-  }, [isOpen, defaultDisplayName, defaultScanGlobal, defaultScanWatched]);
 
   const resetFormState = useCallback(() => {
-    // Don't reset if we just restored progress
-    if (progressRestoredRef.current && localStorage.getItem(ACTIVATION_PROGRESS_KEY)) {
-      return;
-    }
-    setStep('license');
-    setLicenseKey('');
+    setStep('profile');
     setDisplayName(defaultDisplayName);
     setErrors({});
     setAutoScanGlobal(defaultScanGlobal);
@@ -131,13 +65,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
     setIsOpeningFullDiskSettings(false);
     setIsSubmitting(false);
     setSubmitError(null);
-    setValidationState('idle');
-    setLicenseStepError(null);
     setShowFdaGuide(false);
-    if (validationSuccessTimer.current) {
-      window.clearTimeout(validationSuccessTimer.current);
-      validationSuccessTimer.current = null;
-    }
   }, [defaultDisplayName, defaultScanGlobal, defaultScanWatched, defaultScanHome, defaultFullDiskAccess]);
 
   const refreshFullDiskStatus = useCallback(async () => {
@@ -197,11 +125,8 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
       });
       return;
     }
-    // Save progress before showing guide (user may restart app)
-    saveProgress();
-    // Show the two-step guide popup
     setShowFdaGuide(true);
-  }, [isMacPlatform, saveProgress]);
+  }, [isMacPlatform]);
 
   const handleFdaGuideOpenSettings = useCallback(async () => {
     setIsOpeningFullDiskSettings(true);
@@ -216,29 +141,16 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
 
   const handleFdaGuideClose = useCallback(() => {
     setShowFdaGuide(false);
-    // Check FDA status after closing guide
     void refreshFullDiskStatus();
   }, [refreshFullDiskStatus]);
 
   useEffect(() => {
     return () => {
-      if (validationSuccessTimer.current) {
-        window.clearTimeout(validationSuccessTimer.current);
-      }
       if (postGrantCheckTimeoutRef.current) {
         window.clearTimeout(postGrantCheckTimeoutRef.current);
       }
     };
   }, []);
-
-  const validateLicenseStep = () => {
-    const nextErrors: typeof errors = {};
-    if (!licenseKey.trim()) {
-      nextErrors.licenseKey = 'Please enter your licence key';
-    }
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
 
   const validateProfileStep = () => {
     const nextErrors: typeof errors = {};
@@ -249,55 +161,6 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
-  };
-
-  const handleLicenseSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (validationState === 'validating' || validationState === 'success') return;
-
-    setLicenseStepError(null);
-
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      setLicenseStepError('Please switch your Wi-Fi on so we can validate your licence key.');
-      return;
-    }
-
-    if (!validateLicenseStep()) {
-      return;
-    }
-
-    const proceedToProfile = () => {
-      if (validationSuccessTimer.current) {
-        window.clearTimeout(validationSuccessTimer.current);
-      }
-      validationSuccessTimer.current = window.setTimeout(() => {
-        setValidationState('idle');
-        setStep('profile');
-        setErrors({});
-      }, 1200);
-    };
-
-    if (onValidateLicense) {
-      try {
-        setValidationState('validating');
-        await onValidateLicense({
-          licenseKey: licenseKey.trim(),
-        });
-        setValidationState('success');
-        proceedToProfile();
-      } catch (error) {
-        devLog.error('Licence validation failed:', error);
-        const message = error instanceof Error && error.message
-          ? error.message
-          : 'Something went wrong while validating your licence. Please try again.';
-        setLicenseStepError(message);
-        setValidationState('idle');
-        return;
-      }
-    } else {
-      setValidationState('success');
-      proceedToProfile();
-    }
   };
 
   const handleProfileSubmit = (event: React.FormEvent) => {
@@ -320,17 +183,14 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
     setSubmitError(null);
     try {
       await onComplete({
-        licenseKey: licenseKey.trim(),
         displayName: displayName.trim(),
         autoScanGlobal,
         autoScanWatched,
         autoScanHome,
         fullDiskAccessEnabled: isMacPlatform ? (fullDiskAccessEnabled && fullDiskStatus === 'granted') : true,
       });
-      // Clear saved progress on successful completion
-      clearProgress();
     } catch (error) {
-      devLog.error('Activation completion failed:', error);
+      devLog.error('Welcome completion failed:', error);
       const message = error instanceof Error && error.message
         ? error.message
         : 'Something went wrong while setting up. Please try again.';
@@ -341,14 +201,13 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
 
   if (!isOpen) return null;
 
-  const steps: Step[] = ['license', 'profile', 'scanning'];
+  const steps: Step[] = ['profile', 'scanning'];
   const currentIndex = steps.indexOf(step);
-  const isLicenseButtonBusy = validationState === 'validating' || validationState === 'success';
 
   return (
     <AnimatePresence>
       <motion.div
-        key="activation-modal"
+        key="welcome-modal"
         className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/40 px-4"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -378,74 +237,7 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
               ))}
             </div>
 
-            {step === 'license' ? (
-              <form className="space-y-5" onSubmit={handleLicenseSubmit}>
-                <div>
-                  <label className="block text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary mb-2">
-                    Licence key
-                  </label>
-                  <input
-                    type="text"
-                    value={licenseKey}
-                    onChange={(event) => setLicenseKey(event.target.value)}
-                    placeholder="XXXX-XXXX-XXXX-XXXX"
-                    disabled={isLicenseButtonBusy}
-                    className={`w-full px-4 py-3 rounded-xl border bg-transparent text-v-light-text-primary dark:text-v-text-primary focus-visible:outline-none focus:ring-2 focus:ring-v-accent ${
-                      errors.licenseKey ? 'border-red-400' : 'border-v-light-border dark:border-v-border'
-                    }`}
-                  />
-                  {errors.licenseKey && (
-                    <p className="text-xs text-red-500 mt-1">{errors.licenseKey}</p>
-                  )}
-                </div>
-                <button
-                  type="submit"
-                  disabled={isLicenseButtonBusy}
-                  className="w-full py-3 rounded-xl text-white font-semibold transition-colors flex items-center justify-center gap-2 bg-v-accent hover:bg-v-accent-hover disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {validationState === 'validating' && (
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        strokeDasharray="60"
-                        strokeDashoffset="20"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  )}
-                  {validationState === 'success' ? (
-                    <>
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
-                        <path
-                          d="M5 13l4 4L19 7"
-                          stroke="currentColor"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                      Validated
-                    </>
-                  ) : (
-                    <>
-                      {validationState === 'validating' ? 'Validating…' : 'Validate licence'}
-                    </>
-                  )}
-                </button>
-                <p className="text-xs text-v-light-text-secondary dark:text-v-text-secondary text-center">
-                  We&apos;ll store your licence securely on this device and validate it with the Vinsly licence server.
-                </p>
-                {licenseStepError && (
-                  <p className="text-xs text-red-500 mt-2 text-center">
-                    {licenseStepError}
-                  </p>
-                )}
-              </form>
-            ) : step === 'profile' ? (
+            {step === 'profile' ? (
               <form className="space-y-5" onSubmit={handleProfileSubmit}>
                 <div>
                   <label className="block text-sm font-semibold text-v-light-text-primary dark:text-v-text-primary mb-2">
@@ -464,21 +256,12 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
                     <p className="text-xs text-red-500 mt-1">{errors.displayName}</p>
                   )}
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setStep('license')}
-                    className="px-4 py-3 rounded-xl border border-v-light-border dark:border-v-border text-sm font-medium text-v-light-text-secondary dark:text-v-text-secondary hover:border-v-accent hover:text-v-light-text-primary dark:hover:text-v-text-primary transition-colors"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 rounded-xl bg-v-accent text-white font-semibold hover:bg-v-accent-hover transition-colors"
-                  >
-                    Continue
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl bg-v-accent text-white font-semibold hover:bg-v-accent-hover transition-colors"
+                >
+                  Continue
+                </button>
               </form>
             ) : step === 'scanning' ? (
               <form className="space-y-5" onSubmit={handleScanningSubmit}>
@@ -632,4 +415,4 @@ export const ActivationModal: React.FC<ActivationModalProps> = ({
   );
 };
 
-export default ActivationModal;
+export default WelcomeModal;

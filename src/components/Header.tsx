@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Theme } from '../hooks/useTheme';
-import { LicenseInfo } from '../types/licensing';
 import { LoadAgentsOptions, ScanSettings, DetailedScanResult } from '../types';
 import { ClaudeSession } from '../types/session';
 import { SunIcon } from './icons/SunIcon';
@@ -48,8 +47,6 @@ interface HeaderProps {
     onNavigateHome: () => void;
     onScan: (options?: LoadAgentsOptions) => Promise<DetailedScanResult>;
     isScanning?: boolean;
-    licenseInfo: LicenseInfo | null;
-    onResetLicense: () => void;
     userDisplayName: string;
     onDisplayNameChange: (name: string) => void;
     scanSettings: ScanSettings;
@@ -82,8 +79,6 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigateHome,
   onScan,
   isScanning = false,
-  licenseInfo,
-  onResetLicense,
   userDisplayName,
   onDisplayNameChange,
   scanSettings,
@@ -119,17 +114,12 @@ export const Header: React.FC<HeaderProps> = ({
   const [defaultView, setDefaultView] = useState<'table' | 'grid'>('table');
   const [showScanHighlight, setShowScanHighlight] = useState(false);
 
-  // Check if this is first scan after activation
+  // Check if this is first scan after onboarding
   useEffect(() => {
     const checkFirstScan = async () => {
-      if (licenseInfo?.status !== 'active') {
-        setShowScanHighlight(false);
-        return;
-      }
       const hasScanned = await getStorageItem<boolean>('vinsly-has-scanned-after-activation');
       if (!hasScanned) {
         setShowScanHighlight(true);
-        // Auto-dismiss after 15 seconds
         const timer = setTimeout(() => {
           setShowScanHighlight(false);
         }, 15000);
@@ -137,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
       }
     };
     checkFirstScan();
-  }, [licenseInfo?.status]);
+  }, []);
 
   // Clear highlight when scan modal opens
   const handleScanClick = async () => {
@@ -391,7 +381,6 @@ export const Header: React.FC<HeaderProps> = ({
         defaultView={defaultView}
         onViewChange={handleViewPreference}
         onResetPreferences={handleResetPreferences}
-        licenseInfo={licenseInfo}
         userDisplayName={userDisplayName}
         onDisplayNameChange={onDisplayNameChange}
         scanSettings={scanSettings}
@@ -406,10 +395,6 @@ export const Header: React.FC<HeaderProps> = ({
         onInstallUpdate={onInstallUpdate}
         isMacPlatform={isMacPlatform}
         macOSVersionMajor={macOSVersionMajor}
-        onResetLicense={() => {
-          setShowSettingsModal(false);
-          onResetLicense();
-        }}
         loadedProjectPaths={loadedProjectPaths}
       />
 
@@ -438,7 +423,6 @@ export const Header: React.FC<HeaderProps> = ({
         isOpen={showFeedbackModal}
         onClose={() => setShowFeedbackModal(false)}
         appVersion={appVersion}
-        userEmail={licenseInfo?.email}
       />
     </header>
   );

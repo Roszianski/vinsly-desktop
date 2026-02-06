@@ -11,7 +11,7 @@ import { useMCPServers } from '../hooks/useMCPServers';
 import { useHooks } from '../hooks/useHooks';
 import { useHistory } from '../hooks/useHistory';
 import { useToast } from './ToastContext';
-import { useLicenseContext } from './LicenseContext';
+import { useAppBootstrapContext } from './AppBootstrapContext';
 import { DEFAULT_HOME_DISCOVERY_DEPTH, discoverHomeDirectories } from '../utils/homeDiscovery';
 import { saveScanSettings } from '../utils/scanSettings';
 import { AgentCommands, SkillCommands } from '../utils/workspaceCommands';
@@ -93,7 +93,7 @@ interface WorkspaceProviderProps {
 
 export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }) => {
   const { showToast } = useToast();
-  const { isOnboardingComplete, isActivationOpen, registerWorkspaceClear } = useLicenseContext();
+  const { isOnboardingComplete, isWelcomeOpen, registerWorkspaceClear } = useAppBootstrapContext();
 
   // Scan settings
   const scanSettingsHook = useScanSettings();
@@ -188,7 +188,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
 
   // Initialize workspace when onboarding completes
   useEffect(() => {
-    if (!isOnboardingComplete || isActivationOpen) {
+    if (!isOnboardingComplete || isWelcomeOpen) {
       return;
     }
 
@@ -259,7 +259,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     };
 
     initializeWorkspace();
-  }, [isActivationOpen, isOnboardingComplete, loadAgents, loadCommands, loadMCPServers, loadHooks, loadMemories, loadInitialSettings]);
+  }, [isWelcomeOpen, isOnboardingComplete, loadAgents, loadCommands, loadMCPServers, loadHooks, loadMemories, loadInitialSettings]);
 
   // Agent operations with undo support
   const saveAgent = useCallback(async (agent: Agent, options?: { projectPath?: string }) => {

@@ -8,7 +8,6 @@ import { ReactNode } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Header } from './Header';
 import { Theme } from '../hooks/useTheme';
-import { LicenseInfo } from '../types/licensing';
 import { LoadAgentsOptions, ScanSettings, DetailedScanResult } from '../types';
 import { PendingUpdateDetails } from '../types/updater';
 
@@ -22,9 +21,7 @@ interface AppShellProps {
   onScan: (options?: LoadAgentsOptions) => Promise<DetailedScanResult>;
   isScanning: boolean;
 
-  // License & Profile
-  licenseInfo: LicenseInfo | null;
-  onResetLicense: () => void;
+  // Profile
   userDisplayName: string;
   onDisplayNameChange: (name: string) => void;
 
@@ -59,8 +56,6 @@ export function AppShell({
   onNavigateHome,
   onScan,
   isScanning,
-  licenseInfo,
-  onResetLicense,
   userDisplayName,
   onDisplayNameChange,
   scanSettings,
@@ -85,8 +80,6 @@ export function AppShell({
         onNavigateHome={onNavigateHome}
         onScan={onScan}
         isScanning={isScanning}
-        licenseInfo={licenseInfo}
-        onResetLicense={onResetLicense}
         userDisplayName={userDisplayName}
         onDisplayNameChange={onDisplayNameChange}
         scanSettings={scanSettings}

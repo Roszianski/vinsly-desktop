@@ -2,7 +2,7 @@ import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { WorkspaceProvider, useWorkspaceContext } from '../WorkspaceContext';
 import { ToastProvider } from '../ToastContext';
-import { LicenseProvider } from '../LicenseContext';
+import { AppBootstrapProvider } from '../AppBootstrapContext';
 import { Agent, AgentScope, Skill, ScanSettings } from '../../types';
 import * as storage from '../../utils/storage';
 import * as tauriCommands from '../../utils/tauriCommands';
@@ -11,7 +11,6 @@ import * as agentExport from '../../utils/agentExport';
 import * as skillParser from '../../utils/skillParser';
 import * as scanSettings from '../../utils/scanSettings';
 import * as homeDiscovery from '../../utils/homeDiscovery';
-import * as lemonLicensingClient from '../../utils/lemonLicensingClient';
 
 // Mock all external dependencies
 jest.mock('../../utils/storage', () => ({
@@ -80,12 +79,6 @@ jest.mock('../../utils/homeDiscovery', () => ({
   DEFAULT_HOME_DISCOVERY_DEPTH: 2,
 }));
 
-jest.mock('../../utils/lemonLicensingClient', () => ({
-  validateLicenseWithLemon: jest.fn(),
-  activateLicenseWithLemon: jest.fn(),
-  deactivateLicenseWithLemon: jest.fn(),
-}));
-
 // Mock navigator
 Object.defineProperty(navigator, 'onLine', { value: true, writable: true });
 
@@ -121,9 +114,9 @@ function createWrapper() {
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <ToastProvider>
-        <LicenseProvider>
+        <AppBootstrapProvider>
           <WorkspaceProvider>{children}</WorkspaceProvider>
-        </LicenseProvider>
+        </AppBootstrapProvider>
       </ToastProvider>
     );
   };
@@ -135,15 +128,7 @@ describe('WorkspaceContext', () => {
 
     // Setup default mock returns
     (storage.getStorageItem as jest.Mock).mockImplementation((key: string, defaultValue?: unknown) => {
-      if (key === 'license-data') {
-        return Promise.resolve({
-          key: 'test-license-key',
-          instanceId: 'test-instance',
-          activatedAt: Date.now(),
-          isValid: true,
-        });
-      }
-      if (key === 'onboarding-complete') {
+      if (key === 'vinsly-onboarding-complete') {
         return Promise.resolve(true);
       }
       return Promise.resolve(defaultValue ?? null);
@@ -189,12 +174,6 @@ describe('WorkspaceContext', () => {
     (tauriCommands.readClaudeMemory as jest.Mock).mockResolvedValue({ exists: false, path: '', content: '' });
     (tauriCommands.writeClaudeMemory as jest.Mock).mockResolvedValue(undefined);
     (tauriCommands.checkClaudeMemoryExists as jest.Mock).mockResolvedValue(false);
-
-    // License mocks
-    (lemonLicensingClient.validateLicenseWithLemon as jest.Mock).mockResolvedValue({
-      valid: true,
-      error: null,
-    });
   });
 
   describe('useWorkspaceContext hook', () => {
